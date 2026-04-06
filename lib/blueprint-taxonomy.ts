@@ -30,11 +30,14 @@ export function mapSpotifyGenre(rawGenre: string) {
 
   if (
     g.includes("rock") ||
+    g.includes("alternative") ||
     g.includes("indie") ||
     g.includes("grunge") ||
     g.includes("new wave") ||
     g.includes("psychedelic") ||
-    g.includes("progressive")
+    g.includes("progressive") ||
+    g.includes("metal") ||
+    g.includes("punk")
   ) {
     return {
       blueprintWorld: "Rock / Indie / Alternative",
@@ -70,12 +73,15 @@ export function mapSpotifyGenre(rawGenre: string) {
 
   if (
     g.includes("electronic") ||
+    g.includes("ambient") ||
     g.includes("house") ||
     g.includes("edm") ||
     g.includes("idm") ||
     g.includes("drum and bass") ||
     g.includes("lo-fi") ||
-    g.includes("disco")
+    g.includes("disco") ||
+    g.includes("techno") ||
+    g.includes("synth")
   ) {
     return {
       blueprintWorld: "Electronic / Ambient",

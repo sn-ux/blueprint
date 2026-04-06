@@ -18,7 +18,8 @@
       "Bash(/usr/local/bin/node /usr/local/bin/npx tsc --noEmit)",
       "Bash(curl -s http://localhost:3000/)",
       "Bash(grep -v \"^$\")",
-      "Bash(pkill -f 'next dev')"
+      "Bash(pkill -f 'next dev')",
+      "Bash(find /Users/blueprint/blueprint-v1 -type f \\\\\\(-name *genre* -o -name *categor* -o -name *taxonomy* \\\\\\))"
     ]
   }
 }

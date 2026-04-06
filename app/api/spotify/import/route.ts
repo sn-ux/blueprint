@@ -152,45 +152,51 @@ export async function GET() {
       }
     }
 
-    for (const item of allItems) {
-      const track = item.track;
-      const firstArtist = track?.artists?.[0];
+    // Upsert in parallel batches of 25 — avoids serverless timeout on large libraries
+    const BATCH_SIZE = 25;
+    for (let i = 0; i < allItems.length; i += BATCH_SIZE) {
+      await Promise.all(
+        allItems.slice(i, i + BATCH_SIZE).map(async (item) => {
+          const track = item.track;
+          const firstArtist = track?.artists?.[0];
 
-      if (!track?.id || !firstArtist?.id) continue;
+          if (!track?.id || !firstArtist?.id) return;
 
-      const rawGenre = artistGenreMap.get(firstArtist.id) || "unknown";
-      const { blueprintWorld, blueprintSubgenre } = mapSpotifyGenre(rawGenre);
+          const rawGenre = artistGenreMap.get(firstArtist.id) || "unknown";
+          const { blueprintWorld, blueprintSubgenre } = mapSpotifyGenre(rawGenre);
 
-      await prisma.track.upsert({
-        where: {
-          userId_spotifyId: {
-            userId: user.id,
-            spotifyId: track.id,
-          },
-        },
-        update: {
-          name: track.name,
-          artist: firstArtist.name,
-          album: track.album?.name ?? null,
-          imageUrl: track.album?.images?.[0]?.url ?? null,
-          previewUrl: track.preview_url ?? null,
-          rawGenre,
-          blueprintWorld,
-          blueprintSubgenre,
-        },
-        create: {
-          userId: user.id,
-          spotifyId: track.id,
-          name: track.name,
-          artist: firstArtist.name,
-          album: track.album?.name ?? null,
-          imageUrl: track.album?.images?.[0]?.url ?? null,
-          previewUrl: track.preview_url ?? null,
-          rawGenre,
-          blueprintWorld,
-          blueprintSubgenre,
-        },
-      });
+          await prisma.track.upsert({
+            where: {
+              userId_spotifyId: {
+                userId: user.id,
+                spotifyId: track.id,
+              },
+            },
+            update: {
+              name: track.name,
+              artist: firstArtist.name,
+              album: track.album?.name ?? null,
+              imageUrl: track.album?.images?.[0]?.url ?? null,
+              previewUrl: track.preview_url ?? null,
+              rawGenre,
+              blueprintWorld,
+              blueprintSubgenre,
+            },
+            create: {
+              userId: user.id,
+              spotifyId: track.id,
+              name: track.name,
+              artist: firstArtist.name,
+              album: track.album?.name ?? null,
+              imageUrl: track.album?.images?.[0]?.url ?? null,
+              previewUrl: track.preview_url ?? null,
+              rawGenre,
+              blueprintWorld,
+              blueprintSubgenre,
+            },
+          });
+        })
+      );
     }
 
     return NextResponse.json({

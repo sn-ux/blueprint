@@ -882,9 +882,9 @@ export default function WorldPage() {
       }
 
       // ── Subgenre labels (zoomed-in view of the selected plate) ────────────
-      if (zoomRef.current >= 1.9 && selectedIdx >= 0 && subgenres.length > 0) {
-        // Labels fade in at 1.9, fully visible by 2.1 — well into the subgenre zoom level
-        const labelReveal = Math.min(1, Math.max(0, (zoomRef.current - 1.9) / 0.2));
+      if (zoomRef.current >= 1.6 && selectedIdx >= 0 && subgenres.length > 0) {
+        // Labels fade in at 1.6 (same zoom as region faces appear), fully visible by 1.9
+        const labelReveal = Math.min(1, Math.max(0, (zoomRef.current - 1.6) / 0.3));
         ctx.globalAlpha = labelReveal;
         const subAcc: Record<number, { sx: number; sy: number; n: number }> = {};
         for (const { tri, fi, depth, ri } of fd) {
