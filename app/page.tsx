@@ -281,8 +281,8 @@ function hexRgb(h: string): [number, number, number] {
 export default function LandingPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // ── Real data (fetched from API, fallback to demo when not authenticated) ──
-  const [worlds,   setWorlds]   = useState<Record<string, number>>(DEMO_WORLDS);
+  // ── Real data (same path as /world — starts empty, filled from API) ─────────
+  const [worlds,   setWorlds]   = useState<Record<string, number>>({});
   const [subgenres, setSubgenres] = useState<SubItem[]>([]);
   const [tracks,   setTracks]   = useState<TrackItem[]>([]);
 
@@ -314,12 +314,12 @@ export default function LandingPage() {
   const hoveredRef       = useRef<{ genre: string; subgenre?: string } | null>(null);
   const autoSelectedRef  = useRef(false);
 
-  // ── Fetch worlds on mount (real data if authenticated, demo otherwise) ────
+  // ── Fetch worlds on mount — same pattern as /world page ─────────────────
   useEffect(() => {
     fetch("/api/world")
-      .then(r => r.ok ? r.json() : null)
+      .then(r => r.json())
       .then(d => { if (d && Object.keys(d).length > 0) setWorlds(d); })
-      .catch(() => {/* keep DEMO_WORLDS */});
+      .catch(() => {});
   }, []);
 
   // ── Fetch tracks + subgenres when genre selected ──────────────────────────
@@ -337,14 +337,14 @@ export default function LandingPage() {
 
     const enc = encodeURIComponent(selected);
     fetch(`/api/world/${enc}`)
-      .then(r => r.ok ? r.json() : null)
-      .then(d => setTracks(d?.tracks ?? DEMO_TRACKS[selected] ?? []))
-      .catch(() => setTracks(DEMO_TRACKS[selected] ?? []));
+      .then(r => r.json())
+      .then(d => setTracks(d?.tracks ?? []))
+      .catch(() => setTracks([]));
 
     fetch(`/api/world/${enc}/subgenres`)
-      .then(r => r.ok ? r.json() : null)
-      .then(d => setSubgenres(d?.subgenres ?? DEMO_SUBGENRES[selected] ?? []))
-      .catch(() => setSubgenres(DEMO_SUBGENRES[selected] ?? []));
+      .then(r => r.json())
+      .then(d => setSubgenres(d?.subgenres ?? []))
+      .catch(() => setSubgenres([]));
   }, [selected]);
 
   // ── Poll zoomRef → text visibility (reversible) ──────────────────────────
