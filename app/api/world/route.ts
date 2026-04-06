@@ -3,10 +3,15 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/current-user";
 
 export async function GET() {
-  const user = await getCurrentUser();
+  // Authenticated users see their own world; unauthenticated visitors see the
+  // owner's public world (first user in the DB who has imported tracks).
+  const authed = await getCurrentUser();
+  const user =
+    authed ??
+    (await prisma.user.findFirst({ where: { tracks: { some: {} } } }));
 
   if (!user) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    return NextResponse.json({});
   }
 
   const tracks = await prisma.track.findMany({
