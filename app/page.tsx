@@ -306,7 +306,7 @@ export default function LandingPage() {
   const subRegionRef     = useRef<Map<number, number>>(new Map());
   const activeSubsRef    = useRef<SubItem[]>([]);
   const subPolesRef      = useRef<{ name: string; pole: V3 }[]>([]);
-  const rotRef           = useRef({ x: 0.60, y: 2.5 });
+  const rotRef           = useRef({ x: -0.85, y: 2.65 });
   const dragRef          = useRef({ active: false, lx: 0, ly: 0, moved: false });
   const rafRef           = useRef<number>(0);
   const labelHitsRef     = useRef<{ name: string; subgenre?: string; x1: number; y1: number; x2: number; y2: number }[]>([]);
