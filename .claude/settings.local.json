@@ -19,7 +19,10 @@
       "Bash(curl -s http://localhost:3000/)",
       "Bash(grep -v \"^$\")",
       "Bash(pkill -f 'next dev')",
-      "Bash(find /Users/blueprint/blueprint-v1 -type f \\\\\\(-name *genre* -o -name *categor* -o -name *taxonomy* \\\\\\))"
+      "Bash(find /Users/blueprint/blueprint-v1 -type f \\\\\\(-name *genre* -o -name *categor* -o -name *taxonomy* \\\\\\))",
+      "Bash(grep -r \"signIn\\\\|Sign In\\\\|login\\\\|Login\" /Users/blueprint/blueprint-v1/app --include=*.tsx --include=*.ts)",
+      "Bash(find /Users/blueprint/blueprint-v1/components -type f -name *.tsx)",
+      "Bash(grep -r \"useSession\\\\|signIn\\\\|signOut\" /Users/blueprint/blueprint-v1/app --include=*.tsx --include=*.ts)"
     ]
   }
 }
