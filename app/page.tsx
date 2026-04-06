@@ -477,9 +477,12 @@ export default function LandingPage() {
     const FOV = 900;
 
     function drawFrame() {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
       const W = canvas.width, H = canvas.height;
       if (!W || !H) return;
-      const ctx = canvas.getContext("2d")!;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
       const R   = Math.min(W, H) * 0.38 * zoomRef.current;
       // Sphere center shifted right so it sits clear of the left-side text overlay
       const cx  = W * 0.62, cy = H / 2;
