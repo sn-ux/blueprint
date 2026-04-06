@@ -600,9 +600,15 @@ export default function WorldPage() {
 
     // ── Per-frame draw ────────────────────────────────────────────────────────
     function drawFrame() {
-      const W = canvas.width, H = canvas.height;
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const W = canvas.width;
+      const H = canvas.height;
       if (!W || !H) return;
-      const ctx = canvas.getContext("2d")!;
+
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
       const R   = Math.min(W, H) * 0.38 * zoomRef.current;
       const cx  = W / 2, cy = H / 2;
       const rx  = rotRef.current.x, ry = rotRef.current.y;
