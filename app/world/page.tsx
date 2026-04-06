@@ -1072,6 +1072,7 @@ export default function WorldPage() {
       // Dragging: rotate the sphere, suppress hover
       rotRef.current.y += (e.clientX - dragRef.current.lx) * 0.005;
       rotRef.current.x -= (e.clientY - dragRef.current.ly) * 0.005;
+      rotRef.current.x  = Math.max(-1.2, Math.min(1.2, rotRef.current.x));
       dragRef.current.lx    = e.clientX;
       dragRef.current.ly    = e.clientY;
       dragRef.current.moved = true;

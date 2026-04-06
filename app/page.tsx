@@ -793,6 +793,7 @@ export default function LandingPage() {
     if (dragRef.current.active) {
       rotRef.current.y += (e.clientX-dragRef.current.lx)*0.005;
       rotRef.current.x -= (e.clientY-dragRef.current.ly)*0.005;
+      rotRef.current.x  = Math.max(-1.2, Math.min(1.2, rotRef.current.x));
       dragRef.current.lx=e.clientX; dragRef.current.ly=e.clientY; dragRef.current.moved=true;
       hoveredRef.current=null;
       if (selected !== null && zoomRef.current >= 1.1 && regionPolesRef.current.length > 0) {
