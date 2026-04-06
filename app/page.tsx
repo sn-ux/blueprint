@@ -479,8 +479,11 @@ export default function LandingPage() {
     function drawFrame() {
       const canvas = canvasRef.current;
       if (!canvas) return;
-      const W = canvas.width, H = canvas.height;
+
+      const W = canvas.width;
+      const H = canvas.height;
       if (!W || !H) return;
+
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
       const R   = Math.min(W, H) * 0.38 * zoomRef.current;
