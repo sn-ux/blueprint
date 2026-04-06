@@ -295,11 +295,9 @@ export default function LandingPage() {
   const [hoveredSubgenre,   setHoveredSubgenre]   = useState<string | null>(null);
   const hoveredSubgRef      = useRef<string | null>(null);
 
-  // ── Text visibility — tracks overview vs engaged state, reversible ────────
-  // Text is visible in overview (zoom < 1.15), hidden when user enters the world.
-  // Fades back in when user zooms back out to overview.
+  // ── Text visibility — fades out on first interaction, one-way ───────────
   const [textVisible, setTextVisible] = useState(true);
-  const textVisibleRef = useRef(true);
+  const interactedRef = useRef(false);
 
   // ── Interaction refs ──────────────────────────────────────────────────────
   const zoomRef          = useRef(1);
@@ -346,18 +344,6 @@ export default function LandingPage() {
       .then(d => setSubgenres(d?.subgenres ?? []))
       .catch(() => setSubgenres([]));
   }, [selected]);
-
-  // ── Poll zoomRef → text visibility (reversible) ──────────────────────────
-  useEffect(() => {
-    const id = setInterval(() => {
-      const visible = zoomRef.current < 1.15;
-      if (visible !== textVisibleRef.current) {
-        textVisibleRef.current = visible;
-        setTextVisible(visible);
-      }
-    }, 50);
-    return () => clearInterval(id);
-  }, []);
 
   // ── Poll hoveredRef → hoveredSubgenre state ───────────────────────────────
   useEffect(() => {
@@ -487,8 +473,7 @@ export default function LandingPage() {
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
       const R   = Math.min(W, H) * 0.38 * zoomRef.current;
-      // Sphere center shifted right so it sits clear of the left-side text overlay
-      const cx  = W * 0.62, cy = H / 2;
+      const cx  = W / 2, cy = H / 2;
       const rx  = rotRef.current.x, ry = rotRef.current.y;
       labelHitsRef.current = [];
       ctx.clearRect(0, 0, W, H);
@@ -702,12 +687,13 @@ export default function LandingPage() {
     // ── Wheel handler: only capture when pointer is inside the sphere circle ──
     // Outside the sphere, let the wheel event propagate so the page can scroll.
     const onWheel = (e: WheelEvent) => {
+      if (!interactedRef.current) { interactedRef.current = true; setTextVisible(false); }
       const rect = canvas.getBoundingClientRect();
       const mx   = e.clientX - rect.left;
       const my   = e.clientY - rect.top;
       const W    = canvas.clientWidth, H = canvas.clientHeight;
       const R    = Math.min(W, H) * 0.38 * zoomRef.current;
-      const dx   = mx - W * 0.62, dy = my - H / 2;
+      const dx   = mx - W / 2, dy = my - H / 2;
       // Outside sphere circle → don't capture, let page scroll naturally
       if (dx * dx + dy * dy > R * R) return;
 
@@ -764,6 +750,7 @@ export default function LandingPage() {
   // ── Mouse handlers ────────────────────────────────────────────────────────
 
   const onMouseDown = (e: React.MouseEvent) => {
+    if (!interactedRef.current) { interactedRef.current = true; setTextVisible(false); }
     dragRef.current = { active: true, lx: e.clientX, ly: e.clientY, moved: false };
   };
 
@@ -772,7 +759,7 @@ export default function LandingPage() {
     if (!canvas || regionPolesRef.current.length === 0) return null;
     const W=canvas.clientWidth, H=canvas.clientHeight;
     const R=Math.min(W,H)*0.38*zoomRef.current;
-    const cx=W*0.62, cy=H/2;
+    const cx=W/2, cy=H/2;
     const nx=(mx-cx)/R, ny=(my-cy)/R;
     if (nx*nx+ny*ny > 1) return null;
     const nz=Math.sqrt(Math.max(0,1-nx*nx-ny*ny));
@@ -826,7 +813,7 @@ export default function LandingPage() {
       const canvas2=canvasRef.current!;
       const W2=canvas2.clientWidth, H2=canvas2.clientHeight;
       const R2=Math.min(W2,H2)*0.38*zoomRef.current;
-      const nx2=(mx-W2*0.62)/R2, ny2=(my-H2/2)/R2;
+      const nx2=(mx-W2/2)/R2, ny2=(my-H2/2)/R2;
       if (nx2*nx2+ny2*ny2<=1) {
         const nz2=Math.sqrt(Math.max(0,1-nx2*nx2-ny2*ny2));
         const rx2=rotRef.current.x, ry2=rotRef.current.y;
@@ -866,7 +853,7 @@ export default function LandingPage() {
     }
     const W=canvas.clientWidth, H=canvas.clientHeight;
     const R=Math.min(W,H)*0.38*zoomRef.current;
-    const cx=W*0.62, cy=H/2;
+    const cx=W/2, cy=H/2;
     const nx=(mx-cx)/R, ny=(my-cy)/R;
     if (nx*nx+ny*ny > 1) {
       autoSelectedRef.current=false;
@@ -916,22 +903,19 @@ export default function LandingPage() {
           </span>
         </div>
 
-        {/* Body */}
-        <div className="flex flex-1 min-h-0">
+        {/* Body — single positioned container; all UI layers are absolute */}
+        <div className="flex-1 relative min-h-0">
 
-          {/* Canvas area */}
-          <div className="flex-1 relative min-w-0">
-
-            {/* Philosophy text — floats over canvas, fades on first interaction */}
-            <div
-              className="absolute inset-y-0 left-0 z-10 flex flex-col justify-center px-10 md:px-16 lg:px-24 max-w-[520px]"
-              style={{
-                opacity: textVisible ? 1 : 0,
-                transition: "opacity 0.8s ease-in-out",
-                pointerEvents: textVisible ? "auto" : "none",
-                background: "linear-gradient(to right, rgba(0,0,0,0.82) 55%, transparent)",
-              }}
-            >
+          {/* Philosophy text — fades out on first interaction, stays gone */}
+          <div
+            className="absolute inset-y-0 left-0 z-10 flex flex-col justify-center px-10 md:px-16 lg:px-24 max-w-[520px]"
+            style={{
+              opacity: textVisible ? 1 : 0,
+              transition: "opacity 0.4s ease-in-out",
+              pointerEvents: textVisible ? "auto" : "none",
+              background: "linear-gradient(to right, rgba(0,0,0,0.82) 55%, transparent)",
+            }}
+          >
               <p className="text-xs tracking-[0.20em] uppercase text-zinc-600 mb-8 font-medium">
                 The Constraint
               </p>
@@ -954,27 +938,27 @@ export default function LandingPage() {
               </p>
             </div>
 
-            {/* Canvas */}
-            <canvas
-              ref={canvasRef}
-              className="absolute inset-0 w-full h-full cursor-pointer"
-              style={{ display: "block" }}
-              onMouseDown={onMouseDown}
-              onMouseMove={onMouseMove}
-              onMouseUp={stopDrag}
-              onMouseLeave={onMouseLeave}
-              onClick={handleClick}
-            />
-          </div>
+          {/* Canvas — fills entire body, sphere always centered */}
+          <canvas
+            ref={canvasRef}
+            className="absolute inset-0 w-full h-full cursor-pointer"
+            style={{ display: "block" }}
+            onMouseDown={onMouseDown}
+            onMouseMove={onMouseMove}
+            onMouseUp={stopDrag}
+            onMouseLeave={onMouseLeave}
+            onClick={handleClick}
+          />
 
-          {/* Right panel — appears when a genre is selected */}
+          {/* Right panel — absolute overlay, does not affect canvas layout */}
           {selected && (
             <div
-              className="flex-shrink-0 flex flex-col overflow-hidden"
+              className="absolute top-0 right-0 bottom-0 z-20 flex flex-col overflow-hidden"
               style={{
-                width: "42%",
+                width: 420,
                 borderLeft: `1px solid rgba(${sr},${sg},${sb},0.14)`,
-                background: "rgba(4,4,8,0.98)",
+                background: "rgba(4,4,8,0.90)",
+                backdropFilter: "blur(12px)",
               }}
             >
               {/* Thin genre-color accent strip */}
