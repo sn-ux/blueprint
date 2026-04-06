@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession, signIn, signOut } from "next-auth/react";
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 
 export default function AdminPage() {
   const { data: session, status } = useSession();
@@ -86,7 +86,7 @@ export default function AdminPage() {
   );
 }
 
-function btn(bg: string): React.CSSProperties {
+function btn(bg: string): CSSProperties {
   return {
     background: bg,
     color: "#fff",
