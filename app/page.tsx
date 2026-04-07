@@ -131,6 +131,18 @@ const DEMO_TRACKS: Record<string, TrackItem[]> = {
   ],
 };
 
+// ── Company showcase data ─────────────────────────────────────────────────────
+
+const COMPANIES = [
+  { name: "Google",   accent: "#4285F4", rgb: "66,133,244",  tag: "Search",     hasSearch: true,  hasFeed: false },
+  { name: "TikTok",   accent: "#EE1D52", rgb: "238,29,82",   tag: "Video feed", hasSearch: false, hasFeed: true  },
+  { name: "Amazon",   accent: "#FF9900", rgb: "255,153,0",   tag: "E-commerce", hasSearch: true,  hasFeed: true  },
+  { name: "Spotify",  accent: "#1DB954", rgb: "29,185,84",   tag: "Music",      hasSearch: false, hasFeed: true  },
+  { name: "YouTube",  accent: "#FF0000", rgb: "255,0,0",     tag: "Video",      hasSearch: false, hasFeed: true  },
+  { name: "ChatGPT",  accent: "#10A37F", rgb: "16,163,127",  tag: "AI",         hasSearch: true,  hasFeed: false },
+  { name: "DoorDash", accent: "#FF3008", rgb: "255,48,8",    tag: "Delivery",   hasSearch: true,  hasFeed: true  },
+];
+
 // ── Geometry helpers (identical to world/page.tsx) ────────────────────────────
 
 type V3  = [number, number, number];
@@ -299,6 +311,9 @@ export default function LandingPage() {
   const [textVisible, setTextVisible] = useState(true);
   const textVisibleRef = useRef(true);
 
+  // ── Company carousel ────────────────────────────────────────────────────────
+  const [carouselIdx, setCarouselIdx] = useState(0);
+
   // ── Interaction refs ──────────────────────────────────────────────────────
   const zoomRef          = useRef(1);
   const subRegionRef     = useRef<Map<number, number>>(new Map());
@@ -344,6 +359,14 @@ export default function LandingPage() {
       .then(d => setSubgenres(d?.subgenres ?? []))
       .catch(() => setSubgenres([]));
   }, [selected]);
+
+  // ── Auto-rotate company carousel ─────────────────────────────────────────
+  useEffect(() => {
+    const id = setInterval(() => {
+      setCarouselIdx(i => (i + 1) % COMPANIES.length);
+    }, 3200);
+    return () => clearInterval(id);
+  }, []);
 
   // ── Poll zoomRef → text visibility (reversible) ──────────────────────────
   useEffect(() => {
@@ -1068,100 +1091,245 @@ export default function LandingPage() {
       </section>
 
       {/* ══ SECTION 2 — The Problem ═══════════════════════════════════════════ */}
-      <section className="bg-black">
+      <section className="h-screen bg-black flex overflow-hidden"
+        style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
 
-        {/* Problem statement */}
-        <div className="max-w-2xl mx-auto px-8 md:px-12 pt-24 pb-16">
+        {/* ── LEFT: compressed problem copy ─────────────────────────────────── */}
+        <div className="flex flex-col justify-center px-12 py-10 overflow-hidden"
+          style={{ width: "54%", borderRight: "1px solid rgba(255,255,255,0.05)" }}>
 
-          <h2 className="text-3xl md:text-4xl font-light leading-[1.15] text-white mb-14">
-            You&apos;ve been using the internet through a single model.
+          <h2 className="text-[1.35rem] font-light leading-snug text-white mb-5">
+            You&apos;ve been using the internet<br />through a single model.
           </h2>
 
-          <div className="space-y-8 text-zinc-400 text-base leading-relaxed">
+          <div className="space-y-4 text-[13px] text-zinc-400 leading-relaxed">
 
-            <p>Every app works the same way:</p>
-
-            <ol className="space-y-2 pl-1">
-              <li className="flex gap-3"><span className="text-zinc-600 select-none">1.</span><span>You type into a search bar</span></li>
-              <li className="flex gap-3"><span className="text-zinc-600 select-none">2.</span><span>You scroll a recommendation feed</span></li>
-            </ol>
-
-            <p className="text-zinc-600 text-sm">
-              Google. Amazon. TikTok. Spotify. YouTube. ChatGPT. DoorDash.<br />
-              Different content — same system.
-            </p>
-
-            <p>Both parts of this system limit what you can discover.</p>
-
-            <p><span className="text-white">Search</span> shows you what you already know to look for.</p>
-
-            <div>
-              <p className="mb-3"><span className="text-white">Feeds</span> show you what the system predicts you&apos;ll engage with, based on:</p>
-              <ol className="space-y-2 pl-1">
-                <li className="flex gap-3"><span className="text-zinc-600 select-none">1.</span><span>What you&apos;ve already seen</span></li>
-                <li className="flex gap-3"><span className="text-zinc-600 select-none">2.</span><span>What people like you have seen</span></li>
-                <li className="flex gap-3"><span className="text-zinc-600 select-none">3.</span><span>What companies pay to promote</span></li>
-              </ol>
+            {/* Block 1 — the mechanism */}
+            <div className="space-y-1.5">
+              <p>Every app works the same way:</p>
+              <div className="pl-3 border-l border-zinc-800 text-zinc-500 space-y-0.5">
+                <p>1. You type into a search bar</p>
+                <p>2. You scroll a recommendation feed</p>
+              </div>
+              <p className="text-zinc-600 text-[12px]">
+                Google. Amazon. TikTok. Spotify. YouTube. ChatGPT. DoorDash. — different content, same system.
+              </p>
             </div>
 
-            <p className="text-zinc-600 text-sm">That&apos;s it.</p>
-
-            <p>So entire categories of information never reach you.</p>
-
-            <div>
-              <p className="mb-3">You will never find:</p>
-              <ol className="space-y-2 pl-1">
-                <li className="flex gap-3"><span className="text-zinc-600 select-none">1.</span><span>What you don&apos;t know to search for</span></li>
-                <li className="flex gap-3"><span className="text-zinc-600 select-none">2.</span><span>What exists outside your behavioral profile</span></li>
-                <li className="flex gap-3"><span className="text-zinc-600 select-none">3.</span><span>What no one is paying to show you</span></li>
-              </ol>
+            {/* Block 2 — the limits */}
+            <div className="space-y-1">
+              <p>
+                <span className="text-zinc-200">Search</span> shows you what you already know to look for.
+              </p>
+              <p>
+                <span className="text-zinc-200">Feeds</span> show what the system predicts you&apos;ll engage with —
+                based on what you&apos;ve already seen, what people like you have seen,
+                and what companies pay to promote.
+              </p>
             </div>
 
-            <p className="text-zinc-500">
-              This isn&apos;t a UX problem. It&apos;s a structural limit.
-            </p>
-
-            <p>
-              The modern internet is not designed for discovery.<br />
-              It is designed for retrieval and prediction.
-            </p>
-
-            <p>
-              Which means the majority of valuable information<br />
-              is not just hard to find—
-            </p>
-
-            <div className="space-y-1.5 text-zinc-500 text-sm border-l border-zinc-800 pl-5">
-              <p>The song you&apos;d love but haven&apos;t heard yet,</p>
-              <p>the job you want but don&apos;t know exists yet,</p>
-              <p>the product you&apos;d buy but haven&apos;t come across yet,</p>
-              <p>the idea that would change your thinking but hasn&apos;t reached you yet.</p>
+            {/* Block 3 — the gap */}
+            <div className="space-y-1.5">
+              <p>So entire categories of information never reach you.</p>
+              <div className="pl-3 border-l border-zinc-800 text-zinc-500 space-y-0.5">
+                <p>1. What you don&apos;t know to search for</p>
+                <p>2. What exists outside your behavioral profile</p>
+                <p>3. What no one is paying to show you</p>
+              </div>
             </div>
 
-            <p>All already out there — just never shown to you.</p>
+            {/* Block 4 — the thesis */}
+            <div className="space-y-1.5 pt-3 border-t border-zinc-900">
+              <p className="text-zinc-500">This isn&apos;t a UX problem. It&apos;s a structural limit.</p>
+              <p>
+                The modern internet is not designed for discovery.
+                It is designed for retrieval and prediction.
+              </p>
+              <p className="text-[12px] text-zinc-500 border-l border-zinc-800 pl-3 leading-relaxed">
+                The song you&apos;d love but haven&apos;t heard yet, the job you don&apos;t know exists yet,
+                the idea that would change your thinking — all already out there.
+                Just never shown to you.
+              </p>
+            </div>
 
           </div>
         </div>
 
-        {/* ── search-feed-ui-placeholder ────────────────────────────────────────
-            Future: replace with a row/grid of interface screenshots or logos
-            from Google, Amazon, TikTok, Spotify, YouTube, ChatGPT, DoorDash.
-        ──────────────────────────────────────────────────────────────────────── */}
-        <div className="max-w-4xl mx-auto px-8 md:px-12 pb-24">
-          <div
-            className="w-full rounded-lg flex items-center justify-center"
-            style={{
-              height: 200,
-              border: "1px dashed rgba(255,255,255,0.07)",
-              background: "rgba(255,255,255,0.02)",
-            }}
-          >
-            <span className="text-xs text-zinc-700 tracking-widest uppercase select-none">
-              interface screenshots
-            </span>
-          </div>
-        </div>
+        {/* ── RIGHT: rotating company showcase ─────────────────────────────── */}
+        <div className="flex flex-col py-10 px-8 overflow-hidden" style={{ width: "46%" }}>
 
+          <p className="text-[11px] tracking-widest uppercase text-zinc-700 mb-5 select-none flex-shrink-0">
+            The same interface, everywhere
+          </p>
+
+          {/* Carousel slides */}
+          <div className="flex-1 relative min-h-0">
+            {COMPANIES.map((co, i) => (
+              <div
+                key={co.name}
+                className="absolute inset-0 flex flex-col"
+                style={{
+                  opacity: i === carouselIdx ? 1 : 0,
+                  transform: `translateY(${i === carouselIdx ? 0 : 10}px)`,
+                  transition: "opacity 0.55s ease-in-out, transform 0.55s ease-in-out",
+                  pointerEvents: i === carouselIdx ? "auto" : "none",
+                }}
+              >
+                {/* Company header */}
+                <div className="flex items-baseline gap-2.5 mb-3 flex-shrink-0">
+                  <span className="text-lg font-light text-white">{co.name}</span>
+                  <span className="text-[11px] tracking-wider uppercase" style={{ color: co.accent }}>
+                    {co.tag}
+                  </span>
+                  <span className="ml-auto text-[11px] text-zinc-700">
+                    {co.hasSearch && co.hasFeed ? "search + feed" : co.hasSearch ? "search" : "feed"}
+                  </span>
+                </div>
+
+                {/* Mock UI frame */}
+                <div className="flex-1 min-h-0 rounded-xl flex flex-col p-4 gap-3 overflow-hidden"
+                  style={{
+                    background: "rgba(255,255,255,0.025)",
+                    border: "1px solid rgba(255,255,255,0.07)",
+                  }}
+                >
+                  {/* Search bar mock — shown for search-capable companies */}
+                  {co.hasSearch && (
+                    <div className="flex items-center gap-2 rounded-full px-4 py-2 flex-shrink-0"
+                      style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                      <div className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                        style={{ background: `rgba(${co.rgb},0.45)` }} />
+                      <div className="flex-1 h-1.5 rounded-full"
+                        style={{ background: "rgba(255,255,255,0.07)" }} />
+                      <div className="w-10 h-1.5 rounded-full"
+                        style={{ background: "rgba(255,255,255,0.04)" }} />
+                    </div>
+                  )}
+
+                  {/* Content area — varies by company type */}
+                  {co.name === "TikTok" ? (
+                    /* Full-height video card */
+                    <div className="flex-1 rounded-lg relative overflow-hidden"
+                      style={{ background: "rgba(255,255,255,0.03)" }}>
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center"
+                          style={{ background: "rgba(255,255,255,0.07)" }}>
+                          <div style={{ width: 0, height: 0, borderTop: "7px solid transparent",
+                            borderBottom: "7px solid transparent",
+                            borderLeft: "12px solid rgba(255,255,255,0.35)",
+                            marginLeft: 3 }} />
+                        </div>
+                      </div>
+                      <div className="absolute right-3 bottom-8 flex flex-col gap-4">
+                        {[0,1,2].map(j => (
+                          <div key={j} className="w-8 h-8 rounded-full"
+                            style={{ background: "rgba(255,255,255,0.06)" }} />
+                        ))}
+                      </div>
+                      <div className="absolute bottom-4 left-3 right-14 space-y-1.5">
+                        <div className="h-1.5 rounded-full"
+                          style={{ background: "rgba(255,255,255,0.18)", width: "72%" }} />
+                        <div className="h-1 rounded-full"
+                          style={{ background: "rgba(255,255,255,0.08)", width: "48%" }} />
+                      </div>
+                    </div>
+                  ) : co.name === "ChatGPT" ? (
+                    /* Chat interface */
+                    <div className="flex-1 flex flex-col gap-2.5 overflow-hidden min-h-0">
+                      {[
+                        { mine: false, w: "78%" },
+                        { mine: true,  w: "55%" },
+                        { mine: false, w: "88%" },
+                      ].map((m, j) => (
+                        <div key={j} className={`flex ${m.mine ? "justify-end" : "justify-start"}`}>
+                          <div className="rounded-xl px-3 py-2"
+                            style={{
+                              background: m.mine
+                                ? `rgba(${co.rgb},0.14)`
+                                : "rgba(255,255,255,0.05)",
+                              border: `1px solid ${m.mine
+                                ? `rgba(${co.rgb},0.22)`
+                                : "rgba(255,255,255,0.07)"}`,
+                              maxWidth: "82%",
+                            }}>
+                            <div className="h-1.5 rounded-full"
+                              style={{ background: "rgba(255,255,255,0.18)", width: m.w }} />
+                          </div>
+                        </div>
+                      ))}
+                      <div className="mt-auto flex-shrink-0 rounded-xl px-3 py-2.5 flex items-center gap-2"
+                        style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                        <div className="flex-1 h-1.5 rounded-full"
+                          style={{ background: "rgba(255,255,255,0.07)" }} />
+                        <div className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center"
+                          style={{ background: `rgba(${co.rgb},0.3)` }}>
+                          <div className="w-2 h-2 rounded-sm" style={{ background: co.accent }} />
+                        </div>
+                      </div>
+                    </div>
+                  ) : co.name === "YouTube" || co.name === "Spotify" ? (
+                    /* 2×2 content grid */
+                    <div className="flex-1 min-h-0 grid grid-cols-2 gap-2">
+                      {[0,1,2,3].map(j => (
+                        <div key={j} className="rounded-lg overflow-hidden flex flex-col"
+                          style={{ background: "rgba(255,255,255,0.03)" }}>
+                          <div className="flex-1"
+                            style={{ background: "rgba(255,255,255,0.05)" }} />
+                          <div className="px-2 py-1.5 space-y-1 flex-shrink-0">
+                            <div className="h-1.5 rounded-full"
+                              style={{ background: "rgba(255,255,255,0.11)", width: `${72+j*6}%` }} />
+                            <div className="h-1 rounded-full"
+                              style={{ background: "rgba(255,255,255,0.05)", width: `${48+j*5}%` }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    /* Result / product rows (Google, Amazon, DoorDash) */
+                    <div className="flex-1 min-h-0 flex flex-col gap-2 overflow-hidden">
+                      {[0,1,2,3].map(j => (
+                        <div key={j} className="flex gap-3 items-center px-3 py-2 rounded-lg flex-shrink-0"
+                          style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.05)" }}>
+                          <div className="w-9 h-9 rounded flex-shrink-0"
+                            style={{ background: "rgba(255,255,255,0.06)" }} />
+                          <div className="flex-1 space-y-1.5">
+                            <div className="h-1.5 rounded-full"
+                              style={{ background: "rgba(255,255,255,0.13)", width: `${68+j*6}%` }} />
+                            <div className="h-1 rounded-full"
+                              style={{ background: "rgba(255,255,255,0.06)", width: `${44+j*5}%` }} />
+                          </div>
+                          <div className="w-6 h-4 rounded flex-shrink-0"
+                            style={{ background: `rgba(${co.rgb},0.15)` }} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Progress / dot indicators */}
+          <div className="flex gap-1.5 justify-center pt-4 flex-shrink-0">
+            {COMPANIES.map((co, i) => (
+              <button
+                key={i}
+                onClick={() => setCarouselIdx(i)}
+                style={{
+                  height: 3,
+                  width: i === carouselIdx ? 18 : 6,
+                  borderRadius: 2,
+                  background: i === carouselIdx ? co.accent : "rgba(255,255,255,0.12)",
+                  transition: "width 0.3s ease, background 0.3s ease",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: 0,
+                }}
+              />
+            ))}
+          </div>
+
+        </div>
       </section>
 
     </div>
