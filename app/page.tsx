@@ -295,9 +295,9 @@ export default function LandingPage() {
   const [hoveredSubgenre,   setHoveredSubgenre]   = useState<string | null>(null);
   const hoveredSubgRef      = useRef<string | null>(null);
 
-  // ── Text visibility — fades out on first interaction, one-way ───────────
+  // ── Text visibility — tied to zoom; fades out in explore mode, back in at hero ──
   const [textVisible, setTextVisible] = useState(true);
-  const interactedRef = useRef(false);
+  const textVisibleRef = useRef(true);
 
   // ── Interaction refs ──────────────────────────────────────────────────────
   const zoomRef          = useRef(1);
@@ -344,6 +344,18 @@ export default function LandingPage() {
       .then(d => setSubgenres(d?.subgenres ?? []))
       .catch(() => setSubgenres([]));
   }, [selected]);
+
+  // ── Poll zoomRef → text visibility (reversible) ──────────────────────────
+  useEffect(() => {
+    const id = setInterval(() => {
+      const visible = zoomRef.current < 1.15;
+      if (visible !== textVisibleRef.current) {
+        textVisibleRef.current = visible;
+        setTextVisible(visible);
+      }
+    }, 100);
+    return () => clearInterval(id);
+  }, []);
 
   // ── Poll hoveredRef → hoveredSubgenre state ───────────────────────────────
   useEffect(() => {
@@ -687,7 +699,6 @@ export default function LandingPage() {
     // ── Wheel handler: only capture when pointer is inside the sphere circle ──
     // Outside the sphere, let the wheel event propagate so the page can scroll.
     const onWheel = (e: WheelEvent) => {
-      if (!interactedRef.current) { interactedRef.current = true; setTextVisible(false); }
       const rect = canvas.getBoundingClientRect();
       const mx   = e.clientX - rect.left;
       const my   = e.clientY - rect.top;
@@ -696,6 +707,8 @@ export default function LandingPage() {
       const dx   = mx - W / 2, dy = my - H / 2;
       // Outside sphere circle → don't capture, let page scroll naturally
       if (dx * dx + dy * dy > R * R) return;
+      // Hero state (nothing selected, at default zoom) → page scroll has priority
+      if (selected === null && zoomRef.current <= 1.05) return;
 
       e.preventDefault();
 
@@ -750,7 +763,6 @@ export default function LandingPage() {
   // ── Mouse handlers ────────────────────────────────────────────────────────
 
   const onMouseDown = (e: React.MouseEvent) => {
-    if (!interactedRef.current) { interactedRef.current = true; setTextVisible(false); }
     dragRef.current = { active: true, lx: e.clientX, ly: e.clientY, moved: false };
   };
 
@@ -917,7 +929,7 @@ export default function LandingPage() {
             }}
           >
             <h1 className="text-3xl md:text-4xl font-light leading-[1.15] text-white mb-5">
-              What if music taste looked like a world?
+              This is what a music taste looks like.
             </h1>
             <p className="text-sm text-zinc-500 tracking-wide">
               Click. Drag. Zoom. Explore.
