@@ -707,8 +707,11 @@ export default function LandingPage() {
       const dx   = mx - W / 2, dy = my - H / 2;
       // Outside sphere circle → don't capture, let page scroll naturally
       if (dx * dx + dy * dy > R * R) return;
-      // Hero state (nothing selected, at default zoom) → page scroll has priority
-      if (selected === null && zoomRef.current <= 1.05) return;
+      // Hero state guard: genre selected, OR meaningfully zoomed in → explore mode (capture).
+      // Otherwise (nothing selected, near-default zoom) only block scroll-down (page-scroll intent);
+      // scroll-up over the sphere is still the entry point for zooming in.
+      const inExploreMode = selected !== null || zoomRef.current > 1.05;
+      if (!inExploreMode && e.deltaY > 0) return;
 
       e.preventDefault();
 
