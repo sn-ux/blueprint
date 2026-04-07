@@ -1094,44 +1094,43 @@ export default function LandingPage() {
       <section className="h-screen bg-black flex overflow-hidden"
         style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
 
-        {/* ── LEFT: compressed problem copy ─────────────────────────────────── */}
-        <div className="flex flex-col justify-center px-12 py-10 overflow-hidden"
+        {/* ── LEFT: problem copy ──────────────────────────────────────────────── */}
+        <div className="flex flex-col justify-center px-12 py-8 overflow-hidden"
           style={{ width: "54%", borderRight: "1px solid rgba(255,255,255,0.05)" }}>
 
-          <h2 className="text-[1.35rem] font-light leading-snug text-white mb-5">
+          <h2 className="text-[2rem] font-light leading-tight text-white mb-7">
             You&apos;ve been using the internet<br />through a single model.
           </h2>
 
-          <div className="space-y-4 text-[13px] text-zinc-400 leading-relaxed">
+          <div className="space-y-5 leading-relaxed">
 
             {/* Block 1 — the mechanism */}
-            <div className="space-y-1.5">
-              <p>Every app works the same way:</p>
-              <div className="pl-3 border-l border-zinc-800 text-zinc-500 space-y-0.5">
+            <div className="space-y-2">
+              <p className="text-[15px] text-zinc-300">Every app works the same way:</p>
+              <div className="pl-4 border-l-2 border-zinc-800 space-y-0.5 text-[14px] text-zinc-500">
                 <p>1. You type into a search bar</p>
                 <p>2. You scroll a recommendation feed</p>
               </div>
-              <p className="text-zinc-600 text-[12px]">
+              <p className="text-[13px] text-zinc-600">
                 Google. Amazon. TikTok. Spotify. YouTube. ChatGPT. DoorDash. — different content, same system.
               </p>
             </div>
 
             {/* Block 2 — the limits */}
-            <div className="space-y-1">
-              <p>
-                <span className="text-zinc-200">Search</span> shows you what you already know to look for.
+            <div className="space-y-1.5 text-[14px]">
+              <p className="text-zinc-300">
+                <span className="text-white">Search</span> shows you what you already know to look for.
               </p>
-              <p>
-                <span className="text-zinc-200">Feeds</span> show what the system predicts you&apos;ll engage with —
-                based on what you&apos;ve already seen, what people like you have seen,
-                and what companies pay to promote.
+              <p className="text-zinc-400">
+                <span className="text-white">Feeds</span> show what the system predicts — based on what you&apos;ve
+                already seen, what people like you have seen, and what companies pay to promote.
               </p>
             </div>
 
             {/* Block 3 — the gap */}
-            <div className="space-y-1.5">
-              <p>So entire categories of information never reach you.</p>
-              <div className="pl-3 border-l border-zinc-800 text-zinc-500 space-y-0.5">
+            <div className="space-y-2 text-[14px]">
+              <p className="text-zinc-300">So entire categories of information never reach you.</p>
+              <div className="pl-4 border-l-2 border-zinc-800 space-y-0.5 text-zinc-500">
                 <p>1. What you don&apos;t know to search for</p>
                 <p>2. What exists outside your behavioral profile</p>
                 <p>3. What no one is paying to show you</p>
@@ -1139,16 +1138,14 @@ export default function LandingPage() {
             </div>
 
             {/* Block 4 — the thesis */}
-            <div className="space-y-1.5 pt-3 border-t border-zinc-900">
-              <p className="text-zinc-500">This isn&apos;t a UX problem. It&apos;s a structural limit.</p>
-              <p>
-                The modern internet is not designed for discovery.
-                It is designed for retrieval and prediction.
+            <div className="space-y-2 pt-4 border-t border-zinc-900">
+              <p className="text-[15px] text-zinc-200">This isn&apos;t a UX problem. It&apos;s a structural limit.</p>
+              <p className="text-[14px] text-zinc-400">
+                The modern internet is not designed for discovery. It is designed for retrieval and prediction.
               </p>
-              <p className="text-[12px] text-zinc-500 border-l border-zinc-800 pl-3 leading-relaxed">
-                The song you&apos;d love but haven&apos;t heard yet, the job you don&apos;t know exists yet,
-                the idea that would change your thinking — all already out there.
-                Just never shown to you.
+              <p className="text-[13px] text-zinc-500 pl-4 border-l-2 border-zinc-800 leading-relaxed">
+                The song you&apos;d love but haven&apos;t heard yet, the job you don&apos;t know exists,
+                the idea that would change your thinking — all already out there. Just never shown to you.
               </p>
             </div>
 
@@ -1156,9 +1153,9 @@ export default function LandingPage() {
         </div>
 
         {/* ── RIGHT: rotating company showcase ─────────────────────────────── */}
-        <div className="flex flex-col py-10 px-8 overflow-hidden" style={{ width: "46%" }}>
+        <div className="flex flex-col py-8 px-7 overflow-hidden" style={{ width: "46%" }}>
 
-          <p className="text-[11px] tracking-widest uppercase text-zinc-700 mb-5 select-none flex-shrink-0">
+          <p className="text-[11px] tracking-widest uppercase text-zinc-700 mb-4 select-none flex-shrink-0">
             The same interface, everywhere
           </p>
 
@@ -1170,147 +1167,278 @@ export default function LandingPage() {
                 className="absolute inset-0 flex flex-col"
                 style={{
                   opacity: i === carouselIdx ? 1 : 0,
-                  transform: `translateY(${i === carouselIdx ? 0 : 10}px)`,
-                  transition: "opacity 0.55s ease-in-out, transform 0.55s ease-in-out",
+                  transform: `translateY(${i === carouselIdx ? 0 : 8}px)`,
+                  transition: "opacity 0.5s ease-in-out, transform 0.5s ease-in-out",
                   pointerEvents: i === carouselIdx ? "auto" : "none",
                 }}
               >
-                {/* Company header */}
-                <div className="flex items-baseline gap-2.5 mb-3 flex-shrink-0">
-                  <span className="text-lg font-light text-white">{co.name}</span>
-                  <span className="text-[11px] tracking-wider uppercase" style={{ color: co.accent }}>
-                    {co.tag}
-                  </span>
-                  <span className="ml-auto text-[11px] text-zinc-700">
-                    {co.hasSearch && co.hasFeed ? "search + feed" : co.hasSearch ? "search" : "feed"}
-                  </span>
+                {/* Company label row */}
+                <div className="flex items-center gap-2 mb-2.5 flex-shrink-0">
+                  <span className="text-[15px] font-medium" style={{ color: co.accent }}>{co.name}</span>
+                  <span className="text-[11px] text-zinc-600 tracking-wide">{co.tag}</span>
+                  <span className="ml-auto text-[10px] tracking-widest uppercase text-zinc-700">search + feed</span>
                 </div>
 
-                {/* Mock UI frame */}
-                <div className="flex-1 min-h-0 rounded-xl flex flex-col p-4 gap-3 overflow-hidden"
-                  style={{
-                    background: "rgba(255,255,255,0.025)",
-                    border: "1px solid rgba(255,255,255,0.07)",
-                  }}
-                >
-                  {/* Search bar mock — shown for search-capable companies */}
-                  {co.hasSearch && (
-                    <div className="flex items-center gap-2 rounded-full px-4 py-2 flex-shrink-0"
-                      style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}>
-                      <div className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                        style={{ background: `rgba(${co.rgb},0.45)` }} />
-                      <div className="flex-1 h-1.5 rounded-full"
-                        style={{ background: "rgba(255,255,255,0.07)" }} />
-                      <div className="w-10 h-1.5 rounded-full"
-                        style={{ background: "rgba(255,255,255,0.04)" }} />
-                    </div>
-                  )}
+                {/* Window frame */}
+                <div className="flex-1 min-h-0 rounded-xl overflow-hidden flex flex-col"
+                  style={{ background: "rgba(12,12,16,0.97)", border: "1px solid rgba(255,255,255,0.09)" }}>
 
-                  {/* Content area — varies by company type */}
-                  {co.name === "TikTok" ? (
-                    /* Full-height video card */
-                    <div className="flex-1 rounded-lg relative overflow-hidden"
-                      style={{ background: "rgba(255,255,255,0.03)" }}>
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-10 h-10 rounded-full flex items-center justify-center"
-                          style={{ background: "rgba(255,255,255,0.07)" }}>
-                          <div style={{ width: 0, height: 0, borderTop: "7px solid transparent",
-                            borderBottom: "7px solid transparent",
-                            borderLeft: "12px solid rgba(255,255,255,0.35)",
-                            marginLeft: 3 }} />
+                  {/* Window chrome */}
+                  <div className="flex items-center gap-1.5 px-3 py-2 flex-shrink-0"
+                    style={{ background: "rgba(255,255,255,0.025)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                    <div className="w-2.5 h-2.5 rounded-full" style={{ background: `rgba(${co.rgb},0.55)` }} />
+                    <div className="w-2.5 h-2.5 rounded-full" style={{ background: "rgba(255,255,255,0.12)" }} />
+                    <div className="w-2.5 h-2.5 rounded-full" style={{ background: "rgba(255,255,255,0.08)" }} />
+                    <div className="flex-1 mx-2 h-4 rounded-md"
+                      style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.05)" }} />
+                  </div>
+
+                  {/* Content: search zone + feed zone */}
+                  <div className="flex-1 min-h-0 flex flex-col p-3 gap-0 overflow-hidden">
+
+                    {/* ── SEARCH zone ───────────────────────────────────────── */}
+                    <div className="flex-shrink-0 mb-2">
+                      <div className="text-[9px] tracking-[0.15em] uppercase mb-1.5 font-medium"
+                        style={{ color: `rgba(${co.rgb},0.55)` }}>search</div>
+
+                      {co.name === "Google" ? (
+                        /* Google: large centered search bar */
+                        <div className="flex items-center gap-2 px-4 py-2.5 rounded-full"
+                          style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)" }}>
+                          <div className="w-3.5 h-3.5 rounded-full flex-shrink-0 border border-zinc-600" style={{ borderColor: "rgba(255,255,255,0.2)" }} />
+                          <div className="flex-1 h-1.5 rounded" style={{ background: "rgba(255,255,255,0.09)" }} />
+                          <div className="w-px h-4 mx-1" style={{ background: "rgba(255,255,255,0.08)" }} />
+                          <div className="w-4 h-4 rounded-full" style={{ background: `rgba(${co.rgb},0.3)` }} />
                         </div>
-                      </div>
-                      <div className="absolute right-3 bottom-8 flex flex-col gap-4">
-                        {[0,1,2].map(j => (
-                          <div key={j} className="w-8 h-8 rounded-full"
-                            style={{ background: "rgba(255,255,255,0.06)" }} />
-                        ))}
-                      </div>
-                      <div className="absolute bottom-4 left-3 right-14 space-y-1.5">
-                        <div className="h-1.5 rounded-full"
-                          style={{ background: "rgba(255,255,255,0.18)", width: "72%" }} />
-                        <div className="h-1 rounded-full"
-                          style={{ background: "rgba(255,255,255,0.08)", width: "48%" }} />
-                      </div>
-                    </div>
-                  ) : co.name === "ChatGPT" ? (
-                    /* Chat interface */
-                    <div className="flex-1 flex flex-col gap-2.5 overflow-hidden min-h-0">
-                      {[
-                        { mine: false, w: "78%" },
-                        { mine: true,  w: "55%" },
-                        { mine: false, w: "88%" },
-                      ].map((m, j) => (
-                        <div key={j} className={`flex ${m.mine ? "justify-end" : "justify-start"}`}>
-                          <div className="rounded-xl px-3 py-2"
-                            style={{
-                              background: m.mine
-                                ? `rgba(${co.rgb},0.14)`
-                                : "rgba(255,255,255,0.05)",
-                              border: `1px solid ${m.mine
-                                ? `rgba(${co.rgb},0.22)`
-                                : "rgba(255,255,255,0.07)"}`,
-                              maxWidth: "82%",
-                            }}>
-                            <div className="h-1.5 rounded-full"
-                              style={{ background: "rgba(255,255,255,0.18)", width: m.w }} />
+                      ) : co.name === "Amazon" ? (
+                        /* Amazon: search bar with category dropdown */
+                        <div className="flex items-center gap-0 rounded overflow-hidden"
+                          style={{ border: "1px solid rgba(255,153,0,0.3)" }}>
+                          <div className="px-2 py-2 text-[10px] flex-shrink-0 border-r"
+                            style={{ background: "rgba(255,255,255,0.06)", borderColor: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.25)", width: 48, display: "flex", alignItems: "center" }}>
+                            <div className="h-1.5 w-full rounded" style={{ background: "rgba(255,255,255,0.12)" }} />
+                          </div>
+                          <div className="flex-1 flex items-center px-3 py-2" style={{ background: "rgba(255,255,255,0.05)" }}>
+                            <div className="flex-1 h-1.5 rounded" style={{ background: "rgba(255,255,255,0.08)" }} />
+                          </div>
+                          <div className="px-3 py-2 flex-shrink-0 flex items-center"
+                            style={{ background: `rgba(${co.rgb},0.4)` }}>
+                            <div className="w-3.5 h-3.5 rounded" style={{ background: `rgba(${co.rgb},0.5)` }} />
                           </div>
                         </div>
-                      ))}
-                      <div className="mt-auto flex-shrink-0 rounded-xl px-3 py-2.5 flex items-center gap-2"
-                        style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
-                        <div className="flex-1 h-1.5 rounded-full"
-                          style={{ background: "rgba(255,255,255,0.07)" }} />
-                        <div className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center"
-                          style={{ background: `rgba(${co.rgb},0.3)` }}>
-                          <div className="w-2 h-2 rounded-sm" style={{ background: co.accent }} />
-                        </div>
-                      </div>
-                    </div>
-                  ) : co.name === "YouTube" || co.name === "Spotify" ? (
-                    /* 2×2 content grid */
-                    <div className="flex-1 min-h-0 grid grid-cols-2 gap-2">
-                      {[0,1,2,3].map(j => (
-                        <div key={j} className="rounded-lg overflow-hidden flex flex-col"
-                          style={{ background: "rgba(255,255,255,0.03)" }}>
-                          <div className="flex-1"
-                            style={{ background: "rgba(255,255,255,0.05)" }} />
-                          <div className="px-2 py-1.5 space-y-1 flex-shrink-0">
-                            <div className="h-1.5 rounded-full"
-                              style={{ background: "rgba(255,255,255,0.11)", width: `${72+j*6}%` }} />
-                            <div className="h-1 rounded-full"
-                              style={{ background: "rgba(255,255,255,0.05)", width: `${48+j*5}%` }} />
+                      ) : co.name === "TikTok" ? (
+                        /* TikTok: search + For You / Following tabs */
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full"
+                            style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.09)" }}>
+                            <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: "rgba(255,255,255,0.15)" }} />
+                            <div className="flex-1 h-1.5 rounded" style={{ background: "rgba(255,255,255,0.07)" }} />
+                          </div>
+                          <div className="flex gap-4 px-1">
+                            {["For You", "Following", "Explore"].map((tab, k) => (
+                              <div key={k} className="text-[10px] pb-1" style={{
+                                color: k === 0 ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.3)",
+                                borderBottom: k === 0 ? "2px solid rgba(238,29,82,0.8)" : "2px solid transparent",
+                              }}>{tab}</div>
+                            ))}
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  ) : (
-                    /* Result / product rows (Google, Amazon, DoorDash) */
-                    <div className="flex-1 min-h-0 flex flex-col gap-2 overflow-hidden">
-                      {[0,1,2,3].map(j => (
-                        <div key={j} className="flex gap-3 items-center px-3 py-2 rounded-lg flex-shrink-0"
-                          style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.05)" }}>
-                          <div className="w-9 h-9 rounded flex-shrink-0"
-                            style={{ background: "rgba(255,255,255,0.06)" }} />
-                          <div className="flex-1 space-y-1.5">
-                            <div className="h-1.5 rounded-full"
-                              style={{ background: "rgba(255,255,255,0.13)", width: `${68+j*6}%` }} />
-                            <div className="h-1 rounded-full"
-                              style={{ background: "rgba(255,255,255,0.06)", width: `${44+j*5}%` }} />
+                      ) : co.name === "Spotify" ? (
+                        /* Spotify: search bar with genre pills */
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-2 px-3 py-1.5 rounded-md"
+                            style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.09)" }}>
+                            <div className="w-3 h-3 flex-shrink-0" style={{ opacity: 0.4, background: "rgba(255,255,255,0.3)", borderRadius: 2 }} />
+                            <div className="flex-1 h-1.5 rounded" style={{ background: "rgba(255,255,255,0.08)" }} />
                           </div>
-                          <div className="w-6 h-4 rounded flex-shrink-0"
-                            style={{ background: `rgba(${co.rgb},0.15)` }} />
+                          <div className="flex gap-1.5">
+                            {["Podcasts", "Artists", "Albums"].map((p, k) => (
+                              <div key={k} className="px-2 py-0.5 rounded-full text-[9px]"
+                                style={{
+                                  background: k === 0 ? `rgba(${co.rgb},0.2)` : "rgba(255,255,255,0.06)",
+                                  color: k === 0 ? co.accent : "rgba(255,255,255,0.4)",
+                                  border: `1px solid ${k === 0 ? `rgba(${co.rgb},0.35)` : "rgba(255,255,255,0.07)"}`,
+                                }}>{p}</div>
+                            ))}
+                          </div>
                         </div>
-                      ))}
+                      ) : co.name === "YouTube" ? (
+                        /* YouTube: search bar with mic */
+                        <div className="flex items-center gap-0 rounded-full overflow-hidden"
+                          style={{ border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.05)" }}>
+                          <div className="flex-1 flex items-center px-4 py-2">
+                            <div className="flex-1 h-1.5 rounded" style={{ background: "rgba(255,255,255,0.08)" }} />
+                          </div>
+                          <div className="w-px h-5 self-center" style={{ background: "rgba(255,255,255,0.08)" }} />
+                          <div className="px-4 py-2 flex items-center justify-center flex-shrink-0">
+                            <div className="w-3 h-4 rounded-t-full" style={{ border: "1.5px solid rgba(255,255,255,0.2)" }} />
+                          </div>
+                        </div>
+                      ) : co.name === "ChatGPT" ? (
+                        /* ChatGPT: centered prompt input */
+                        <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
+                          style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.11)" }}>
+                          <div className="flex-1 h-1.5 rounded" style={{ background: "rgba(255,255,255,0.07)" }} />
+                          <div className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center"
+                            style={{ background: `rgba(${co.rgb},0.35)` }}>
+                            <div className="w-2 h-2 rounded-sm" style={{ background: co.accent }} />
+                          </div>
+                        </div>
+                      ) : (
+                        /* DoorDash: address + search */
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-2 px-3 py-1.5 rounded-md"
+                            style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                            <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: `rgba(${co.rgb},0.5)` }} />
+                            <div className="h-1.5 rounded" style={{ background: "rgba(255,255,255,0.10)", width: "55%" }} />
+                          </div>
+                          <div className="flex items-center gap-2 px-3 py-1.5 rounded-md"
+                            style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.09)" }}>
+                            <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: "rgba(255,255,255,0.12)" }} />
+                            <div className="flex-1 h-1.5 rounded" style={{ background: "rgba(255,255,255,0.07)" }} />
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
+
+                    {/* ── FEED zone ─────────────────────────────────────────── */}
+                    <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                      <div className="text-[9px] tracking-[0.15em] uppercase mb-1.5 font-medium flex-shrink-0"
+                        style={{ color: `rgba(${co.rgb},0.55)` }}>feed</div>
+
+                      {co.name === "Google" ? (
+                        /* Google: text result rows */
+                        <div className="flex-1 min-h-0 flex flex-col gap-3 overflow-hidden">
+                          {[{ tw: "72%", dw: "55%" }, { tw: "58%", dw: "68%" }, { tw: "80%", dw: "48%" }].map((row, j) => (
+                            <div key={j} className="flex-shrink-0 space-y-1">
+                              <div className="h-2 rounded" style={{ background: `rgba(${co.rgb},0.35)`, width: row.tw }} />
+                              <div className="h-1.5 rounded" style={{ background: "rgba(255,255,255,0.07)", width: "42%" }} />
+                              <div className="h-1.5 rounded" style={{ background: "rgba(255,255,255,0.05)", width: row.dw }} />
+                              <div className="h-1.5 rounded" style={{ background: "rgba(255,255,255,0.04)", width: "60%" }} />
+                            </div>
+                          ))}
+                        </div>
+                      ) : co.name === "Amazon" ? (
+                        /* Amazon: "Recommended for you" product grid */
+                        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                          <div className="text-[10px] text-zinc-600 mb-1.5 flex-shrink-0">Recommended for you</div>
+                          <div className="flex gap-2 flex-1 min-h-0 overflow-hidden">
+                            {[0,1,2,3].map(j => (
+                              <div key={j} className="flex flex-col flex-1 min-w-0">
+                                <div className="flex-1 rounded mb-1.5" style={{ background: "rgba(255,255,255,0.05)" }} />
+                                <div className="h-1.5 rounded mb-1" style={{ background: "rgba(255,255,255,0.10)", width: "90%" }} />
+                                <div className="h-2 rounded" style={{ background: `rgba(${co.rgb},0.3)`, width: "60%" }} />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : co.name === "TikTok" ? (
+                        /* TikTok: 2-col video grid */
+                        <div className="grid grid-cols-2 gap-1.5 flex-1 min-h-0 overflow-hidden">
+                          {[0,1,2,3].map(j => (
+                            <div key={j} className="relative rounded overflow-hidden"
+                              style={{ background: "rgba(255,255,255,0.04)" }}>
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <div className="w-6 h-6 rounded-full flex items-center justify-center"
+                                  style={{ background: "rgba(255,255,255,0.08)" }}>
+                                  <div style={{ width: 0, height: 0, borderTop: "4px solid transparent",
+                                    borderBottom: "4px solid transparent",
+                                    borderLeft: "7px solid rgba(255,255,255,0.4)",
+                                    marginLeft: 2 }} />
+                                </div>
+                              </div>
+                              <div className="absolute right-1.5 top-2 flex flex-col gap-2">
+                                {[0,1,2].map(k => <div key={k} className="w-5 h-5 rounded-full" style={{ background: "rgba(255,255,255,0.06)" }} />)}
+                              </div>
+                              <div className="absolute bottom-2 left-2 right-2 space-y-1">
+                                <div className="h-1.5 rounded" style={{ background: "rgba(255,255,255,0.15)", width: `${65+j*8}%` }} />
+                                <div className="h-1 rounded" style={{ background: "rgba(255,255,255,0.07)", width: `${45+j*6}%` }} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : co.name === "Spotify" ? (
+                        /* Spotify: album card grid */
+                        <div className="flex-1 min-h-0 flex flex-col gap-2 overflow-hidden">
+                          <div className="text-[10px] text-zinc-600 flex-shrink-0">Made for you</div>
+                          <div className="grid grid-cols-3 gap-2 flex-1 min-h-0 overflow-hidden">
+                            {[0,1,2,3,4,5].map(j => (
+                              <div key={j} className="flex flex-col rounded overflow-hidden"
+                                style={{ background: "rgba(255,255,255,0.04)" }}>
+                                <div className="flex-1" style={{ background: `rgba(${co.rgb},${0.10+j*0.02})` }} />
+                                <div className="p-1.5 space-y-0.5 flex-shrink-0">
+                                  <div className="h-1.5 rounded" style={{ background: "rgba(255,255,255,0.12)", width: "85%" }} />
+                                  <div className="h-1 rounded" style={{ background: "rgba(255,255,255,0.05)", width: "60%" }} />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : co.name === "YouTube" ? (
+                        /* YouTube: recommended video list */
+                        <div className="flex-1 min-h-0 flex flex-col gap-2.5 overflow-hidden">
+                          {[0,1,2].map(j => (
+                            <div key={j} className="flex gap-2.5 flex-shrink-0">
+                              <div className="flex-shrink-0 rounded overflow-hidden relative flex items-center justify-center"
+                                style={{ width: 90, height: 52, background: "rgba(255,255,255,0.05)" }}>
+                                <div style={{ width: 0, height: 0, borderTop: "6px solid transparent",
+                                  borderBottom: "6px solid transparent",
+                                  borderLeft: `10px solid rgba(${co.rgb},0.45)` }} />
+                              </div>
+                              <div className="flex-1 space-y-1.5 pt-0.5">
+                                <div className="h-1.5 rounded" style={{ background: "rgba(255,255,255,0.12)", width: `${75+j*5}%` }} />
+                                <div className="h-1.5 rounded" style={{ background: "rgba(255,255,255,0.10)", width: `${58+j*5}%` }} />
+                                <div className="h-1 rounded" style={{ background: "rgba(255,255,255,0.05)", width: "38%" }} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : co.name === "ChatGPT" ? (
+                        /* ChatGPT: suggested prompts grid */
+                        <div className="grid grid-cols-2 gap-1.5 flex-1 min-h-0 overflow-hidden">
+                          {[0,1,2,3].map(j => (
+                            <div key={j} className="px-2.5 py-2 rounded-lg flex gap-1.5 items-start"
+                              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                              <div className="w-3.5 h-3.5 rounded flex-shrink-0 mt-0.5"
+                                style={{ background: `rgba(${co.rgb},0.2)` }} />
+                              <div className="flex-1 space-y-1 min-w-0">
+                                <div className="h-1.5 rounded" style={{ background: "rgba(255,255,255,0.10)", width: "95%" }} />
+                                <div className="h-1.5 rounded" style={{ background: "rgba(255,255,255,0.06)", width: "75%" }} />
+                                <div className="h-1.5 rounded" style={{ background: "rgba(255,255,255,0.04)", width: "55%" }} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        /* DoorDash: restaurant recommendation cards */
+                        <div className="flex-1 min-h-0 flex flex-col gap-2 overflow-hidden">
+                          <div className="text-[10px] text-zinc-600 flex-shrink-0">Recommended near you</div>
+                          {[0,1,2].map(j => (
+                            <div key={j} className="flex-shrink-0 rounded-lg overflow-hidden"
+                              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                              <div style={{ height: 28, background: `rgba(${co.rgb},${0.10+j*0.03})` }} />
+                              <div className="px-2.5 py-1.5 flex items-center gap-2">
+                                <div className="flex-1 space-y-0.5">
+                                  <div className="h-1.5 rounded" style={{ background: "rgba(255,255,255,0.13)", width: `${62+j*9}%` }} />
+                                  <div className="h-1 rounded" style={{ background: "rgba(255,255,255,0.06)", width: "48%" }} />
+                                </div>
+                                <div className="flex-shrink-0 h-3 rounded px-1"
+                                  style={{ background: `rgba(${co.rgb},0.22)`, width: 30 }} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                  </div>{/* /content */}
+                </div>{/* /window */}
               </div>
             ))}
           </div>
 
-          {/* Progress / dot indicators */}
-          <div className="flex gap-1.5 justify-center pt-4 flex-shrink-0">
+          {/* Progress indicators */}
+          <div className="flex gap-1.5 justify-center pt-3 flex-shrink-0">
             {COMPANIES.map((co, i) => (
               <button
                 key={i}
