@@ -906,37 +906,23 @@ export default function LandingPage() {
         {/* Body — single positioned container; all UI layers are absolute */}
         <div className="flex-1 relative min-h-0">
 
-          {/* Philosophy text — fades out on first interaction, stays gone */}
+          {/* Intro text — fades out on first interaction, stays gone */}
           <div
-            className="absolute inset-y-0 left-0 z-10 flex flex-col justify-center px-10 md:px-16 lg:px-24 max-w-[520px]"
+            className="absolute inset-y-0 left-0 z-10 flex flex-col justify-center px-10 md:px-16 lg:px-24 max-w-[480px]"
             style={{
               opacity: textVisible ? 1 : 0,
               transition: "opacity 0.4s ease-in-out",
               pointerEvents: textVisible ? "auto" : "none",
-              background: "linear-gradient(to right, rgba(0,0,0,0.82) 55%, transparent)",
+              background: "linear-gradient(to right, rgba(0,0,0,0.80) 50%, transparent)",
             }}
           >
-              <p className="text-xs tracking-[0.20em] uppercase text-zinc-600 mb-8 font-medium">
-                The Constraint
-              </p>
-              <h1 className="text-3xl md:text-4xl lg:text-[2.6rem] font-light leading-[1.2] text-white mb-10 max-w-xl">
-                The internet is navigated through two interfaces: the search bar and the feed.
-              </h1>
-              <div className="space-y-5 max-w-md">
-                <p className="text-base text-zinc-400 leading-relaxed">
-                  One shows you what you already know to ask for.
-                  The other shows you what it predicts you&apos;ll want.
-                  Both limit discovery.
-                </p>
-                <p className="text-sm text-zinc-600 leading-relaxed">
-                  The things most worth finding are often the things
-                  you don&apos;t yet know to search for.
-                </p>
-              </div>
-              <p className="text-xs text-zinc-700 mt-10 tracking-wide">
-                scroll down ↓ · zoom into the sphere →
-              </p>
-            </div>
+            <h1 className="text-3xl md:text-4xl font-light leading-[1.15] text-white mb-5">
+              What if music taste looked like a world?
+            </h1>
+            <p className="text-sm text-zinc-500 tracking-wide">
+              Click. Drag. Zoom. Explore.
+            </p>
+          </div>
 
           {/* Canvas — fills entire body, sphere always centered */}
           <canvas
@@ -1066,41 +1052,98 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ══ SECTION 2 — The Escape ════════════════════════════════════════════ */}
-      <section className="min-h-screen bg-black flex flex-col">
+      {/* ══ SECTION 2 — The Problem ═══════════════════════════════════════════ */}
+      <section className="bg-black">
 
-        {/* Copy */}
-        <div className="flex flex-col items-center text-center px-6 pt-20 pb-16 max-w-2xl mx-auto">
-          <p className="text-xs tracking-[0.20em] uppercase text-zinc-600 mb-8 font-medium">
-            The Escape
-          </p>
-          <h2 className="text-3xl md:text-4xl lg:text-[2.6rem] font-light leading-[1.2] text-white mb-10">
-            You get past these constraints by exploring someone you trust.
+        {/* Problem statement */}
+        <div className="max-w-2xl mx-auto px-8 md:px-12 pt-24 pb-16">
+
+          <h2 className="text-3xl md:text-4xl font-light leading-[1.15] text-white mb-14">
+            You&apos;ve been using the internet through a single model.
           </h2>
-          <div className="space-y-5 max-w-lg">
-            <p className="text-base text-zinc-400 leading-relaxed">
-              Discovery expands when you move through someone else&apos;s digital life.
-              Someone with taste you respect.
-              Someone closer to a scene.
-              Someone who sees what you don&apos;t.
+
+          <div className="space-y-8 text-zinc-400 text-base leading-relaxed">
+
+            <p>Every app works the same way:</p>
+
+            <ol className="space-y-2 pl-1">
+              <li className="flex gap-3"><span className="text-zinc-600 select-none">1.</span><span>You type into a search bar</span></li>
+              <li className="flex gap-3"><span className="text-zinc-600 select-none">2.</span><span>You scroll a recommendation feed</span></li>
+            </ol>
+
+            <p className="text-zinc-600 text-sm">
+              Google. Amazon. TikTok. Spotify. YouTube. ChatGPT. DoorDash.<br />
+              Different content — same system.
             </p>
-            <p className="text-sm text-zinc-600 leading-relaxed">
-              What you didn&apos;t know to look for becomes visible.
+
+            <p>Both parts of this system limit what you can discover.</p>
+
+            <p><span className="text-white">Search</span> shows you what you already know to look for.</p>
+
+            <div>
+              <p className="mb-3"><span className="text-white">Feeds</span> show you what the system predicts you&apos;ll engage with, based on:</p>
+              <ol className="space-y-2 pl-1">
+                <li className="flex gap-3"><span className="text-zinc-600 select-none">1.</span><span>What you&apos;ve already seen</span></li>
+                <li className="flex gap-3"><span className="text-zinc-600 select-none">2.</span><span>What people like you have seen</span></li>
+                <li className="flex gap-3"><span className="text-zinc-600 select-none">3.</span><span>What companies pay to promote</span></li>
+              </ol>
+            </div>
+
+            <p className="text-zinc-600 text-sm">That&apos;s it.</p>
+
+            <p>So entire categories of information never reach you.</p>
+
+            <div>
+              <p className="mb-3">You will never find:</p>
+              <ol className="space-y-2 pl-1">
+                <li className="flex gap-3"><span className="text-zinc-600 select-none">1.</span><span>What you don&apos;t know to search for</span></li>
+                <li className="flex gap-3"><span className="text-zinc-600 select-none">2.</span><span>What exists outside your behavioral profile</span></li>
+                <li className="flex gap-3"><span className="text-zinc-600 select-none">3.</span><span>What no one is paying to show you</span></li>
+              </ol>
+            </div>
+
+            <p className="text-zinc-500">
+              This isn&apos;t a UX problem. It&apos;s a structural limit.
             </p>
+
+            <p>
+              The modern internet is not designed for discovery.<br />
+              It is designed for retrieval and prediction.
+            </p>
+
+            <p>
+              Which means the majority of valuable information<br />
+              is not just hard to find—
+            </p>
+
+            <div className="space-y-1.5 text-zinc-500 text-sm border-l border-zinc-800 pl-5">
+              <p>The song you&apos;d love but haven&apos;t heard yet,</p>
+              <p>the job you want but don&apos;t know exists yet,</p>
+              <p>the product you&apos;d buy but haven&apos;t come across yet,</p>
+              <p>the idea that would change your thinking but hasn&apos;t reached you yet.</p>
+            </div>
+
+            <p>All already out there — just never shown to you.</p>
+
           </div>
         </div>
 
-        {/* Two passive spheres */}
-        <div className="flex-1 flex items-center justify-center gap-0 md:gap-8 px-4 pb-16 min-h-[420px]">
-          <div className="relative w-[44vw] max-w-[420px] aspect-square flex-shrink-0">
-            <div className="absolute inset-0 pointer-events-none z-10"
-              style={{ background: "radial-gradient(circle at 50% 50%, transparent 38%, black 78%)" }} />
-            <SphereCanvas className="w-full h-full" rotSpeed={0.0020} initialRotX={0.28} initialRotY={0.4} />
-          </div>
-          <div className="relative w-[44vw] max-w-[420px] aspect-square flex-shrink-0">
-            <div className="absolute inset-0 pointer-events-none z-10"
-              style={{ background: "radial-gradient(circle at 50% 50%, transparent 38%, black 78%)" }} />
-            <SphereCanvas className="w-full h-full" rotSpeed={0.0018} initialRotX={0.22} initialRotY={2.2} />
+        {/* ── search-feed-ui-placeholder ────────────────────────────────────────
+            Future: replace with a row/grid of interface screenshots or logos
+            from Google, Amazon, TikTok, Spotify, YouTube, ChatGPT, DoorDash.
+        ──────────────────────────────────────────────────────────────────────── */}
+        <div className="max-w-4xl mx-auto px-8 md:px-12 pb-24">
+          <div
+            className="w-full rounded-lg flex items-center justify-center"
+            style={{
+              height: 200,
+              border: "1px dashed rgba(255,255,255,0.07)",
+              background: "rgba(255,255,255,0.02)",
+            }}
+          >
+            <span className="text-xs text-zinc-700 tracking-widest uppercase select-none">
+              interface screenshots
+            </span>
           </div>
         </div>
 
