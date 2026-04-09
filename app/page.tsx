@@ -977,7 +977,7 @@ export default function LandingPage() {
 
           {/* Top-left: Headline + supporting text */}
           <div
-            className="absolute top-0 left-0 z-10 flex flex-col px-8 pt-8 md:px-12 md:pt-10 pointer-events-none"
+            className="absolute top-0 left-0 z-10 flex flex-col pl-10 pt-12 md:pl-14 md:pt-16 pointer-events-none"
             style={{
               opacity: textVisible ? 1 : 0,
               transition: "opacity 0.4s ease-in-out",
@@ -994,7 +994,7 @@ export default function LandingPage() {
           {/* Bottom center: Stats row */}
           {totalTrackCount > 0 && (
             <div
-              className="absolute bottom-[8vh] left-0 right-0 z-10 flex justify-center gap-10 pointer-events-none"
+              className="absolute bottom-[2vh] left-0 right-0 z-10 flex justify-center gap-10 pointer-events-none"
               style={{
                 opacity: textVisible ? 1 : 0,
                 transition: "opacity 0.4s ease-in-out",
