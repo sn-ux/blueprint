@@ -1167,6 +1167,7 @@ export default function LandingPage() {
 
             {/* Block 1 — the mechanism */}
             <div className="space-y-0.5 text-[17px] text-white">
+              <p className="text-white mb-1">Check every app you use.</p>
               <p>1. You type into a search bar</p>
               <p>2. You scroll a recommendation feed</p>
             </div>
