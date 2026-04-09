@@ -978,7 +978,7 @@ export default function LandingPage() {
                 This is what a music taste looks like.
               </h1>
               <p className="text-xs text-zinc-500 tracking-widest uppercase">
-                Zoom. Explore.
+                Zoom. Explore. Discover.
               </p>
             </div>
 
