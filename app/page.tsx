@@ -977,7 +977,8 @@ export default function LandingPage() {
 
           {/* Top-left: Headline + supporting text */}
           <div
-            className="absolute top-0 left-0 z-10 flex flex-col pl-10 pt-12 md:pl-14 md:pt-16 pointer-events-none"
+            className="absolute z-10 flex flex-col pointer-events-none"
+            style={{ top: "22%", left: "8%" }}
             style={{
               opacity: textVisible ? 1 : 0,
               transition: "opacity 0.4s ease-in-out",
