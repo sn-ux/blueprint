@@ -1185,6 +1185,9 @@ export default function LandingPage() {
               </p>
             </div>
 
+            {/* Echo chamber line */}
+            <p className="text-[17px] text-white">This puts you in an algorithmic echo chamber.</p>
+
             {/* Block 3 — the gap */}
             <div className="space-y-1.5 text-[17px]">
               <p className="text-white font-semibold">Entire categories of information never reach you.</p>
