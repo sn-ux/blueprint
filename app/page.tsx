@@ -975,28 +975,27 @@ export default function LandingPage() {
             onClick={handleClick}
           />
 
-          {/* Left: Headline — vertically centered, anchored left */}
+          {/* Top-left: Headline + supporting text */}
           <div
-            className="absolute left-[6vw] z-10 max-w-sm pointer-events-none"
+            className="absolute top-0 left-0 z-10 flex flex-col px-8 pt-8 md:px-12 md:pt-10 pointer-events-none"
             style={{
-              top: "50%",
-              transform: "translateY(-50%)",
               opacity: textVisible ? 1 : 0,
               transition: "opacity 0.4s ease-in-out",
             }}
           >
-            <h1 className="text-2xl md:text-3xl font-light leading-[1.25] text-white">
+            <h1 className="text-2xl md:text-3xl font-light leading-[1.25] text-white mb-2 max-w-sm">
               This is what a music taste looks like.
             </h1>
+            <p className="text-[11px] text-zinc-500 tracking-widest uppercase">
+              Zoom. Explore. Discover.
+            </p>
           </div>
 
-          {/* Right: Stats — vertically centered, anchored right */}
+          {/* Bottom center: Stats row */}
           {totalTrackCount > 0 && (
             <div
-              className="absolute right-[6vw] z-10 flex flex-col gap-4 pointer-events-none"
+              className="absolute bottom-[8vh] left-0 right-0 z-10 flex justify-center gap-10 pointer-events-none"
               style={{
-                top: "50%",
-                transform: "translateY(-50%)",
                 opacity: textVisible ? 1 : 0,
                 transition: "opacity 0.4s ease-in-out",
               }}
@@ -1007,30 +1006,17 @@ export default function LandingPage() {
                 { label: "Genres",    value: totalGenreCount },
                 { label: "Subgenres", value: totalSubgenreCount },
               ].map(({ label, value }) => (
-                <div key={label} className="flex items-baseline gap-3">
+                <div key={label} className="flex flex-col items-center">
                   <span className="text-lg font-light text-white tabular-nums leading-none">
                     {value.toLocaleString()}
                   </span>
-                  <span className="text-[10px] tracking-widest uppercase text-zinc-600">
+                  <span className="text-[10px] tracking-widest uppercase text-zinc-600 mt-1">
                     {label}
                   </span>
                 </div>
               ))}
             </div>
           )}
-
-          {/* Bottom: Subtext — horizontally centered near bottom */}
-          <div
-            className="absolute bottom-[10vh] left-0 right-0 z-10 flex justify-center pointer-events-none"
-            style={{
-              opacity: textVisible ? 1 : 0,
-              transition: "opacity 0.4s ease-in-out",
-            }}
-          >
-            <p className="text-[11px] text-zinc-500 tracking-widest uppercase">
-              Zoom. Explore. Discover.
-            </p>
-          </div>
 
           {/* Right panel — absolute overlay, does not affect canvas layout */}
           {selected && (
