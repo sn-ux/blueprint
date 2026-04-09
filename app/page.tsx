@@ -300,6 +300,68 @@ function hexRgb(h: string): [number, number, number] {
   return [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)];
 }
 
+// ── Mini spinning icosphere for sections 3 & 4 ───────────────────────────────
+
+function MiniSphere({ size = 80, seed = 0 }: { size?: number; seed?: number }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const rotRef    = useRef({ x: 0.3 + seed * 0.18, y: seed * 0.55 });
+  const rafRef    = useRef(0);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width  = size * dpr;
+    canvas.height = size * dpr;
+    ctx.scale(dpr, dpr);
+
+    const { verts, faces } = buildIcosphere(2);
+    const palette    = Object.values(COLORS);
+    const faceColors = faces.map((_, i) => palette[(i * 3 + seed * 7) % palette.length]);
+    const hexRgbMini = (h: string) =>
+      [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)] as const;
+
+    function draw() {
+      ctx.clearRect(0, 0, size, size);
+      rotRef.current.y += 0.006;
+      const R  = size * 0.42;
+      const rx = rotRef.current.x, ry = rotRef.current.y;
+      const sX = Math.sin(rx), cX = Math.cos(rx);
+      const sY = Math.sin(ry), cY = Math.cos(ry);
+      const pv = verts.map(([x, y, z]) => {
+        const x1 = x*cY - z*sY, z1 = x*sY + z*cY;
+        const y2 = y*cX - z1*sX, z2 = y*sX + z1*cX;
+        return { sx: size/2 + x1*R, sy: size/2 - y2*R, z: z2 };
+      });
+      const sorted = faces
+        .map((f, i) => ({ f, i, z: (pv[f[0]].z + pv[f[1]].z + pv[f[2]].z) / 3 }))
+        .sort((a, b) => a.z - b.z);
+      for (const { f, i, z } of sorted) {
+        const [ia, ib, ic] = f;
+        const [r, g, b]    = hexRgbMini(faceColors[i]);
+        ctx.beginPath();
+        ctx.moveTo(pv[ia].sx, pv[ia].sy);
+        ctx.lineTo(pv[ib].sx, pv[ib].sy);
+        ctx.lineTo(pv[ic].sx, pv[ic].sy);
+        ctx.closePath();
+        ctx.fillStyle   = `rgba(${r},${g},${b},${(0.05 + Math.max(0,z)*0.12).toFixed(3)})`;
+        ctx.fill();
+        ctx.strokeStyle = `rgba(${r},${g},${b},${(0.30 + Math.max(0,z)*0.50).toFixed(3)})`;
+        ctx.lineWidth   = 0.7;
+        ctx.stroke();
+      }
+      rafRef.current = requestAnimationFrame(draw);
+    }
+    draw();
+    return () => cancelAnimationFrame(rafRef.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [size, seed]);
+
+  return <canvas ref={canvasRef} style={{ width: size, height: size, display: "block" }} />;
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function LandingPage() {
@@ -1715,16 +1777,16 @@ export default function LandingPage() {
 
           <div className="space-y-6 leading-relaxed">
             <div className="space-y-1.5 text-[17px]">
-              <p className="text-white font-semibold">Every person has a world.</p>
-              <p className="text-zinc-500">Blueprint maps the music taste of everyone you know into a sphere you can physically explore — not a playlist, not a feed. A world.</p>
+              <p className="text-white font-semibold">Every person has a sphere.</p>
+              <p className="text-zinc-500">Blueprint maps the music taste of everyone you know into a sphere you can physically explore — not a playlist, not a feed. A map of what they actually love.</p>
             </div>
             <div className="space-y-1.5 text-[17px]">
-              <p className="text-white font-semibold">Navigate their world, not their recently played.</p>
+              <p className="text-white font-semibold">Navigate their sphere, not their recently played.</p>
               <p className="text-zinc-500">See the shape of what they love. Walk through their Jazz section, their Electronic corner, their deep cuts. Find what&apos;s been there for years — not just what they listened to yesterday.</p>
             </div>
             <div className="space-y-1.5 text-[17px]">
               <p className="text-white font-semibold">For You.</p>
-              <p className="text-zinc-500">Content from your friends&apos; worlds that doesn&apos;t exist in yours — but is close enough to what you already love that you&apos;d probably love it too.</p>
+              <p className="text-zinc-500">Content from your friends&apos; spheres that doesn&apos;t exist in yours — but is close enough to what you already love that you&apos;d probably love it too.</p>
             </div>
           </div>
 
@@ -1751,46 +1813,25 @@ export default function LandingPage() {
                 style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.05)" }} />
             </div>
             {/* Content */}
-            <div className="flex-1 min-h-0 flex flex-col p-4 gap-4 overflow-hidden">
+            <div className="flex-1 min-h-0 flex flex-col p-5 gap-0 overflow-hidden">
               {/* Aggregate friends sphere */}
-              <div className="flex flex-col items-center flex-shrink-0 pt-2">
-                <div className="text-[9px] tracking-widest uppercase text-zinc-600 mb-2.5">Friends World</div>
-                <div style={{
-                  width: 96, height: 96, borderRadius: "50%",
-                  background: "radial-gradient(circle at 38% 35%, rgba(167,139,250,0.55) 0%, rgba(251,146,60,0.3) 35%, rgba(34,211,238,0.18) 65%, rgba(0,0,0,0) 100%)",
-                  border: "1px solid rgba(255,255,255,0.12)",
-                  boxShadow: "0 0 32px rgba(167,139,250,0.12)",
-                }} />
+              <div className="flex flex-col items-center flex-shrink-0 pb-4">
+                <div className="text-[9px] tracking-widest uppercase text-zinc-600 mb-3">Friends</div>
+                <MiniSphere size={110} seed={99} />
               </div>
-              {/* Friend spheres grid */}
-              <div className="flex-1 min-h-0 grid grid-cols-3 gap-3 overflow-hidden">
+              {/* Friend spheres grid — fills remaining space */}
+              <div className="flex-1 min-h-0 grid grid-cols-3 grid-rows-2 gap-y-3 gap-x-2">
                 {[
-                  { name: "Chris",   c1: "167,139,250", c2: "251,146,60"  },
-                  { name: "Adam",    c1: "34,211,238",  c2: "74,222,128"  },
-                  { name: "Ethan",   c1: "251,146,60",  c2: "248,113,113" },
-                  { name: "Dole",    c1: "74,222,128",  c2: "34,211,238"  },
-                  { name: "UCLA",    c1: "251,191,36",  c2: "167,139,250" },
-                  { name: "Atlanta", c1: "248,113,113", c2: "251,146,60"  },
+                  { name: "Chris",   seed: 1 },
+                  { name: "Adam",    seed: 5 },
+                  { name: "Ethan",   seed: 9 },
+                  { name: "Dole",    seed: 3 },
+                  { name: "UCLA",    seed: 7 },
+                  { name: "Atlanta", seed: 11 },
                 ].map(f => (
-                  <div key={f.name} className="flex flex-col items-center justify-center gap-1.5">
-                    <div style={{
-                      width: 54, height: 54, borderRadius: "50%",
-                      background: `radial-gradient(circle at 38% 35%, rgba(${f.c1},0.55) 0%, rgba(${f.c2},0.25) 55%, rgba(0,0,0,0) 100%)`,
-                      border: "1px solid rgba(255,255,255,0.08)",
-                    }} />
-                    <span className="text-[9px] text-zinc-600">{f.name}</span>
-                  </div>
-                ))}
-              </div>
-              {/* Nav bar */}
-              <div className="flex-shrink-0 flex justify-around py-2"
-                style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
-                {["You", "Friends", "World"].map((tab, k) => (
-                  <div key={tab} className="flex flex-col items-center gap-1">
-                    <div className="w-1.5 h-1.5 rounded-full"
-                      style={{ background: k === 1 ? "rgba(167,139,250,0.8)" : "rgba(255,255,255,0.15)" }} />
-                    <span className="text-[9px]"
-                      style={{ color: k === 1 ? "rgba(167,139,250,0.8)" : "rgba(255,255,255,0.25)" }}>{tab}</span>
+                  <div key={f.name} className="flex flex-col items-center justify-center gap-1.5 min-h-0">
+                    <MiniSphere size={72} seed={f.seed} />
+                    <span className="text-[10px] text-zinc-500">{f.name}</span>
                   </div>
                 ))}
               </div>
@@ -1800,11 +1841,11 @@ export default function LandingPage() {
 
       </section>
 
-      {/* ══ SECTION 4 — World ════════════════════════════════════════════════ */}
+      {/* ══ SECTION 4 — Places ═══════════════════════════════════════════════ */}
       <section className="h-screen bg-black flex overflow-hidden"
         style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
 
-        {/* ── LEFT: world map mockup ───────────────────────────────────────────── */}
+        {/* ── LEFT: map mockup ─────────────────────────────────────────────────── */}
         <div className="flex flex-col py-8 px-7 overflow-hidden" style={{ width: "46%" }}>
           <p className="text-[11px] tracking-widest uppercase text-zinc-700 mb-4 select-none flex-shrink-0">
             The Universal Intellect
@@ -1822,53 +1863,35 @@ export default function LandingPage() {
             </div>
             {/* Map content */}
             <div className="flex-1 min-h-0 relative overflow-hidden">
-              {/* Grid lines */}
+              {/* Subtle grid */}
               <svg className="absolute inset-0 w-full h-full" style={{ pointerEvents: "none" }}>
-                {[0.18,0.32,0.46,0.60,0.74,0.88].map((y,i) => (
+                {[0.18,0.36,0.54,0.72,0.88].map((y,i) => (
                   <line key={`h${i}`} x1="0" y1={`${y*100}%`} x2="100%" y2={`${y*100}%`}
-                    stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
+                    stroke="rgba(255,255,255,0.035)" strokeWidth="1" />
                 ))}
-                {[0.12,0.24,0.38,0.52,0.66,0.80,0.92].map((x,i) => (
+                {[0.15,0.30,0.46,0.62,0.78,0.92].map((x,i) => (
                   <line key={`v${i}`} x1={`${x*100}%`} y1="0" x2={`${x*100}%`} y2="100%"
-                    stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
+                    stroke="rgba(255,255,255,0.035)" strokeWidth="1" />
                 ))}
-                {/* Diagonal roads */}
-                <line x1="5%" y1="20%" x2="45%" y2="70%" stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
-                <line x1="30%" y1="10%" x2="85%" y2="60%" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
-                <line x1="0%" y1="55%" x2="60%" y2="90%" stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
+                <line x1="5%" y1="18%" x2="48%" y2="72%" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+                <line x1="28%" y1="8%"  x2="88%" y2="62%" stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
+                <line x1="0%" y1="52%" x2="58%" y2="92%" stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
               </svg>
-              {/* Location spheres */}
+              {/* City spheres — absolute positioned */}
               {[
-                { x: "20%", y: "22%", r: 24, label: "New York",  c1: "167,139,250", c2: "251,146,60"  },
-                { x: "40%", y: "38%", r: 18, label: "Chicago",   c1: "34,211,238",  c2: "74,222,128"  },
-                { x: "70%", y: "28%", r: 30, label: "Los Angeles",c1: "251,146,60",  c2: "167,139,250" },
-                { x: "57%", y: "58%", r: 14, label: "Austin",    c1: "251,191,36",  c2: "248,113,113" },
-                { x: "15%", y: "62%", r: 16, label: "Atlanta",   c1: "248,113,113", c2: "251,146,60"  },
-                { x: "82%", y: "62%", r: 12, label: "Miami",     c1: "74,222,128",  c2: "34,211,238"  },
+                { x: "20%", y: "20%", size: 68, seed: 2,  label: "New York"    },
+                { x: "42%", y: "36%", size: 56, seed: 6,  label: "Chicago"     },
+                { x: "72%", y: "22%", size: 80, seed: 10, label: "Los Angeles" },
+                { x: "56%", y: "60%", size: 46, seed: 4,  label: "Austin"      },
+                { x: "14%", y: "65%", size: 50, seed: 8,  label: "Atlanta"     },
+                { x: "83%", y: "65%", size: 40, seed: 12, label: "Miami"       },
               ].map(loc => (
                 <div key={loc.label} className="absolute flex flex-col items-center"
                   style={{ left: loc.x, top: loc.y, transform: "translate(-50%,-50%)" }}>
-                  <div style={{
-                    width: loc.r*2, height: loc.r*2, borderRadius: "50%",
-                    background: `radial-gradient(circle at 38% 35%, rgba(${loc.c1},0.6) 0%, rgba(${loc.c2},0.28) 55%, rgba(0,0,0,0) 100%)`,
-                    border: "1px solid rgba(255,255,255,0.10)",
-                    boxShadow: `0 0 ${loc.r}px rgba(${loc.c1},0.14)`,
-                  }} />
-                  <span className="text-[8px] text-zinc-600 mt-1 whitespace-nowrap">{loc.label}</span>
+                  <MiniSphere size={loc.size} seed={loc.seed} />
+                  <span className="text-[9px] text-zinc-600 mt-1 whitespace-nowrap">{loc.label}</span>
                 </div>
               ))}
-              {/* Nav bar */}
-              <div className="absolute bottom-0 left-0 right-0 flex justify-around py-2 px-3"
-                style={{ borderTop: "1px solid rgba(255,255,255,0.05)", background: "rgba(8,8,12,0.92)" }}>
-                {["You", "Friends", "World"].map((tab, k) => (
-                  <div key={tab} className="flex flex-col items-center gap-1">
-                    <div className="w-1.5 h-1.5 rounded-full"
-                      style={{ background: k === 2 ? "rgba(74,222,128,0.8)" : "rgba(255,255,255,0.15)" }} />
-                    <span className="text-[9px]"
-                      style={{ color: k === 2 ? "rgba(74,222,128,0.8)" : "rgba(255,255,255,0.25)" }}>{tab}</span>
-                  </div>
-                ))}
-              </div>
             </div>
           </div>
         </div>
@@ -1878,20 +1901,20 @@ export default function LandingPage() {
           style={{ width: "54%", borderLeft: "1px solid rgba(255,255,255,0.05)" }}>
 
           <h2 className="text-[2.75rem] font-light leading-tight text-white">
-            Every place has<br />a World.
+            Every place has<br />a sphere.
           </h2>
 
           <div className="space-y-6 leading-relaxed">
             <div className="space-y-1.5 text-[17px]">
               <p className="text-white font-semibold">A living map of human taste.</p>
-              <p className="text-zinc-500">Every city, school, and community has a World — a sphere built from the combined taste of everyone in that place. Not what&apos;s trending. Not what&apos;s promoted. What the people there actually love.</p>
+              <p className="text-zinc-500">Every city, school, and community has a sphere — built from the combined taste of everyone in that place. Not what&apos;s trending. Not what&apos;s promoted. What the people there actually love.</p>
             </div>
             <div className="space-y-1.5 text-[17px]">
-              <p className="text-white font-semibold">Zoom out far enough and you see Earth&apos;s World.</p>
+              <p className="text-white font-semibold">Zoom out far enough and you see everything.</p>
               <p className="text-zinc-500">The aggregate of everything everyone has ever discovered, saved, and loved. The complete record of human taste, mapped onto the planet that produced it.</p>
             </div>
             <div className="space-y-1.5 text-[17px]">
-              <p className="text-white font-semibold">The digital world, tethered to the real one.</p>
+              <p className="text-white font-semibold">The digital, tethered to the real.</p>
               <p className="text-zinc-500">Find music from Atlanta, jazz from New Orleans, electronic from Berlin — not because an algorithm decided you&apos;d like it, but because you chose to go there.</p>
             </div>
           </div>
