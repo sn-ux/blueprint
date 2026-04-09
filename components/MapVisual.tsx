@@ -103,9 +103,11 @@ export default function MapVisual() {
   const elsRef       = useRef<Map<string, HTMLDivElement>>(new Map());
 
   useEffect(() => {
-    const container = containerRef.current;
-    const bg        = bgRef.current;
-    if (!container || !bg) return;
+    const containerRaw = containerRef.current;
+    const bgRaw        = bgRef.current;
+    if (!containerRaw || !bgRaw) return;
+    const container: HTMLDivElement = containerRaw;
+    const bg: HTMLDivElement        = bgRaw;
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
