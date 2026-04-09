@@ -131,6 +131,18 @@ const DEMO_TRACKS: Record<string, TrackItem[]> = {
   ],
 };
 
+// ── Per-platform discovery statements (indexed to COMPANIES order) ───────────
+
+const DISCOVERY = [
+  "the result you\u2019d love but never thought to search for",   // Google
+  "the video you\u2019d love but the algorithm never surfaced",    // TikTok
+  "the product you\u2019d love but never knew existed",            // Amazon
+  "the song you\u2019d love but haven\u2019t heard yet",           // Spotify
+  "the video you\u2019d love but never came across",               // YouTube
+  "the answer you\u2019d love but never knew to ask for",          // ChatGPT
+  "the dish you\u2019d love but haven\u2019t tried yet",           // DoorDash
+];
+
 // ── Company showcase data ─────────────────────────────────────────────────────
 
 const COMPANIES = [
@@ -1146,21 +1158,15 @@ export default function LandingPage() {
           style={{ width: "54%", borderRight: "1px solid rgba(255,255,255,0.05)" }}>
 
           <h2 className="text-[2rem] font-light leading-tight text-white mb-7">
-            You&apos;ve been using the internet<br />through a single model.
+            The modern &ldquo;internet&rdquo;<br />is a single model.
           </h2>
 
           <div className="space-y-5 leading-relaxed">
 
             {/* Block 1 — the mechanism */}
-            <div className="space-y-2">
-              <p className="text-[15px] text-zinc-300">Every app works the same way:</p>
-              <div className="pl-4 border-l-2 border-zinc-800 space-y-0.5 text-[14px] text-zinc-500">
-                <p>1. You type into a search bar</p>
-                <p>2. You scroll a recommendation feed</p>
-              </div>
-              <p className="text-[13px] text-zinc-600">
-                Google. Amazon. TikTok. Spotify. YouTube. ChatGPT. DoorDash. — different content, same system.
-              </p>
+            <div className="pl-4 border-l-2 border-zinc-800 space-y-0.5 text-[14px] text-zinc-500">
+              <p>1. You type into a search bar</p>
+              <p>2. You scroll a recommendation feed</p>
             </div>
 
             {/* Block 2 — the limits */}
@@ -1169,14 +1175,14 @@ export default function LandingPage() {
                 <span className="text-white">Search</span> shows you what you already know to look for.
               </p>
               <p className="text-zinc-400">
-                <span className="text-white">Feeds</span> show what the system predicts — based on what you&apos;ve
-                already seen, what people like you have seen, and what companies pay to promote.
+                <span className="text-white">Feeds</span> show what the system predicts — based on what
+                you&apos;ve already seen, what people like you have seen, and what companies pay to promote.
               </p>
             </div>
 
             {/* Block 3 — the gap */}
             <div className="space-y-2 text-[14px]">
-              <p className="text-zinc-300">So entire categories of information never reach you.</p>
+              <p className="text-zinc-300">Entire categories of information never reach you.</p>
               <div className="pl-4 border-l-2 border-zinc-800 space-y-0.5 text-zinc-500">
                 <p>1. What you don&apos;t know to search for</p>
                 <p>2. What exists outside your behavioral profile</p>
@@ -1188,11 +1194,16 @@ export default function LandingPage() {
             <div className="space-y-2 pt-4 border-t border-zinc-900">
               <p className="text-[15px] text-zinc-200">This isn&apos;t a UX problem. It&apos;s a structural limit.</p>
               <p className="text-[14px] text-zinc-400">
-                The modern internet is not designed for discovery. It is designed for retrieval and prediction.
+                The modern internet is not designed for discovery. It is designed for engagement.
               </p>
               <p className="text-[13px] text-zinc-500 pl-4 border-l-2 border-zinc-800 leading-relaxed">
-                The song you&apos;d love but haven&apos;t heard yet, the job you don&apos;t know exists,
-                the idea that would change your thinking — all already out there. Just never shown to you.
+                <span
+                  key={carouselIdx}
+                  style={{ display: "inline", transition: "opacity 0.4s ease-in-out" }}
+                >
+                  {DISCOVERY[carouselIdx]}
+                </span>
+                {" "}— all already out there. Just never shown to you.
               </p>
             </div>
 
@@ -1203,7 +1214,7 @@ export default function LandingPage() {
         <div className="flex flex-col py-8 px-7 overflow-hidden" style={{ width: "46%" }}>
 
           <p className="text-[11px] tracking-widest uppercase text-zinc-700 mb-4 select-none flex-shrink-0">
-            The same interface, everywhere
+            Different content, same model
           </p>
 
           {/* Carousel slides */}
