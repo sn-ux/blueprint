@@ -319,9 +319,40 @@ function MiniSphere({ size = 80, seed = 0 }: { size?: number; seed?: number }) {
     ctx.scale(dpr, dpr);
 
     const { verts, faces } = buildIcosphere(2);
-    const palette    = Object.values(COLORS);
-    const faceColors = faces.map((_, i) => palette[(i * 3 + seed * 7) % palette.length]);
-    const hexRgbMini = (h: string) =>
+    const palette = Object.values(COLORS);
+    const nC      = palette.length;
+
+    // Seeded shuffle — each sphere gets a unique, non-repeating color order
+    const colorOrder = Array.from({ length: nC }, (_, i) => i);
+    let s = (seed * 1234567 + 42) >>> 0;
+    for (let i = nC - 1; i > 0; i--) {
+      s = Math.imul(s, 1664525) + 1013904223 >>> 0;
+      const j = s % (i + 1);
+      [colorOrder[i], colorOrder[j]] = [colorOrder[j], colorOrder[i]];
+    }
+
+    // Fibonacci poles rotated by seed → unique Voronoi layout per sphere
+    const rawPoles = fiboPoles(nC);
+    const yOff = seed * 1.1, cosO = Math.cos(yOff), sinO = Math.sin(yOff);
+    const poles = rawPoles.map(([px, py, pz]): V3 =>
+      [px * cosO - pz * sinO, py, px * sinO + pz * cosO]);
+
+    // Assign each face to its nearest pole (Voronoi)
+    const faceRegion = faces.map(f => {
+      const cx = (verts[f[0]][0]+verts[f[1]][0]+verts[f[2]][0]) / 3;
+      const cy = (verts[f[0]][1]+verts[f[1]][1]+verts[f[2]][1]) / 3;
+      const cz = (verts[f[0]][2]+verts[f[1]][2]+verts[f[2]][2]) / 3;
+      const len = Math.sqrt(cx*cx + cy*cy + cz*cz) || 1;
+      const nx = cx/len, ny = cy/len, nz = cz/len;
+      let best = 0, bestDot = -Infinity;
+      for (let p = 0; p < nC; p++) {
+        const dot = nx*poles[p][0] + ny*poles[p][1] + nz*poles[p][2];
+        if (dot > bestDot) { bestDot = dot; best = p; }
+      }
+      return colorOrder[best];
+    });
+
+    const hp = (h: string) =>
       [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)] as const;
 
     function draw() {
@@ -341,15 +372,15 @@ function MiniSphere({ size = 80, seed = 0 }: { size?: number; seed?: number }) {
         .sort((a, b) => a.z - b.z);
       for (const { f, i, z } of sorted) {
         const [ia, ib, ic] = f;
-        const [r, g, b]    = hexRgbMini(faceColors[i]);
+        const [r, g, b]    = hp(palette[faceRegion[i]]);
         ctx.beginPath();
         ctx.moveTo(pv[ia].sx, pv[ia].sy);
         ctx.lineTo(pv[ib].sx, pv[ib].sy);
         ctx.lineTo(pv[ic].sx, pv[ic].sy);
         ctx.closePath();
-        ctx.fillStyle   = `rgba(${r},${g},${b},${(0.05 + Math.max(0,z)*0.12).toFixed(3)})`;
+        ctx.fillStyle   = `rgba(${r},${g},${b},${(0.05 + Math.max(0,z)*0.13).toFixed(3)})`;
         ctx.fill();
-        ctx.strokeStyle = `rgba(${r},${g},${b},${(0.30 + Math.max(0,z)*0.50).toFixed(3)})`;
+        ctx.strokeStyle = `rgba(${r},${g},${b},${(0.28 + Math.max(0,z)*0.55).toFixed(3)})`;
         ctx.lineWidth   = 0.7;
         ctx.stroke();
       }
@@ -1802,40 +1833,27 @@ export default function LandingPage() {
           <p className="text-[11px] tracking-widest uppercase text-zinc-700 mb-4 select-none flex-shrink-0">
             Explore through connection
           </p>
-          <div className="flex-1 min-h-0 rounded-xl overflow-hidden flex flex-col"
-            style={{ background: "rgba(12,12,16,0.97)", border: "1px solid rgba(255,255,255,0.09)" }}>
-            {/* Window chrome */}
-            <div className="flex items-center gap-1.5 px-3 py-2 flex-shrink-0"
-              style={{ background: "rgba(255,255,255,0.025)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-              <div className="w-2.5 h-2.5 rounded-full" style={{ background: "rgba(167,139,250,0.55)" }} />
-              <div className="w-2.5 h-2.5 rounded-full" style={{ background: "rgba(255,255,255,0.12)" }} />
-              <div className="w-2.5 h-2.5 rounded-full" style={{ background: "rgba(255,255,255,0.08)" }} />
-              <div className="flex-1 mx-2 h-4 rounded-md"
-                style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.05)" }} />
+          <div className="flex-1 min-h-0 flex flex-col gap-0 overflow-hidden">
+            {/* Aggregate friends sphere */}
+            <div className="flex flex-col items-center flex-shrink-0 pb-5">
+              <div className="text-[11px] tracking-widest uppercase text-zinc-600 mb-3">Friends</div>
+              <MiniSphere size={134} seed={99} />
             </div>
-            {/* Content */}
-            <div className="flex-1 min-h-0 flex flex-col p-5 gap-0 overflow-hidden">
-              {/* Aggregate friends sphere */}
-              <div className="flex flex-col items-center flex-shrink-0 pb-4">
-                <div className="text-[9px] tracking-widest uppercase text-zinc-600 mb-3">Friends</div>
-                <MiniSphere size={110} seed={99} />
-              </div>
-              {/* Friend spheres grid — fills remaining space */}
-              <div className="flex-1 min-h-0 grid grid-cols-3 grid-rows-2 gap-y-3 gap-x-2">
-                {[
-                  { name: "Chris",   seed: 1 },
-                  { name: "Adam",    seed: 5 },
-                  { name: "Ethan",   seed: 9 },
-                  { name: "Dole",    seed: 3 },
-                  { name: "UCLA",    seed: 7 },
-                  { name: "Atlanta", seed: 11 },
-                ].map(f => (
-                  <div key={f.name} className="flex flex-col items-center justify-center gap-1.5 min-h-0">
-                    <MiniSphere size={72} seed={f.seed} />
-                    <span className="text-[10px] text-zinc-500">{f.name}</span>
-                  </div>
-                ))}
-              </div>
+            {/* Friend spheres grid — fills remaining space */}
+            <div className="flex-1 min-h-0 grid grid-cols-3 grid-rows-2 gap-y-4 gap-x-2">
+              {[
+                { name: "Chris",   seed: 1 },
+                { name: "Adam",    seed: 5 },
+                { name: "Ethan",   seed: 9 },
+                { name: "Dole",    seed: 3 },
+                { name: "UCLA",    seed: 7 },
+                { name: "Atlanta", seed: 11 },
+              ].map(f => (
+                <div key={f.name} className="flex flex-col items-center justify-center gap-2 min-h-0">
+                  <MiniSphere size={90} seed={f.seed} />
+                  <span className="text-[13px] text-zinc-500">{f.name}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
