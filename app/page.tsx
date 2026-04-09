@@ -394,6 +394,157 @@ function MiniSphere({ size = 80, seed = 0 }: { size?: number; seed?: number }) {
   return <canvas ref={canvasRef} style={{ width: size, height: size, display: "block" }} />;
 }
 
+// ── Map Visual (Page 4) ───────────────────────────────────────────────────────
+
+type MapNode = {
+  id: string; label: string; x: number; y: number;
+  seed: number; size: number; minT: number; maxT: number;
+};
+
+const MAP_CAM: readonly [number, number, number, number][] = [
+  [0.00, 22,   200, 300],
+  [0.18,  9,   194, 292],
+  [0.32,  4,   203, 310],
+  [0.50,  1.8, 295, 292],
+  [0.68,  0.9, 455, 272],
+  [0.84,  0.6, 500, 293],
+  [1.00,  0.55,500, 298],
+];
+
+const MAP_NODES: MapNode[] = [
+  // Hyper-local
+  { id:"mp",  label:"Menlo Park",    x:200,y:300, seed:17,size:28, minT:0.00,maxT:0.22 },
+  { id:"pa",  label:"Palo Alto",     x:202,y:312, seed:23,size:20, minT:0.06,maxT:0.22 },
+  // Bay Area
+  { id:"sf",  label:"San Francisco", x:184,y:278, seed:1, size:34, minT:0.12,maxT:0.44 },
+  { id:"oak", label:"Oakland",       x:190,y:284, seed:7, size:20, minT:0.12,maxT:0.40 },
+  { id:"sj",  label:"San Jose",      x:205,y:320, seed:13,size:22, minT:0.12,maxT:0.40 },
+  // California / West Coast
+  { id:"la",  label:"Los Angeles",   x:210,y:368, seed:3, size:34, minT:0.28,maxT:0.62 },
+  { id:"sea", label:"Seattle",       x:186,y:218, seed:31,size:28, minT:0.28,maxT:0.62 },
+  { id:"sac", label:"Sacramento",    x:195,y:266, seed:25,size:20, minT:0.28,maxT:0.56 },
+  // USA
+  { id:"ny",  label:"New York",      x:405,y:250, seed:21,size:36, minT:0.42,maxT:0.74 },
+  { id:"chi", label:"Chicago",       x:348,y:266, seed:9, size:32, minT:0.42,maxT:0.74 },
+  { id:"hou", label:"Houston",       x:325,y:384, seed:11,size:26, minT:0.42,maxT:0.72 },
+  { id:"mia", label:"Miami",         x:385,y:400, seed:15,size:24, minT:0.42,maxT:0.72 },
+  // International
+  { id:"lon", label:"London",        x:496,y:206, seed:2, size:36, minT:0.58,maxT:0.92 },
+  { id:"par", label:"Paris",         x:504,y:222, seed:8, size:28, minT:0.58,maxT:0.90 },
+  { id:"mos", label:"Moscow",        x:570,y:184, seed:26,size:28, minT:0.60,maxT:0.90 },
+  { id:"tok", label:"Tokyo",         x:780,y:238, seed:16,size:34, minT:0.60,maxT:0.90 },
+  { id:"mum", label:"Mumbai",        x:642,y:294, seed:4, size:26, minT:0.60,maxT:0.88 },
+  { id:"sao", label:"São Paulo",     x:378,y:418, seed:28,size:26, minT:0.60,maxT:0.90 },
+  { id:"syd", label:"Sydney",        x:790,y:412, seed:22,size:24, minT:0.62,maxT:0.88 },
+  // Continents
+  { id:"naf", label:"North America", x:270,y:285, seed:6, size:52, minT:0.80,maxT:1.00 },
+  { id:"eur", label:"Europe",        x:520,y:212, seed:12,size:46, minT:0.80,maxT:1.00 },
+  { id:"asi", label:"Asia",          x:698,y:255, seed:18,size:52, minT:0.80,maxT:1.00 },
+  { id:"afr", label:"Africa",        x:530,y:350, seed:24,size:40, minT:0.82,maxT:1.00 },
+  { id:"sam", label:"South America", x:360,y:402, seed:30,size:38, minT:0.82,maxT:1.00 },
+];
+
+function MapVisual() {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const bgRef        = useRef<HTMLDivElement>(null);
+  const rafRef       = useRef(0);
+  const animRef      = useRef({ t: 0, dir: 1 });
+  const elsRef       = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  useEffect(() => {
+    const container = containerRef.current;
+    const bg        = bgRef.current;
+    if (!container || !bg) return;
+
+    const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+    const ease = (t: number) => t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t+2, 2)/2;
+
+    function getCamera(t: number) {
+      let i = 0;
+      while (i < MAP_CAM.length - 2 && MAP_CAM[i + 1][0] <= t) i++;
+      const [t0, z0, x0, y0] = MAP_CAM[i];
+      const [t1, z1, x1, y1] = MAP_CAM[i + 1];
+      const e = ease(Math.max(0, Math.min(1, (t - t0) / (t1 - t0))));
+      return { zoom: lerp(z0, z1, e), cx: lerp(x0, x1, e), cy: lerp(y0, y1, e) };
+    }
+
+    function nodeOpacity(n: MapNode, t: number) {
+      const fw = 0.055;
+      if (t < n.minT || t > n.maxT) return 0;
+      return Math.min((t - n.minT) / fw, (n.maxT - t) / fw, 1);
+    }
+
+    const SPEED = 0.000038;
+    let last = 0;
+
+    function frame(now: number) {
+      const dt = last ? Math.min(now - last, 50) : 16;
+      last = now;
+      const a = animRef.current;
+      a.t = Math.max(0, Math.min(1, a.t + a.dir * SPEED * dt));
+      if (a.t >= 1) { a.t = 1; a.dir = -1; }
+      if (a.t <= 0) { a.t = 0; a.dir =  1; }
+
+      const { zoom, cx, cy } = getCamera(a.t);
+      const cw = container.clientWidth  || 400;
+      const ch = container.clientHeight || 600;
+      const tx = cw / 2 - cx * zoom;
+      const ty = ch / 2 - cy * zoom;
+
+      // Animated grid that moves with the camera
+      const gs = 60 * zoom;
+      bg.style.backgroundSize     = `${gs}px ${gs}px`;
+      bg.style.backgroundPosition = `${((tx % gs) + gs) % gs}px ${((ty % gs) + gs) % gs}px`;
+
+      // Position each node in screen space
+      MAP_NODES.forEach(n => {
+        const el = elsRef.current.get(n.id);
+        if (!el) return;
+        el.style.left    = `${n.x * zoom + tx}px`;
+        el.style.top     = `${n.y * zoom + ty}px`;
+        el.style.opacity = `${nodeOpacity(n, a.t)}`;
+      });
+
+      rafRef.current = requestAnimationFrame(frame);
+    }
+
+    rafRef.current = requestAnimationFrame(frame);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, []);
+
+  return (
+    <div ref={containerRef} className="relative w-full h-full overflow-hidden" style={{ background: "#000" }}>
+      {/* Animated grid — moves + scales with camera */}
+      <div ref={bgRef} className="absolute inset-0 pointer-events-none" style={{
+        backgroundImage:
+          "linear-gradient(rgba(255,255,255,0.032) 1px, transparent 1px)," +
+          "linear-gradient(90deg, rgba(255,255,255,0.032) 1px, transparent 1px)",
+      }} />
+      {/* Place nodes */}
+      {MAP_NODES.map(n => (
+        <div
+          key={n.id}
+          ref={el => { if (el) elsRef.current.set(n.id, el); }}
+          style={{
+            position: "absolute", opacity: 0, pointerEvents: "none",
+            transform: "translate(-50%, -50%)",
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
+          }}
+        >
+          <MiniSphere size={n.size} seed={n.seed} />
+          <span style={{
+            fontSize: Math.max(8, Math.round(n.size * 0.28)),
+            color: "rgba(255,255,255,0.45)",
+            whiteSpace: "nowrap",
+            letterSpacing: "0.05em",
+            lineHeight: 1,
+          }}>{n.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function LandingPage() {
@@ -1891,55 +2042,12 @@ export default function LandingPage() {
           </div>
         </div>
 
-        {/* ── RIGHT: map mockup ───────────────────────────────────────────────── */}
-        <div className="flex flex-col py-8 px-7 overflow-hidden" style={{ width: "46%" }}>
-          <p className="text-[11px] tracking-widest uppercase text-zinc-700 mb-4 select-none flex-shrink-0">
+        {/* ── RIGHT: animated map visual ──────────────────────────────────────── */}
+        <div className="relative overflow-hidden" style={{ width: "46%", alignSelf: "stretch" }}>
+          <p className="absolute top-8 left-7 text-[11px] tracking-widest uppercase text-zinc-700 select-none pointer-events-none" style={{ zIndex: 10 }}>
             The Universal Intellect
           </p>
-          <div className="flex-1 min-h-0 rounded-xl overflow-hidden flex flex-col"
-            style={{ background: "rgba(8,8,12,0.97)", border: "1px solid rgba(255,255,255,0.09)" }}>
-            {/* Window chrome */}
-            <div className="flex items-center gap-1.5 px-3 py-2 flex-shrink-0"
-              style={{ background: "rgba(255,255,255,0.025)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-              <div className="w-2.5 h-2.5 rounded-full" style={{ background: "rgba(74,222,128,0.55)" }} />
-              <div className="w-2.5 h-2.5 rounded-full" style={{ background: "rgba(255,255,255,0.12)" }} />
-              <div className="w-2.5 h-2.5 rounded-full" style={{ background: "rgba(255,255,255,0.08)" }} />
-              <div className="flex-1 mx-2 h-4 rounded-md"
-                style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.05)" }} />
-            </div>
-            {/* Map content */}
-            <div className="flex-1 min-h-0 relative overflow-hidden">
-              {/* Subtle grid */}
-              <svg className="absolute inset-0 w-full h-full" style={{ pointerEvents: "none" }}>
-                {[0.18,0.36,0.54,0.72,0.88].map((y,i) => (
-                  <line key={`h${i}`} x1="0" y1={`${y*100}%`} x2="100%" y2={`${y*100}%`}
-                    stroke="rgba(255,255,255,0.035)" strokeWidth="1" />
-                ))}
-                {[0.15,0.30,0.46,0.62,0.78,0.92].map((x,i) => (
-                  <line key={`v${i}`} x1={`${x*100}%`} y1="0" x2={`${x*100}%`} y2="100%"
-                    stroke="rgba(255,255,255,0.035)" strokeWidth="1" />
-                ))}
-                <line x1="5%" y1="18%" x2="48%" y2="72%" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
-                <line x1="28%" y1="8%"  x2="88%" y2="62%" stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
-                <line x1="0%" y1="52%" x2="58%" y2="92%" stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
-              </svg>
-              {/* City spheres — absolute positioned */}
-              {[
-                { x: "20%", y: "20%", size: 68, seed: 2,  label: "New York"    },
-                { x: "42%", y: "36%", size: 56, seed: 6,  label: "Chicago"     },
-                { x: "72%", y: "22%", size: 80, seed: 10, label: "Los Angeles" },
-                { x: "56%", y: "60%", size: 46, seed: 4,  label: "Austin"      },
-                { x: "14%", y: "65%", size: 50, seed: 8,  label: "Atlanta"     },
-                { x: "83%", y: "65%", size: 40, seed: 12, label: "Miami"       },
-              ].map(loc => (
-                <div key={loc.label} className="absolute flex flex-col items-center"
-                  style={{ left: loc.x, top: loc.y, transform: "translate(-50%,-50%)" }}>
-                  <MiniSphere size={loc.size} seed={loc.seed} />
-                  <span className="text-[9px] text-zinc-600 mt-1 whitespace-nowrap">{loc.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+          <MapVisual />
         </div>
 
       </section>
