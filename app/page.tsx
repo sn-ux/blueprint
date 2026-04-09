@@ -960,51 +960,10 @@ export default function LandingPage() {
           </span>
         </div>
 
-        {/* Body — single positioned container; all UI layers are absolute */}
+        {/* Canvas area — takes remaining flex space, sphere centered within */}
         <div className="flex-1 relative min-h-0">
 
-          {/* Top-left info cluster — hero copy + stats, fades out on zoom */}
-          <div
-            className="absolute top-0 left-0 z-10 flex flex-col px-8 pt-8 md:px-12 md:pt-10"
-            style={{
-              opacity: textVisible ? 1 : 0,
-              transition: "opacity 0.4s ease-in-out",
-              pointerEvents: textVisible ? "auto" : "none",
-            }}
-          >
-            {/* Hero copy */}
-            <div className="mb-5">
-              <h1 className="text-2xl md:text-3xl font-light leading-[1.2] text-white mb-2">
-                This is what a music taste looks like.
-              </h1>
-              <p className="text-xs text-zinc-500 tracking-widest uppercase">
-                Zoom. Explore. Discover.
-              </p>
-            </div>
-
-            {/* Stats */}
-            {totalTrackCount > 0 && (
-              <div className="flex gap-6">
-                {[
-                  { label: "Tracks",    value: totalTrackCount },
-                  { label: "Artists",   value: totalArtistCount },
-                  { label: "Genres",    value: totalGenreCount },
-                  { label: "Subgenres", value: totalSubgenreCount },
-                ].map(({ label, value }) => (
-                  <div key={label} className="flex flex-col">
-                    <span className="text-lg font-light text-white leading-none tabular-nums">
-                      {value.toLocaleString()}
-                    </span>
-                    <span className="text-[10px] tracking-widest uppercase text-zinc-600 mt-1">
-                      {label}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Canvas — fills entire body, sphere always centered */}
+          {/* Canvas — fills entire canvas area, sphere always centered */}
           <canvas
             ref={canvasRef}
             className="absolute inset-0 w-full h-full cursor-pointer"
@@ -1130,6 +1089,43 @@ export default function LandingPage() {
           )}
 
         </div>
+
+        {/* Centered text block — below the sphere, fades out on zoom */}
+        <div
+          className="flex-shrink-0 flex flex-col items-center text-center px-6 pt-5 pb-8"
+          style={{
+            opacity: textVisible ? 1 : 0,
+            transition: "opacity 0.4s ease-in-out",
+            pointerEvents: "none",
+          }}
+        >
+          <h1 className="text-xl md:text-2xl font-light leading-[1.2] text-white mb-2 max-w-xl">
+            This is what a music taste looks like.
+          </h1>
+          <p className="text-[11px] text-zinc-400 tracking-widest uppercase mb-6">
+            Zoom. Explore. Discover.
+          </p>
+          {totalTrackCount > 0 && (
+            <div className="flex justify-center gap-8">
+              {[
+                { label: "Tracks",    value: totalTrackCount },
+                { label: "Artists",   value: totalArtistCount },
+                { label: "Genres",    value: totalGenreCount },
+                { label: "Subgenres", value: totalSubgenreCount },
+              ].map(({ label, value }) => (
+                <div key={label} className="flex flex-col items-center">
+                  <span className="text-base font-light text-white leading-none tabular-nums">
+                    {value.toLocaleString()}
+                  </span>
+                  <span className="text-[10px] tracking-widest uppercase text-zinc-600 mt-1">
+                    {label}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
       </section>
 
       {/* ══ SECTION 2 — The Problem ═══════════════════════════════════════════ */}
