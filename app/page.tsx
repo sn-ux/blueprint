@@ -1773,27 +1773,27 @@ export default function LandingPage() {
           style={{ width: "54%", borderRight: "1px solid rgba(255,255,255,0.05)" }}>
 
           <h2 className="text-[2.75rem] font-light leading-tight text-white">
-            Your friends are<br />your best algorithm.
+            The people you trust<br />are the best filter.
           </h2>
 
           <div className="space-y-6 leading-relaxed">
             <div className="space-y-1.5 text-[17px]">
-              <p className="text-white font-semibold">Every person has a sphere.</p>
-              <p className="text-zinc-500">Blueprint maps the music taste of everyone you know into a sphere you can physically explore — not a playlist, not a feed. A map of what they actually love.</p>
+              <p className="text-white font-semibold">What your friends love isn&apos;t in your feed.</p>
+              <p className="text-zinc-500">The algorithm only knows you. It doesn&apos;t know your friends — what they&apos;ve been obsessing over for years, what shaped them, what they&apos;d play you the moment you walked in the door.</p>
             </div>
             <div className="space-y-1.5 text-[17px]">
-              <p className="text-white font-semibold">Navigate their sphere, not their recently played.</p>
-              <p className="text-zinc-500">See the shape of what they love. Walk through their Jazz section, their Electronic corner, their deep cuts. Find what&apos;s been there for years — not just what they listened to yesterday.</p>
+              <p className="text-white font-semibold">Navigate their taste, not their recently played.</p>
+              <p className="text-zinc-500">See the full shape of what they love. Walk through their Jazz section, their Electronic corner, their deep cuts. Find what&apos;s been there for years — not just what they listened to yesterday.</p>
             </div>
             <div className="space-y-1.5 text-[17px]">
-              <p className="text-white font-semibold">For You.</p>
-              <p className="text-zinc-500">Content from your friends&apos; spheres that doesn&apos;t exist in yours — but is close enough to what you already love that you&apos;d probably love it too.</p>
+              <p className="text-white font-semibold">Find what no search bar could surface.</p>
+              <p className="text-zinc-500">Things you didn&apos;t know to look for. Things outside your engagement profile. Things no one is paying to promote to you — but that someone you actually trust has loved for years.</p>
             </div>
           </div>
 
           <div className="space-y-2.5 pt-6 border-t border-zinc-900 leading-relaxed">
-            <p className="text-[17px] font-semibold text-zinc-200">This is discovery, not recommendation.</p>
-            <p className="text-[18px] text-zinc-300 font-medium">You choose where to explore. No algorithm decides what you see.</p>
+            <p className="text-[17px] font-semibold text-zinc-200">And you get closer in the process.</p>
+            <p className="text-[18px] text-zinc-300 font-medium">There&apos;s no better way to understand someone than to explore what they actually love.</p>
           </div>
         </div>
 
@@ -1902,13 +1902,13 @@ export default function LandingPage() {
           style={{ width: "54%", borderLeft: "1px solid rgba(255,255,255,0.05)" }}>
 
           <h2 className="text-[2.75rem] font-light leading-tight text-white">
-            Every place has<br />a sphere.
+            Every place has<br />a taste.
           </h2>
 
           <div className="space-y-6 leading-relaxed">
             <div className="space-y-1.5 text-[17px]">
               <p className="text-white font-semibold">A living map of human taste.</p>
-              <p className="text-zinc-500">Every city, school, and community has a sphere — built from the combined taste of everyone in that place. Not what&apos;s trending. Not what&apos;s promoted. What the people there actually love.</p>
+              <p className="text-zinc-500">Every city, school, and community has a visual — built from the combined taste of everyone in that place. Not what&apos;s trending. Not what&apos;s promoted. What the people there actually love.</p>
             </div>
             <div className="space-y-1.5 text-[17px]">
               <p className="text-white font-semibold">Zoom out far enough and you see everything.</p>
