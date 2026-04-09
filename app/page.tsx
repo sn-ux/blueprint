@@ -1167,7 +1167,7 @@ export default function LandingPage() {
 
             {/* Block 1 — the mechanism */}
             <div className="space-y-0.5 text-[17px] text-white">
-              <p className="text-white mb-1">Check every app you use.</p>
+              <p className="text-white font-semibold mb-3">Check every app you use.</p>
               <p>1. You type into a search bar</p>
               <p>2. You scroll a recommendation feed</p>
             </div>
@@ -1186,7 +1186,7 @@ export default function LandingPage() {
             </div>
 
             {/* Echo chamber line */}
-            <p className="text-[17px] text-white">This puts you in an algorithmic echo chamber.</p>
+            <p className="text-[17px] text-white font-semibold">This puts you in an algorithmic echo chamber.</p>
 
             {/* Block 3 — the gap */}
             <div className="space-y-1.5 text-[17px]">
