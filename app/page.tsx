@@ -960,10 +960,10 @@ export default function LandingPage() {
           </span>
         </div>
 
-        {/* Canvas area — takes remaining flex space, sphere centered within */}
+        {/* Canvas area — fills remaining viewport, sphere centered within */}
         <div className="flex-1 relative min-h-0">
 
-          {/* Canvas — fills entire canvas area, sphere always centered */}
+          {/* Canvas — fills entire area, sphere always centered */}
           <canvas
             ref={canvasRef}
             className="absolute inset-0 w-full h-full cursor-pointer"
@@ -974,6 +974,63 @@ export default function LandingPage() {
             onMouseLeave={onMouseLeave}
             onClick={handleClick}
           />
+
+          {/* Left: Headline — vertically centered, anchored left */}
+          <div
+            className="absolute left-[6vw] z-10 max-w-sm pointer-events-none"
+            style={{
+              top: "50%",
+              transform: "translateY(-50%)",
+              opacity: textVisible ? 1 : 0,
+              transition: "opacity 0.4s ease-in-out",
+            }}
+          >
+            <h1 className="text-2xl md:text-3xl font-light leading-[1.25] text-white">
+              This is what a music taste looks like.
+            </h1>
+          </div>
+
+          {/* Right: Stats — vertically centered, anchored right */}
+          {totalTrackCount > 0 && (
+            <div
+              className="absolute right-[6vw] z-10 flex flex-col gap-4 pointer-events-none"
+              style={{
+                top: "50%",
+                transform: "translateY(-50%)",
+                opacity: textVisible ? 1 : 0,
+                transition: "opacity 0.4s ease-in-out",
+              }}
+            >
+              {[
+                { label: "Tracks",    value: totalTrackCount },
+                { label: "Artists",   value: totalArtistCount },
+                { label: "Genres",    value: totalGenreCount },
+                { label: "Subgenres", value: totalSubgenreCount },
+              ].map(({ label, value }) => (
+                <div key={label} className="flex items-baseline gap-3">
+                  <span className="text-lg font-light text-white tabular-nums leading-none">
+                    {value.toLocaleString()}
+                  </span>
+                  <span className="text-[10px] tracking-widest uppercase text-zinc-600">
+                    {label}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Bottom: Subtext — horizontally centered near bottom */}
+          <div
+            className="absolute bottom-[10vh] left-0 right-0 z-10 flex justify-center pointer-events-none"
+            style={{
+              opacity: textVisible ? 1 : 0,
+              transition: "opacity 0.4s ease-in-out",
+            }}
+          >
+            <p className="text-[11px] text-zinc-500 tracking-widest uppercase">
+              Zoom. Explore. Discover.
+            </p>
+          </div>
 
           {/* Right panel — absolute overlay, does not affect canvas layout */}
           {selected && (
@@ -1088,42 +1145,6 @@ export default function LandingPage() {
             </div>
           )}
 
-        </div>
-
-        {/* Centered text block — below the sphere, fades out on zoom */}
-        <div
-          className="flex-shrink-0 flex flex-col items-center text-center px-6 pt-5 pb-8"
-          style={{
-            opacity: textVisible ? 1 : 0,
-            transition: "opacity 0.4s ease-in-out",
-            pointerEvents: "none",
-          }}
-        >
-          <h1 className="text-xl md:text-2xl font-light leading-[1.2] text-white mb-2 max-w-xl">
-            This is what a music taste looks like.
-          </h1>
-          <p className="text-[11px] text-zinc-400 tracking-widest uppercase mb-6">
-            Zoom. Explore. Discover.
-          </p>
-          {totalTrackCount > 0 && (
-            <div className="flex justify-center gap-8">
-              {[
-                { label: "Tracks",    value: totalTrackCount },
-                { label: "Artists",   value: totalArtistCount },
-                { label: "Genres",    value: totalGenreCount },
-                { label: "Subgenres", value: totalSubgenreCount },
-              ].map(({ label, value }) => (
-                <div key={label} className="flex flex-col items-center">
-                  <span className="text-base font-light text-white leading-none tabular-nums">
-                    {value.toLocaleString()}
-                  </span>
-                  <span className="text-[10px] tracking-widest uppercase text-zinc-600 mt-1">
-                    {label}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
 
       </section>
