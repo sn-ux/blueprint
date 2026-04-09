@@ -1246,6 +1246,10 @@ export default function LandingPage() {
                     /* ── ChatGPT: conversation above, prompt bar at bottom ── */
                     <div className="flex-1 min-h-0 flex flex-col p-3 gap-2 overflow-hidden">
 
+                      {/* Feed label */}
+                      <div className="text-[9px] tracking-[0.15em] uppercase font-medium flex-shrink-0"
+                        style={{ color: `rgba(${co.rgb},0.55)` }}>feed</div>
+
                       {/* Conversation feed */}
                       <div className="flex-1 min-h-0 flex flex-col gap-3 overflow-hidden">
                         {/* Assistant turn 1 */}
@@ -1282,6 +1286,10 @@ export default function LandingPage() {
                           </div>
                         </div>
                       </div>
+
+                      {/* Search label */}
+                      <div className="text-[9px] tracking-[0.15em] uppercase font-medium flex-shrink-0"
+                        style={{ color: `rgba(${co.rgb},0.55)` }}>search</div>
 
                       {/* Prompt input — pinned to bottom */}
                       <div className="flex-shrink-0 flex items-center gap-2 px-3 py-2.5 rounded-xl"
@@ -1440,7 +1448,7 @@ export default function LandingPage() {
                               <div className="h-1.5 rounded" style={{ background: "rgba(255,255,255,0.06)", width: "80%" }} />
                             </div>
                             {/* Organic results */}
-                            {[{ tw: "70%", sw: "38%", dw: "58%" }, { tw: "55%", sw: "44%", dw: "72%" }, { tw: "78%", sw: "36%", dw: "50%" }].map((row, j) => (
+                            {[{ tw: "70%", sw: "38%", dw: "58%" }, { tw: "55%", sw: "44%", dw: "72%" }, { tw: "78%", sw: "36%", dw: "50%" }, { tw: "63%", sw: "42%", dw: "67%" }, { tw: "74%", sw: "37%", dw: "54%" }].map((row, j) => (
                               <div key={j} className="flex-shrink-0 space-y-0.5">
                                 <div className="h-1.5 rounded" style={{ background: "rgba(255,255,255,0.06)", width: row.sw }} />
                                 <div className="h-2 rounded" style={{ background: `rgba(${co.rgb},0.38)`, width: row.tw }} />
@@ -1515,7 +1523,7 @@ export default function LandingPage() {
                                 {[0,1,2,3].map(j => (
                                   <div key={j} className="flex-1 rounded overflow-hidden"
                                     style={{ background: "rgba(255,255,255,0.05)" }}>
-                                    <div style={{ height: 30, background: `rgba(${co.rgb},${0.15+j*0.04})` }} />
+                                    <div style={{ height: 52, background: `rgba(${co.rgb},${0.15+j*0.04})` }} />
                                     <div className="p-1">
                                       <div className="h-1 rounded" style={{ background: "rgba(255,255,255,0.10)", width: "80%" }} />
                                     </div>
@@ -1530,7 +1538,7 @@ export default function LandingPage() {
                                 {[0,1,2,3,4,5].map(j => (
                                   <div key={j} className="flex flex-col rounded overflow-hidden"
                                     style={{ background: "rgba(255,255,255,0.04)" }}>
-                                    <div style={{ height: 28, background: `rgba(${co.rgb},${0.08+j*0.03})` }} />
+                                    <div style={{ height: 44, background: `rgba(${co.rgb},${0.08+j*0.03})` }} />
                                     <div className="p-1 space-y-0.5">
                                       <div className="h-1 rounded" style={{ background: "rgba(255,255,255,0.11)", width: "85%" }} />
                                       <div className="h-1 rounded" style={{ background: "rgba(255,255,255,0.05)", width: "60%" }} />
@@ -1542,11 +1550,11 @@ export default function LandingPage() {
                           </div>
                         ) : co.name === "YouTube" ? (
                           /* YouTube: 2-col thumbnail grid */
-                          <div className="flex-1 min-h-0 grid grid-cols-2 gap-2 overflow-hidden content-start">
+                          <div className="flex-1 min-h-0 grid grid-cols-2 grid-rows-3 gap-2 overflow-hidden">
                             {[0,1,2,3,4,5].map(j => (
-                              <div key={j} className="flex flex-col flex-shrink-0">
-                                <div className="rounded overflow-hidden relative flex items-center justify-center mb-1"
-                                  style={{ height: 46, background: "rgba(255,255,255,0.05)" }}>
+                              <div key={j} className="flex flex-col min-h-0">
+                                <div className="flex-1 min-h-0 rounded overflow-hidden relative flex items-center justify-center mb-1"
+                                  style={{ background: "rgba(255,255,255,0.05)" }}>
                                   <div style={{ width: 0, height: 0, borderTop: "5px solid transparent",
                                     borderBottom: "5px solid transparent",
                                     borderLeft: `9px solid rgba(${co.rgb},0.5)` }} />
@@ -1580,10 +1588,11 @@ export default function LandingPage() {
                               { name: 72, meta: 48, time: "25 min", rating: true },
                               { name: 60, meta: 55, time: "35 min", rating: false },
                               { name: 78, meta: 42, time: "20 min", rating: true },
+                              { name: 65, meta: 50, time: "30 min", rating: true },
                             ].map((r, j) => (
                               <div key={j} className="flex-shrink-0 rounded-lg overflow-hidden"
                                 style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                                <div style={{ height: 26, background: `rgba(${co.rgb},${0.09+j*0.03})` }} />
+                                <div style={{ height: 38, background: `rgba(${co.rgb},${0.09+j*0.03})` }} />
                                 <div className="px-2.5 py-1.5 flex items-center gap-2">
                                   <div className="flex-1 space-y-0.5">
                                     <div className="h-1.5 rounded" style={{ background: "rgba(255,255,255,0.13)", width: `${r.name}%` }} />
