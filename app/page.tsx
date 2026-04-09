@@ -996,7 +996,7 @@ export default function LandingPage() {
           {/* Bottom center: Stats row */}
           {totalTrackCount > 0 && (
             <div
-              className="absolute bottom-[2vh] left-0 right-0 z-10 flex justify-center gap-10 pointer-events-none"
+              className="absolute bottom-[4vh] right-[6%] z-10 flex flex-col gap-3 items-end pointer-events-none"
               style={{
                 opacity: textVisible ? 1 : 0,
                 transition: "opacity 0.4s ease-in-out",
@@ -1008,12 +1008,12 @@ export default function LandingPage() {
                 { label: "Genres",    value: totalGenreCount },
                 { label: "Subgenres", value: totalSubgenreCount },
               ].map(({ label, value }) => (
-                <div key={label} className="flex flex-col items-center">
-                  <span className="text-lg font-light text-white tabular-nums leading-none">
-                    {value.toLocaleString()}
-                  </span>
-                  <span className="text-[10px] tracking-widest uppercase text-zinc-600 mt-1">
+                <div key={label} className="flex items-baseline gap-2">
+                  <span className="text-[10px] tracking-widest uppercase text-zinc-600">
                     {label}
+                  </span>
+                  <span className="text-base font-light text-white tabular-nums leading-none">
+                    {value.toLocaleString()}
                   </span>
                 </div>
               ))}
