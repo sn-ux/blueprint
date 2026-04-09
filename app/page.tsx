@@ -1285,6 +1285,26 @@ export default function LandingPage() {
                             <div className="h-1.5 rounded" style={{ background: "rgba(255,255,255,0.06)", width: "68%" }} />
                           </div>
                         </div>
+                        {/* User turn 2 */}
+                        <div className="flex justify-end flex-shrink-0">
+                          <div className="rounded-xl px-3 py-2 space-y-1"
+                            style={{ background: "rgba(255,255,255,0.07)", maxWidth: "65%" }}>
+                            <div className="h-1.5 rounded" style={{ background: "rgba(255,255,255,0.16)", width: "100%" }} />
+                          </div>
+                        </div>
+                        {/* Assistant turn 3 — typing indicator */}
+                        <div className="flex gap-2 items-start flex-shrink-0">
+                          <div className="w-4 h-4 rounded-full flex-shrink-0 mt-0.5 flex items-center justify-center"
+                            style={{ background: `rgba(${co.rgb},0.3)` }}>
+                            <div className="w-2 h-2 rounded-sm" style={{ background: co.accent, opacity: 0.8 }} />
+                          </div>
+                          <div className="flex-1 space-y-1">
+                            <div className="h-1.5 rounded" style={{ background: "rgba(255,255,255,0.11)", width: "85%" }} />
+                            <div className="h-1.5 rounded" style={{ background: "rgba(255,255,255,0.08)", width: "72%" }} />
+                            <div className="h-1.5 rounded" style={{ background: "rgba(255,255,255,0.06)", width: "91%" }} />
+                            <div className="h-1.5 rounded" style={{ background: "rgba(255,255,255,0.05)", width: "44%" }} />
+                          </div>
+                        </div>
                       </div>
 
                       {/* Search label */}
@@ -1448,7 +1468,7 @@ export default function LandingPage() {
                               <div className="h-1.5 rounded" style={{ background: "rgba(255,255,255,0.06)", width: "80%" }} />
                             </div>
                             {/* Organic results */}
-                            {[{ tw: "70%", sw: "38%", dw: "58%" }, { tw: "55%", sw: "44%", dw: "72%" }, { tw: "78%", sw: "36%", dw: "50%" }, { tw: "63%", sw: "42%", dw: "67%" }, { tw: "74%", sw: "37%", dw: "54%" }].map((row, j) => (
+                            {[{ tw: "70%", sw: "38%", dw: "58%" }, { tw: "55%", sw: "44%", dw: "72%" }, { tw: "78%", sw: "36%", dw: "50%" }, { tw: "63%", sw: "42%", dw: "67%" }].map((row, j) => (
                               <div key={j} className="flex-shrink-0 space-y-0.5">
                                 <div className="h-1.5 rounded" style={{ background: "rgba(255,255,255,0.06)", width: row.sw }} />
                                 <div className="h-2 rounded" style={{ background: `rgba(${co.rgb},0.38)`, width: row.tw }} />
@@ -1456,6 +1476,21 @@ export default function LandingPage() {
                                 <div className="h-1 rounded" style={{ background: "rgba(255,255,255,0.03)", width: "65%" }} />
                               </div>
                             ))}
+                            {/* People also ask */}
+                            <div className="flex-shrink-0 rounded-lg overflow-hidden"
+                              style={{ border: "1px solid rgba(255,255,255,0.07)" }}>
+                              <div className="px-2.5 py-1 flex-shrink-0"
+                                style={{ background: "rgba(255,255,255,0.025)", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                                <div className="h-1.5 rounded" style={{ background: "rgba(255,255,255,0.09)", width: "48%" }} />
+                              </div>
+                              {[{ w: "68%" }, { w: "74%" }, { w: "60%" }].map((q, k) => (
+                                <div key={k} className="px-2.5 py-1.5 flex items-center justify-between"
+                                  style={{ borderBottom: k < 2 ? "1px solid rgba(255,255,255,0.04)" : "none" }}>
+                                  <div className="h-1.5 rounded" style={{ background: "rgba(255,255,255,0.07)", width: q.w }} />
+                                  <div className="w-1.5 h-1.5 rounded-sm flex-shrink-0" style={{ background: "rgba(255,255,255,0.09)" }} />
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         ) : co.name === "Amazon" ? (
                           /* Amazon: dense ecommerce product grid — 2 rows of 4 */
@@ -1532,14 +1567,14 @@ export default function LandingPage() {
                               </div>
                             </div>
                             {/* Made for you section */}
-                            <div className="flex-1 min-h-0 overflow-hidden">
-                              <div className="text-[9px] text-zinc-600 mb-1.5">Made for you</div>
-                              <div className="grid grid-cols-3 gap-1.5 overflow-hidden" style={{ maxHeight: "100%" }}>
+                            <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                              <div className="text-[9px] text-zinc-600 mb-1.5 flex-shrink-0">Made for you</div>
+                              <div className="flex-1 min-h-0 grid grid-cols-3 grid-rows-2 gap-1.5">
                                 {[0,1,2,3,4,5].map(j => (
-                                  <div key={j} className="flex flex-col rounded overflow-hidden"
+                                  <div key={j} className="flex flex-col rounded overflow-hidden min-h-0"
                                     style={{ background: "rgba(255,255,255,0.04)" }}>
-                                    <div style={{ height: 44, background: `rgba(${co.rgb},${0.08+j*0.03})` }} />
-                                    <div className="p-1 space-y-0.5">
+                                    <div className="flex-1 min-h-0" style={{ background: `rgba(${co.rgb},${0.08+j*0.03})` }} />
+                                    <div className="px-1 py-1 flex-shrink-0 space-y-0.5">
                                       <div className="h-1 rounded" style={{ background: "rgba(255,255,255,0.11)", width: "85%" }} />
                                       <div className="h-1 rounded" style={{ background: "rgba(255,255,255,0.05)", width: "60%" }} />
                                     </div>
@@ -1583,24 +1618,31 @@ export default function LandingPage() {
                                   }}>{c}</div>
                               ))}
                             </div>
-                            {/* Restaurant cards */}
+                            {/* Restaurant cards — horizontal thumbnail layout */}
                             {[
-                              { name: 72, meta: 48, time: "25 min", rating: true },
-                              { name: 60, meta: 55, time: "35 min", rating: false },
-                              { name: 78, meta: 42, time: "20 min", rating: true },
-                              { name: 65, meta: 50, time: "30 min", rating: true },
+                              { nw: "68%", c1: "45%", c2: "30%", time: "25 min", fee: "$0 delivery" },
+                              { nw: "55%", c1: "52%", c2: "38%", time: "35 min", fee: "$1.99 delivery" },
+                              { nw: "72%", c1: "40%", c2: "28%", time: "20 min", fee: "$0 delivery" },
+                              { nw: "62%", c1: "48%", c2: "35%", time: "30 min", fee: "$0.99 delivery" },
                             ].map((r, j) => (
-                              <div key={j} className="flex-shrink-0 rounded-lg overflow-hidden"
+                              <div key={j} className="flex-shrink-0 flex gap-2.5 items-center rounded-lg px-2.5 py-2"
                                 style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                                <div style={{ height: 38, background: `rgba(${co.rgb},${0.09+j*0.03})` }} />
-                                <div className="px-2.5 py-1.5 flex items-center gap-2">
-                                  <div className="flex-1 space-y-0.5">
-                                    <div className="h-1.5 rounded" style={{ background: "rgba(255,255,255,0.13)", width: `${r.name}%` }} />
-                                    <div className="h-1 rounded" style={{ background: "rgba(255,255,255,0.06)", width: `${r.meta}%` }} />
+                                {/* Square thumbnail */}
+                                <div className="flex-shrink-0 rounded-md"
+                                  style={{ width: 44, height: 44, background: `rgba(${co.rgb},${0.18+j*0.04})` }} />
+                                {/* Info */}
+                                <div className="flex-1 min-w-0 space-y-1">
+                                  <div className="h-2 rounded" style={{ background: "rgba(255,255,255,0.14)", width: r.nw }} />
+                                  <div className="flex gap-1.5 items-center">
+                                    <div className="h-1.5 rounded" style={{ background: "rgba(255,255,255,0.07)", width: r.c1 }} />
+                                    <div className="w-px h-2" style={{ background: "rgba(255,255,255,0.07)" }} />
+                                    <div className="h-1.5 rounded" style={{ background: "rgba(255,255,255,0.05)", width: r.c2 }} />
                                   </div>
-                                  <div className="flex-shrink-0 flex items-center gap-1">
-                                    {r.rating && <div className="w-1.5 h-1.5 rounded-full" style={{ background: `rgba(${co.rgb},0.6)` }} />}
-                                    <div className="text-[8px]" style={{ color: "rgba(255,255,255,0.3)" }}>{r.time}</div>
+                                  <div className="flex items-center gap-1">
+                                    <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: `rgba(${co.rgb},0.55)` }} />
+                                    <div className="h-1 rounded" style={{ background: `rgba(${co.rgb},0.25)`, width: "22%" }} />
+                                    <div className="h-1 rounded ml-1" style={{ background: "rgba(255,255,255,0.06)", width: "28%" }} />
+                                    <div className="ml-auto text-[8px]" style={{ color: "rgba(255,255,255,0.28)" }}>{r.time}</div>
                                   </div>
                                 </div>
                               </div>
