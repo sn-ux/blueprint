@@ -979,8 +979,8 @@ export default function LandingPage() {
           <div
             className="absolute z-10 flex flex-col pointer-events-none"
             style={{
-              top: "22%",
-              left: "8%",
+              top: "18%",
+              left: "6%",
               opacity: textVisible ? 1 : 0,
               transition: "opacity 0.4s ease-in-out",
             }}
