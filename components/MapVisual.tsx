@@ -104,9 +104,11 @@ export default function MapVisual() {
         zoomAnimation:      false,  // no zoom transition animation
       });
 
-      // CartoDB Dark Matter — free, no API key required
+      // CartoDB Dark Matter (no-labels variant) — tiles only, zero basemap labels.
+      // Using dark_nolabels instead of dark_all so the only visible labels are
+      // our custom English NODES labels, each paired with a MiniSphere.
       L.tileLayer(
-        "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+        "https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png",
         { subdomains: "abcd", maxZoom: 19 }
       ).addTo(map);
 
