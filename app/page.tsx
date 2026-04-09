@@ -134,13 +134,13 @@ const DEMO_TRACKS: Record<string, TrackItem[]> = {
 // ── Per-platform discovery statements (indexed to COMPANIES order) ───────────
 
 const DISCOVERY = [
-  "the result you\u2019d love but never thought to search for",   // Google
-  "the video you\u2019d love but the algorithm never surfaced",    // TikTok
-  "the product you\u2019d love but never knew existed",            // Amazon
-  "the song you\u2019d love but haven\u2019t heard yet",           // Spotify
-  "the video you\u2019d love but never came across",               // YouTube
-  "the answer you\u2019d love but never knew to ask for",          // ChatGPT
-  "the dish you\u2019d love but haven\u2019t tried yet",           // DoorDash
+  "The result you\u2019d love but never thought to search for",   // Google
+  "The video you\u2019d love but the algorithm never surfaced",    // TikTok
+  "The product you\u2019d love but never knew existed",            // Amazon
+  "The song you\u2019d love but haven\u2019t heard yet",           // Spotify
+  "The video you\u2019d love but never came across",               // YouTube
+  "The answer you\u2019d love but never knew to ask for",          // ChatGPT
+  "The dish you\u2019d love but haven\u2019t tried yet",           // DoorDash
 ];
 
 // ── Company showcase data ─────────────────────────────────────────────────────
@@ -1201,7 +1201,7 @@ export default function LandingPage() {
             <p className="text-[15px] text-zinc-500">
               The modern internet is not designed for discovery. It is designed for engagement.
             </p>
-            <p className="text-[15px] text-zinc-500 leading-relaxed">
+            <p className="text-[18px] text-zinc-300 leading-relaxed font-medium">
               <span
                 key={carouselIdx}
                 style={{ color: COMPANIES[carouselIdx].accent, transition: "color 0.5s ease-in-out" }}
