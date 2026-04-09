@@ -297,6 +297,7 @@ export default function LandingPage() {
   const [worlds,   setWorlds]   = useState<Record<string, number>>({});
   const [subgenres, setSubgenres] = useState<SubItem[]>([]);
   const [tracks,   setTracks]   = useState<TrackItem[]>([]);
+  const [statsExtra, setStatsExtra] = useState<{ artistCount: number; subgenreCount: number }>({ artistCount: 0, subgenreCount: 0 });
 
   // ── Genre + subgenre selection ────────────────────────────────────────────
   const [selected,          setSelected]          = useState<string | null>(null);
@@ -319,7 +320,7 @@ export default function LandingPage() {
   const subRegionRef     = useRef<Map<number, number>>(new Map());
   const activeSubsRef    = useRef<SubItem[]>([]);
   const subPolesRef      = useRef<{ name: string; pole: V3 }[]>([]);
-  const rotRef           = useRef({ x: -0.52, y: -0.25 });
+  const rotRef           = useRef({ x: -0.35, y: -0.8 });
   const dragRef          = useRef({ active: false, lx: 0, ly: 0, moved: false });
   const rafRef           = useRef<number>(0);
   const labelHitsRef     = useRef<{ name: string; subgenre?: string; x1: number; y1: number; x2: number; y2: number }[]>([]);
@@ -327,11 +328,15 @@ export default function LandingPage() {
   const hoveredRef       = useRef<{ genre: string; subgenre?: string } | null>(null);
   const autoSelectedRef  = useRef(false);
 
-  // ── Fetch worlds on mount — same pattern as /world page ─────────────────
+  // ── Fetch worlds + stats on mount ────────────────────────────────────────
   useEffect(() => {
     fetch("/api/world")
       .then(r => r.json())
       .then(d => { if (d && Object.keys(d).length > 0) setWorlds(d); })
+      .catch(() => {});
+    fetch("/api/stats")
+      .then(r => r.json())
+      .then(d => { if (d) setStatsExtra({ artistCount: d.artistCount ?? 0, subgenreCount: d.subgenreCount ?? 0 }); })
       .catch(() => {});
   }, []);
 
@@ -921,6 +926,8 @@ export default function LandingPage() {
   };
 
   // ── Derived display values ────────────────────────────────────────────────
+  const totalTrackCount   = Object.values(worlds).reduce((s, c) => s + c, 0);
+  const totalGenreCount   = Object.keys(worlds).length;
   const selectedColor   = selected ? (COLORS[selected] ?? "#ffffff") : "#ffffff";
   const [sr, sg, sb]    = selected ? hexRgb(COLORS[selected] ?? "#ffffff") : [255, 255, 255];
   const focusedSubgenre = hoveredSubgenre ?? selectedSubgenre ?? zoomSubgenre;
@@ -944,23 +951,50 @@ export default function LandingPage() {
         {/* Body — single positioned container; all UI layers are absolute */}
         <div className="flex-1 relative min-h-0">
 
-          {/* Intro text — fades out on first interaction, stays gone */}
+          {/* Hero text — top-left, fades out on zoom */}
           <div
-            className="absolute inset-y-0 left-0 z-10 flex flex-col justify-center px-10 md:px-16 lg:px-24 max-w-[480px]"
+            className="absolute top-0 left-0 z-10 flex flex-col px-8 pt-6 md:px-12 md:pt-8"
             style={{
               opacity: textVisible ? 1 : 0,
               transition: "opacity 0.4s ease-in-out",
               pointerEvents: textVisible ? "auto" : "none",
-              background: "linear-gradient(to right, rgba(0,0,0,0.80) 50%, transparent)",
             }}
           >
-            <h1 className="text-3xl md:text-4xl font-light leading-[1.15] text-white mb-5">
+            <h1 className="text-2xl md:text-3xl font-light leading-[1.2] text-white mb-2">
               This is what a music taste looks like.
             </h1>
-            <p className="text-sm text-zinc-500 tracking-wide">
-              Click. Drag. Zoom. Explore.
+            <p className="text-xs text-zinc-500 tracking-widest uppercase">
+              Zoom. Explore.
             </p>
           </div>
+
+          {/* Stats — bottom-left, fades out on zoom */}
+          {totalTrackCount > 0 && (
+            <div
+              className="absolute bottom-0 left-0 z-10 flex gap-6 px-8 pb-7 md:px-12 md:pb-9"
+              style={{
+                opacity: textVisible ? 1 : 0,
+                transition: "opacity 0.4s ease-in-out",
+                pointerEvents: "none",
+              }}
+            >
+              {[
+                { label: "Tracks",    value: totalTrackCount },
+                { label: "Artists",   value: statsExtra.artistCount },
+                { label: "Genres",    value: totalGenreCount },
+                { label: "Subgenres", value: statsExtra.subgenreCount },
+              ].map(({ label, value }) => (
+                <div key={label} className="flex flex-col">
+                  <span className="text-lg font-light text-white leading-none tabular-nums">
+                    {value.toLocaleString()}
+                  </span>
+                  <span className="text-[10px] tracking-widest uppercase text-zinc-600 mt-1">
+                    {label}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Canvas — fills entire body, sphere always centered */}
           <canvas
