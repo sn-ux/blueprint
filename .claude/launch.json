@@ -4,7 +4,7 @@
     {
       "name": "blueprint-v1",
       "runtimeExecutable": "/usr/local/bin/node",
-      "runtimeArgs": ["/Users/blueprint/blueprint-v1/node_modules/.bin/next", "dev", "--port", "3000"],
+      "runtimeArgs": ["/Users/blueprint/blueprint-v1/node_modules/.bin/next", "dev", "--port", "3000", "--no-turbopack"],
       "port": 3000
     }
   ]

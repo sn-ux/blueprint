@@ -22,7 +22,12 @@
       "Bash(find /Users/blueprint/blueprint-v1 -type f \\\\\\(-name *genre* -o -name *categor* -o -name *taxonomy* \\\\\\))",
       "Bash(grep -r \"signIn\\\\|Sign In\\\\|login\\\\|Login\" /Users/blueprint/blueprint-v1/app --include=*.tsx --include=*.ts)",
       "Bash(find /Users/blueprint/blueprint-v1/components -type f -name *.tsx)",
-      "Bash(grep -r \"useSession\\\\|signIn\\\\|signOut\" /Users/blueprint/blueprint-v1/app --include=*.tsx --include=*.ts)"
+      "Bash(grep -r \"useSession\\\\|signIn\\\\|signOut\" /Users/blueprint/blueprint-v1/app --include=*.tsx --include=*.ts)",
+      "Bash(./node_modules/.bin/tsc --noEmit)",
+      "Bash(cat -n /Users/blueprint/blueprint-v1/app/api/world/[genre]/route.ts)",
+      "Bash(node -e \":*)",
+      "Bash(node_modules/.bin/tsc --noEmit)",
+      "Bash(/usr/local/bin/node node_modules/.bin/tsc --noEmit)"
     ]
   }
 }
