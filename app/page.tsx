@@ -1805,12 +1805,12 @@ export default function LandingPage() {
             Explore through connection
           </p>
           {/* Aggregate friends sphere */}
-          <div className="flex flex-col items-center mb-3">
+          <div className="flex flex-col items-center mb-6">
             <div className="text-[11px] tracking-widest uppercase text-zinc-600 mb-2">Friends</div>
             <MiniSphere size={150} seed={99} />
           </div>
           {/* Friend spheres grid */}
-          <div className="grid grid-cols-3 gap-y-2 gap-x-1">
+          <div className="grid grid-cols-3 gap-y-6 gap-x-6">
             {[
               { name: "Chris",   seed: 1 },
               { name: "Adam",    seed: 5 },
