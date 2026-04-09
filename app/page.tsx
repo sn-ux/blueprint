@@ -1157,21 +1157,22 @@ export default function LandingPage() {
         <div className="flex flex-col justify-between px-12 py-12 overflow-hidden"
           style={{ width: "54%", borderRight: "1px solid rgba(255,255,255,0.05)" }}>
 
-          {/* Top group */}
-          <div className="space-y-7 leading-relaxed">
+          {/* Top: headline only */}
+          <h2 className="text-[2.75rem] font-light leading-tight text-white">
+            The modern &ldquo;internet&rdquo;<br />is a single model.
+          </h2>
 
-            <h2 className="text-[2.75rem] font-light leading-tight text-white">
-              The modern &ldquo;internet&rdquo;<br />is a single model.
-            </h2>
+          {/* Middle: body blocks */}
+          <div className="space-y-6 leading-relaxed">
 
             {/* Block 1 — the mechanism */}
-            <div className="space-y-0.5 text-[16px] text-white">
+            <div className="space-y-0.5 text-[17px] text-white">
               <p>1. You type into a search bar</p>
               <p>2. You scroll a recommendation feed</p>
             </div>
 
             {/* Block 2 — the limits */}
-            <div className="space-y-1.5 text-[16px]">
+            <div className="space-y-1.5 text-[17px]">
               <p>
                 <span className="text-white font-semibold">Search</span>
                 <span className="text-zinc-500"> shows you what you already know to look for.</span>
@@ -1184,7 +1185,7 @@ export default function LandingPage() {
             </div>
 
             {/* Block 3 — the gap */}
-            <div className="space-y-1.5 text-[16px]">
+            <div className="space-y-1.5 text-[17px]">
               <p className="text-white font-semibold">Entire categories of information never reach you.</p>
               <div className="space-y-0.5 text-zinc-500">
                 <p>1. What you don&apos;t know to search for</p>
@@ -1195,13 +1196,13 @@ export default function LandingPage() {
 
           </div>
 
-          {/* Bottom group — thesis + rotating line */}
+          {/* Bottom: thesis + rotating line */}
           <div className="space-y-2.5 pt-6 border-t border-zinc-900 leading-relaxed">
-            <p className="text-[16px] font-semibold text-zinc-200">This isn&apos;t a UX problem. It&apos;s a structural limit.</p>
-            <p className="text-[15px] text-zinc-500">
+            <p className="text-[17px] font-semibold text-zinc-200">This isn&apos;t a UX problem. It&apos;s a structural limit.</p>
+            <p className="text-[16px] text-zinc-500">
               The modern internet is not designed for discovery. It is designed for engagement.
             </p>
-            <p className="text-[18px] text-zinc-300 leading-relaxed font-medium">
+            <p className="text-[19px] text-zinc-300 leading-relaxed font-medium">
               <span
                 key={carouselIdx}
                 style={{ color: COMPANIES[carouselIdx].accent, transition: "color 0.5s ease-in-out" }}
