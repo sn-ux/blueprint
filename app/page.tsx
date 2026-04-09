@@ -310,8 +310,9 @@ function MiniSphere({ size = 80, seed = 0 }: { size?: number; seed?: number }) {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    const ctx2d = canvas.getContext("2d");
+    if (!ctx2d) return;
+    const ctx: CanvasRenderingContext2D = ctx2d;
     const dpr = window.devicePixelRatio || 1;
     canvas.width  = size * dpr;
     canvas.height = size * dpr;
