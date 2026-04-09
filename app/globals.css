@@ -1,4 +1,9 @@
 @import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+/* Force tiles visible — Leaflet sets opacity:0 inline and skips the fade-in
+   when fadeAnimation is disabled, so tiles never become visible otherwise. */
+.leaflet-tile { opacity: 1 !important; }
 
 :root {
   --background: #ffffff;

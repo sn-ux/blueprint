@@ -27,7 +27,9 @@
       "Bash(cat -n /Users/blueprint/blueprint-v1/app/api/world/[genre]/route.ts)",
       "Bash(node -e \":*)",
       "Bash(node_modules/.bin/tsc --noEmit)",
-      "Bash(/usr/local/bin/node node_modules/.bin/tsc --noEmit)"
+      "Bash(/usr/local/bin/node node_modules/.bin/tsc --noEmit)",
+      "Bash(npm install:*)",
+      "Bash(npm list:*)"
     ]
   }
 }
