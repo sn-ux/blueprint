@@ -1829,18 +1829,18 @@ export default function LandingPage() {
         </div>
 
         {/* ── RIGHT: friends mockup ────────────────────────────────────────────── */}
-        <div className="flex flex-col py-8 px-7 overflow-hidden" style={{ width: "46%" }}>
-          <p className="text-[11px] tracking-widest uppercase text-zinc-700 mb-4 select-none flex-shrink-0">
+        <div className="flex flex-col py-6 px-6 overflow-hidden" style={{ width: "46%" }}>
+          <p className="text-[11px] tracking-widest uppercase text-zinc-700 mb-3 select-none flex-shrink-0">
             Explore through connection
           </p>
-          <div className="flex-1 min-h-0 flex flex-col gap-0 overflow-hidden">
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
             {/* Aggregate friends sphere */}
-            <div className="flex flex-col items-center flex-shrink-0 pb-5">
-              <div className="text-[11px] tracking-widest uppercase text-zinc-600 mb-3">Friends</div>
-              <MiniSphere size={134} seed={99} />
+            <div className="flex flex-col items-center flex-shrink-0 pb-3">
+              <div className="text-[11px] tracking-widest uppercase text-zinc-600 mb-2">Friends</div>
+              <MiniSphere size={150} seed={99} />
             </div>
             {/* Friend spheres grid — fills remaining space */}
-            <div className="flex-1 min-h-0 grid grid-cols-3 grid-rows-2 gap-y-4 gap-x-2">
+            <div className="flex-1 min-h-0 grid grid-cols-3 grid-rows-2 gap-y-1 gap-x-1">
               {[
                 { name: "Chris",   seed: 1 },
                 { name: "Adam",    seed: 5 },
@@ -1849,8 +1849,8 @@ export default function LandingPage() {
                 { name: "UCLA",    seed: 7 },
                 { name: "Atlanta", seed: 11 },
               ].map(f => (
-                <div key={f.name} className="flex flex-col items-center justify-center gap-2 min-h-0">
-                  <MiniSphere size={90} seed={f.seed} />
+                <div key={f.name} className="flex flex-col items-center justify-center gap-1 min-h-0">
+                  <MiniSphere size={100} seed={f.seed} />
                   <span className="text-[13px] text-zinc-500">{f.name}</span>
                 </div>
               ))}
