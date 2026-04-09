@@ -1796,12 +1796,40 @@ export default function LandingPage() {
       </section>
 
       {/* ══ SECTION 3 — Friends ═══════════════════════════════════════════════ */}
-      <section className="h-screen bg-black flex overflow-hidden"
+      <section className="h-screen bg-black flex items-center overflow-hidden"
         style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
 
-        {/* ── LEFT: copy ──────────────────────────────────────────────────────── */}
-        <div className="flex flex-col justify-between px-12 py-12 overflow-hidden"
-          style={{ width: "54%", borderRight: "1px solid rgba(255,255,255,0.05)" }}>
+        {/* ── LEFT: spheres ───────────────────────────────────────────────────── */}
+        <div className="flex flex-col items-center justify-center py-8 px-6 flex-shrink-0" style={{ width: "54%" }}>
+          <p className="text-[11px] tracking-widest uppercase text-zinc-700 mb-4 select-none">
+            Explore through connection
+          </p>
+          {/* Aggregate friends sphere */}
+          <div className="flex flex-col items-center mb-3">
+            <div className="text-[11px] tracking-widest uppercase text-zinc-600 mb-2">Friends</div>
+            <MiniSphere size={150} seed={99} />
+          </div>
+          {/* Friend spheres grid */}
+          <div className="grid grid-cols-3 gap-y-2 gap-x-1">
+            {[
+              { name: "Chris",   seed: 1 },
+              { name: "Adam",    seed: 5 },
+              { name: "Ethan",   seed: 9 },
+              { name: "Dole",    seed: 3 },
+              { name: "UCLA",    seed: 7 },
+              { name: "Atlanta", seed: 11 },
+            ].map(f => (
+              <div key={f.name} className="flex flex-col items-center gap-1">
+                <MiniSphere size={100} seed={f.seed} />
+                <span className="text-[13px] text-zinc-500">{f.name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── RIGHT: copy ─────────────────────────────────────────────────────── */}
+        <div className="flex flex-col justify-between py-12 px-12 overflow-hidden"
+          style={{ width: "46%", borderLeft: "1px solid rgba(255,255,255,0.05)", alignSelf: "stretch" }}>
 
           <h2 className="text-[2.75rem] font-light leading-tight text-white">
             The people you trust<br />are the best filter.
@@ -1825,36 +1853,6 @@ export default function LandingPage() {
           <div className="space-y-2.5 pt-6 border-t border-zinc-900 leading-relaxed">
             <p className="text-[17px] font-semibold text-zinc-200">And you get closer in the process.</p>
             <p className="text-[18px] text-zinc-300 font-medium">There&apos;s no better way to understand someone than to explore what they actually love.</p>
-          </div>
-        </div>
-
-        {/* ── RIGHT: friends mockup ────────────────────────────────────────────── */}
-        <div className="flex flex-col py-6 px-6 overflow-hidden" style={{ width: "46%" }}>
-          <p className="text-[11px] tracking-widest uppercase text-zinc-700 mb-3 select-none flex-shrink-0">
-            Explore through connection
-          </p>
-          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-            {/* Aggregate friends sphere */}
-            <div className="flex flex-col items-center flex-shrink-0 pb-3">
-              <div className="text-[11px] tracking-widest uppercase text-zinc-600 mb-2">Friends</div>
-              <MiniSphere size={150} seed={99} />
-            </div>
-            {/* Friend spheres grid — fills remaining space */}
-            <div className="flex-1 min-h-0 grid grid-cols-3 grid-rows-2 gap-y-1 gap-x-1">
-              {[
-                { name: "Chris",   seed: 1 },
-                { name: "Adam",    seed: 5 },
-                { name: "Ethan",   seed: 9 },
-                { name: "Dole",    seed: 3 },
-                { name: "UCLA",    seed: 7 },
-                { name: "Atlanta", seed: 11 },
-              ].map(f => (
-                <div key={f.name} className="flex flex-col items-center justify-center gap-1 min-h-0">
-                  <MiniSphere size={100} seed={f.seed} />
-                  <span className="text-[13px] text-zinc-500">{f.name}</span>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
 
