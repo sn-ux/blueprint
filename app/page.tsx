@@ -967,7 +967,7 @@ export default function LandingPage() {
           <canvas
             ref={canvasRef}
             className="absolute inset-0 w-full h-full cursor-pointer"
-            style={{ display: "block", transform: "translateY(3%)" }}
+            style={{ display: "block", transform: "translateY(-3%)" }}
             onMouseDown={onMouseDown}
             onMouseMove={onMouseMove}
             onMouseUp={stopDrag}
