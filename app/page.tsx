@@ -297,7 +297,7 @@ export default function LandingPage() {
   const [worlds,   setWorlds]   = useState<Record<string, number>>({});
   const [subgenres, setSubgenres] = useState<SubItem[]>([]);
   const [tracks,   setTracks]   = useState<TrackItem[]>([]);
-  const [statsExtra, setStatsExtra] = useState<{ artistCount: number; subgenreCount: number }>({ artistCount: 0, subgenreCount: 0 });
+  const [allTracksData, setAllTracksData] = useState<TrackItem[]>([]);
 
   // ── Genre + subgenre selection ────────────────────────────────────────────
   const [selected,          setSelected]          = useState<string | null>(null);
@@ -320,7 +320,7 @@ export default function LandingPage() {
   const subRegionRef     = useRef<Map<number, number>>(new Map());
   const activeSubsRef    = useRef<SubItem[]>([]);
   const subPolesRef      = useRef<{ name: string; pole: V3 }[]>([]);
-  const rotRef           = useRef({ x: -0.35, y: -0.8 });
+  const rotRef           = useRef({ x: -0.35, y: -1.3 });
   const dragRef          = useRef({ active: false, lx: 0, ly: 0, moved: false });
   const rafRef           = useRef<number>(0);
   const labelHitsRef     = useRef<{ name: string; subgenre?: string; x1: number; y1: number; x2: number; y2: number }[]>([]);
@@ -328,17 +328,27 @@ export default function LandingPage() {
   const hoveredRef       = useRef<{ genre: string; subgenre?: string } | null>(null);
   const autoSelectedRef  = useRef(false);
 
-  // ── Fetch worlds + stats on mount ────────────────────────────────────────
+  // ── Fetch worlds on mount ────────────────────────────────────────────────
   useEffect(() => {
     fetch("/api/world")
       .then(r => r.json())
       .then(d => { if (d && Object.keys(d).length > 0) setWorlds(d); })
       .catch(() => {});
-    fetch("/api/stats")
-      .then(r => r.json())
-      .then(d => { if (d) setStatsExtra({ artistCount: d.artistCount ?? 0, subgenreCount: d.subgenreCount ?? 0 }); })
-      .catch(() => {});
   }, []);
+
+  // ── Fetch all genre tracks once worlds loads (for stats derivation) ──────
+  useEffect(() => {
+    const genres = Object.keys(worlds);
+    if (genres.length === 0) return;
+    Promise.all(
+      genres.map(g =>
+        fetch(`/api/world/${encodeURIComponent(g)}`)
+          .then(r => r.json())
+          .then(d => (d?.tracks ?? []) as TrackItem[])
+          .catch(() => [] as TrackItem[])
+      )
+    ).then(arrays => setAllTracksData(arrays.flat()));
+  }, [worlds]);
 
   // ── Fetch tracks + subgenres when genre selected ──────────────────────────
   useEffect(() => {
@@ -926,8 +936,10 @@ export default function LandingPage() {
   };
 
   // ── Derived display values ────────────────────────────────────────────────
-  const totalTrackCount   = Object.values(worlds).reduce((s, c) => s + c, 0);
-  const totalGenreCount   = Object.keys(worlds).length;
+  const totalTrackCount    = Object.values(worlds).reduce((s, c) => s + c, 0);
+  const totalGenreCount    = Object.keys(worlds).length;
+  const totalArtistCount   = new Set(allTracksData.map(t => t.artist)).size;
+  const totalSubgenreCount = new Set(allTracksData.map(t => t.blueprintSubgenre).filter(Boolean)).size;
   const selectedColor   = selected ? (COLORS[selected] ?? "#ffffff") : "#ffffff";
   const [sr, sg, sb]    = selected ? hexRgb(COLORS[selected] ?? "#ffffff") : [255, 255, 255];
   const focusedSubgenre = hoveredSubgenre ?? selectedSubgenre ?? zoomSubgenre;
@@ -953,7 +965,7 @@ export default function LandingPage() {
 
           {/* Hero text — top-left, fades out on zoom */}
           <div
-            className="absolute top-0 left-0 z-10 flex flex-col px-8 pt-6 md:px-12 md:pt-8"
+            className="absolute top-0 left-0 z-10 flex flex-col px-8 pt-12 md:px-12 md:pt-16"
             style={{
               opacity: textVisible ? 1 : 0,
               transition: "opacity 0.4s ease-in-out",
@@ -971,7 +983,7 @@ export default function LandingPage() {
           {/* Stats — bottom-left, fades out on zoom */}
           {totalTrackCount > 0 && (
             <div
-              className="absolute bottom-0 left-0 z-10 flex gap-6 px-8 pb-7 md:px-12 md:pb-9"
+              className="absolute bottom-0 left-0 z-10 flex gap-6 px-8 pb-12 md:px-12 md:pb-14"
               style={{
                 opacity: textVisible ? 1 : 0,
                 transition: "opacity 0.4s ease-in-out",
@@ -980,9 +992,9 @@ export default function LandingPage() {
             >
               {[
                 { label: "Tracks",    value: totalTrackCount },
-                { label: "Artists",   value: statsExtra.artistCount },
+                { label: "Artists",   value: totalArtistCount },
                 { label: "Genres",    value: totalGenreCount },
-                { label: "Subgenres", value: statsExtra.subgenreCount },
+                { label: "Subgenres", value: totalSubgenreCount },
               ].map(({ label, value }) => (
                 <div key={label} className="flex flex-col">
                   <span className="text-lg font-light text-white leading-none tabular-nums">
