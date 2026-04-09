@@ -1158,20 +1158,20 @@ export default function LandingPage() {
           style={{ width: "54%", borderRight: "1px solid rgba(255,255,255,0.05)" }}>
 
           {/* Top group */}
-          <div className="space-y-8 leading-relaxed">
+          <div className="space-y-9 leading-relaxed">
 
-            <h2 className="text-[3rem] font-light leading-tight text-white">
+            <h2 className="text-[3.75rem] font-light leading-tight text-white">
               The modern &ldquo;internet&rdquo;<br />is a single model.
             </h2>
 
             {/* Block 1 — the mechanism */}
-            <div className="pl-5 border-l-2 border-zinc-800 space-y-1 text-[17px] text-white">
+            <div className="space-y-1 text-[20px] text-white">
               <p>1. You type into a search bar</p>
               <p>2. You scroll a recommendation feed</p>
             </div>
 
             {/* Block 2 — the limits */}
-            <div className="space-y-2 text-[17px]">
+            <div className="space-y-2 text-[20px]">
               <p>
                 <span className="text-white font-medium">Search</span>
                 <span className="text-zinc-500"> shows you what you already know to look for.</span>
@@ -1184,9 +1184,9 @@ export default function LandingPage() {
             </div>
 
             {/* Block 3 — the gap */}
-            <div className="space-y-2 text-[17px]">
+            <div className="space-y-2 text-[20px]">
               <p className="text-white">Entire categories of information never reach you.</p>
-              <div className="pl-5 border-l-2 border-zinc-800 space-y-1 text-zinc-500">
+              <div className="space-y-1 text-zinc-500">
                 <p>1. What you don&apos;t know to search for</p>
                 <p>2. What exists outside your behavioral profile</p>
                 <p>3. What no one is paying to show you</p>
@@ -1197,11 +1197,11 @@ export default function LandingPage() {
 
           {/* Bottom group — thesis + rotating line */}
           <div className="space-y-3 pt-7 border-t border-zinc-900 leading-relaxed">
-            <p className="text-[18px] text-zinc-200">This isn&apos;t a UX problem. It&apos;s a structural limit.</p>
-            <p className="text-[17px] text-zinc-500">
+            <p className="text-[20px] text-zinc-200">This isn&apos;t a UX problem. It&apos;s a structural limit.</p>
+            <p className="text-[19px] text-zinc-500">
               The modern internet is not designed for discovery. It is designed for engagement.
             </p>
-            <p className="text-[16px] text-zinc-500 pl-5 border-l-2 border-zinc-800 leading-relaxed">
+            <p className="text-[18px] text-zinc-500 leading-relaxed">
               <span
                 key={carouselIdx}
                 style={{ color: COMPANIES[carouselIdx].accent, transition: "color 0.5s ease-in-out" }}
