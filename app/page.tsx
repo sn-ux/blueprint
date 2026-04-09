@@ -1862,7 +1862,36 @@ export default function LandingPage() {
       <section className="h-screen bg-black flex overflow-hidden"
         style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
 
-        {/* ── LEFT: map mockup ─────────────────────────────────────────────────── */}
+        {/* ── LEFT: copy ──────────────────────────────────────────────────────── */}
+        <div className="flex flex-col justify-between px-12 py-12 overflow-hidden"
+          style={{ width: "54%", borderRight: "1px solid rgba(255,255,255,0.05)" }}>
+
+          <h2 className="text-[2.75rem] font-light leading-tight text-white">
+            Every place has<br />a taste.
+          </h2>
+
+          <div className="space-y-6 leading-relaxed">
+            <div className="space-y-1.5 text-[17px]">
+              <p className="text-white font-semibold">A living map of human taste.</p>
+              <p className="text-zinc-500">Every city, school, and community has a visual — built from the combined taste of everyone in that place. Not what&apos;s trending. Not what&apos;s promoted. What the people there actually love.</p>
+            </div>
+            <div className="space-y-1.5 text-[17px]">
+              <p className="text-white font-semibold">Zoom out far enough and you see everything.</p>
+              <p className="text-zinc-500">The aggregate of everything everyone has ever discovered, saved, and loved. The complete record of human taste, mapped onto the planet that produced it.</p>
+            </div>
+            <div className="space-y-1.5 text-[17px]">
+              <p className="text-white font-semibold">The digital, tethered to the real.</p>
+              <p className="text-zinc-500">Find music from Atlanta, jazz from New Orleans, electronic from Berlin — not because an algorithm decided you&apos;d like it, but because you chose to go there.</p>
+            </div>
+          </div>
+
+          <div className="space-y-2.5 pt-6 border-t border-zinc-900 leading-relaxed">
+            <p className="text-[17px] font-semibold text-zinc-200">This is the Universal Intellect.</p>
+            <p className="text-[18px] text-zinc-300 font-medium">Everything humanity has ever loved — all already out there. Now you can find it.</p>
+          </div>
+        </div>
+
+        {/* ── RIGHT: map mockup ───────────────────────────────────────────────── */}
         <div className="flex flex-col py-8 px-7 overflow-hidden" style={{ width: "46%" }}>
           <p className="text-[11px] tracking-widest uppercase text-zinc-700 mb-4 select-none flex-shrink-0">
             The Universal Intellect
@@ -1910,35 +1939,6 @@ export default function LandingPage() {
                 </div>
               ))}
             </div>
-          </div>
-        </div>
-
-        {/* ── RIGHT: copy ─────────────────────────────────────────────────────── */}
-        <div className="flex flex-col justify-between px-12 py-12 overflow-hidden"
-          style={{ width: "54%", borderLeft: "1px solid rgba(255,255,255,0.05)" }}>
-
-          <h2 className="text-[2.75rem] font-light leading-tight text-white">
-            Every place has<br />a taste.
-          </h2>
-
-          <div className="space-y-6 leading-relaxed">
-            <div className="space-y-1.5 text-[17px]">
-              <p className="text-white font-semibold">A living map of human taste.</p>
-              <p className="text-zinc-500">Every city, school, and community has a visual — built from the combined taste of everyone in that place. Not what&apos;s trending. Not what&apos;s promoted. What the people there actually love.</p>
-            </div>
-            <div className="space-y-1.5 text-[17px]">
-              <p className="text-white font-semibold">Zoom out far enough and you see everything.</p>
-              <p className="text-zinc-500">The aggregate of everything everyone has ever discovered, saved, and loved. The complete record of human taste, mapped onto the planet that produced it.</p>
-            </div>
-            <div className="space-y-1.5 text-[17px]">
-              <p className="text-white font-semibold">The digital, tethered to the real.</p>
-              <p className="text-zinc-500">Find music from Atlanta, jazz from New Orleans, electronic from Berlin — not because an algorithm decided you&apos;d like it, but because you chose to go there.</p>
-            </div>
-          </div>
-
-          <div className="space-y-2.5 pt-6 border-t border-zinc-900 leading-relaxed">
-            <p className="text-[17px] font-semibold text-zinc-200">This is the Universal Intellect.</p>
-            <p className="text-[18px] text-zinc-300 font-medium">Everything humanity has ever loved — all already out there. Now you can find it.</p>
           </div>
         </div>
 
