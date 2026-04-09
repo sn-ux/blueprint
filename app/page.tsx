@@ -134,13 +134,13 @@ const DEMO_TRACKS: Record<string, TrackItem[]> = {
 // ── Per-platform discovery statements (indexed to COMPANIES order) ───────────
 
 const DISCOVERY = [
-  "The result you\u2019d love but never thought to search for",   // Google
-  "The video you\u2019d love but the algorithm never surfaced",    // TikTok
-  "The product you\u2019d love but never knew existed",            // Amazon
-  "The song you\u2019d love but haven\u2019t heard yet",           // Spotify
-  "The video you\u2019d love but never came across",               // YouTube
-  "The answer you\u2019d love but never knew to ask for",          // ChatGPT
-  "The dish you\u2019d love but haven\u2019t tried yet",           // DoorDash
+  "The result you\u2019d love, but never thought to search for",   // Google
+  "The video you\u2019d love, but the algorithm never surfaced",    // TikTok
+  "The product you\u2019d love, but never knew existed",            // Amazon
+  "The song you\u2019d love, but haven\u2019t heard yet",           // Spotify
+  "The video you\u2019d love, but never came across",               // YouTube
+  "The answer you\u2019d love, but never knew to ask for",          // ChatGPT
+  "The dish you\u2019d love, but haven\u2019t tried yet",           // DoorDash
 ];
 
 // ── Company showcase data ─────────────────────────────────────────────────────
@@ -391,7 +391,7 @@ export default function LandingPage() {
   useEffect(() => {
     const id = setInterval(() => {
       setCarouselIdx(i => (i + 1) % COMPANIES.length);
-    }, 3200);
+    }, 4200);
     return () => clearInterval(id);
   }, []);
 
