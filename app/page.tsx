@@ -1154,14 +1154,15 @@ export default function LandingPage() {
         style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
 
         {/* ── LEFT: problem copy ──────────────────────────────────────────────── */}
-        <div className="flex flex-col justify-center px-12 py-8 overflow-hidden"
+        <div className="flex flex-col justify-between px-12 py-14 overflow-hidden"
           style={{ width: "54%", borderRight: "1px solid rgba(255,255,255,0.05)" }}>
 
-          <h2 className="text-[2rem] font-light leading-tight text-white mb-7">
-            The modern &ldquo;internet&rdquo;<br />is a single model.
-          </h2>
+          {/* Top group */}
+          <div className="space-y-6 leading-relaxed">
 
-          <div className="space-y-5 leading-relaxed">
+            <h2 className="text-[2rem] font-light leading-tight text-white">
+              The modern &ldquo;internet&rdquo;<br />is a single model.
+            </h2>
 
             {/* Block 1 — the mechanism */}
             <div className="pl-4 border-l-2 border-zinc-800 space-y-0.5 text-[14px] text-zinc-500">
@@ -1175,7 +1176,7 @@ export default function LandingPage() {
                 <span className="text-white">Search</span> shows you what you already know to look for.
               </p>
               <p className="text-zinc-400">
-                <span className="text-white">Feeds</span> show what the system predicts — based on what
+                <span className="text-white">Feeds</span>{" "}show what the system predicts — based on what
                 you&apos;ve already seen, what people like you have seen, and what companies pay to promote.
               </p>
             </div>
@@ -1190,24 +1191,25 @@ export default function LandingPage() {
               </div>
             </div>
 
-            {/* Block 4 — the thesis */}
-            <div className="space-y-2 pt-4 border-t border-zinc-900">
-              <p className="text-[15px] text-zinc-200">This isn&apos;t a UX problem. It&apos;s a structural limit.</p>
-              <p className="text-[14px] text-zinc-400">
-                The modern internet is not designed for discovery. It is designed for engagement.
-              </p>
-              <p className="text-[13px] text-zinc-500 pl-4 border-l-2 border-zinc-800 leading-relaxed">
-                <span
-                  key={carouselIdx}
-                  style={{ display: "inline", transition: "opacity 0.4s ease-in-out" }}
-                >
-                  {DISCOVERY[carouselIdx]}
-                </span>
-                {" "}— all already out there. Just never shown to you.
-              </p>
-            </div>
-
           </div>
+
+          {/* Bottom group — thesis + rotating line */}
+          <div className="space-y-3 pt-6 border-t border-zinc-900 leading-relaxed">
+            <p className="text-[15px] text-zinc-200">This isn&apos;t a UX problem. It&apos;s a structural limit.</p>
+            <p className="text-[14px] text-zinc-400">
+              The modern internet is not designed for discovery. It is designed for engagement.
+            </p>
+            <p className="text-[13px] text-zinc-500 pl-4 border-l-2 border-zinc-800 leading-relaxed">
+              <span
+                key={carouselIdx}
+                style={{ color: COMPANIES[carouselIdx].accent, transition: "color 0.5s ease-in-out" }}
+              >
+                {DISCOVERY[carouselIdx]}
+              </span>
+              {" "}— all already out there. Just never shown to you.
+            </p>
+          </div>
+
         </div>
 
         {/* ── RIGHT: rotating company showcase ─────────────────────────────── */}
