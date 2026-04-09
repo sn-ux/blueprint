@@ -967,7 +967,7 @@ export default function LandingPage() {
           <canvas
             ref={canvasRef}
             className="absolute inset-0 w-full h-full cursor-pointer"
-            style={{ display: "block" }}
+            style={{ display: "block", transform: "translateY(-5%)" }}
             onMouseDown={onMouseDown}
             onMouseMove={onMouseMove}
             onMouseUp={stopDrag}
@@ -979,7 +979,7 @@ export default function LandingPage() {
           <div
             className="absolute z-10 flex flex-col pointer-events-none"
             style={{
-              top: "9%",
+              top: "5%",
               left: "6%",
               opacity: textVisible ? 1 : 0,
               transition: "opacity 0.4s ease-in-out",
