@@ -14,53 +14,54 @@ type PlaceNode = {
 
 /* ── Place nodes — US only, three zoom stages ───────────────────────────── *
  *
- *  Stage 1  (t 0.00–0.38)  Bay Area close-up  — all local cities visible
- *  Stage 2  (t 0.38–0.68)  California pull-back — local cities fade out
- *  Stage 3  (t 0.52–1.00)  Full USA — national cities appear
+ *  Stage 1  (t 0.00–0.30)  Menlo Park only — clean, focused
+ *  Stage 2  (t 0.32–0.72)  West Coast cities — SF, LA, Seattle, Denver
+ *                           These are 40–110 px apart at Stage 2 zoom, so
+ *                           spheres never overlap.
+ *  Stage 3  (t 0.55–1.00)  National cities — full USA
+ *
+ *  MP exits before Stage 2 cities enter (brief clean gap at t≈0.30–0.32)
+ *  so the camera pan never causes MP + SF to share the same screen pixel.
  *
  *  PLACES is the single source of truth.  Every entry renders exactly one
  *  MiniSphere + one label, always paired in the same parent div.           */
 
 const PLACES: PlaceNode[] = [
-  // ── Stage 1 + 2: Bay Area — all visible from t=0, fading out before Stage 3.
-  //   At zoom 32×, these cities are spread across the panel (SF ~24px left of
-  //   MP, SJ ~30px right) — readable and clearly distinct.
-  { id:"mp",  label:"Menlo Park",    lat:37.453, lng:-122.182, size:28, seed:17, minT:0.00, maxT:0.56 },
-  { id:"pa",  label:"Palo Alto",     lat:37.441, lng:-122.143, size:22, seed:23, minT:0.00, maxT:0.52 },
-  { id:"stn", label:"Stanford",      lat:37.427, lng:-122.170, size:18, seed:29, minT:0.00, maxT:0.50 },
-  { id:"sf",  label:"San Francisco", lat:37.774, lng:-122.419, size:32, seed: 1, minT:0.00, maxT:0.60 },
-  { id:"sj",  label:"San Jose",      lat:37.338, lng:-121.886, size:26, seed:13, minT:0.00, maxT:0.58 },
-  { id:"oak", label:"Oakland",       lat:37.804, lng:-122.271, size:22, seed: 7, minT:0.00, maxT:0.56 },
+  // ── Stage 1: just Menlo Park ──────────────────────────────────────────
+  { id:"mp",  label:"Menlo Park",    lat:37.453, lng:-122.182, size:28, seed:17, minT:0.00, maxT:0.30 },
 
-  // ── Stage 3: Full USA — fade in as we zoom out past California
-  { id:"la",  label:"Los Angeles",   lat:34.052, lng:-118.244, size:34, seed: 3, minT:0.50, maxT:1.00 },
-  { id:"sea", label:"Seattle",       lat:47.606, lng:-122.332, size:28, seed:31, minT:0.50, maxT:1.00 },
-  { id:"ny",  label:"New York",      lat:40.713, lng: -74.006, size:38, seed:21, minT:0.52, maxT:1.00 },
-  { id:"chi", label:"Chicago",       lat:41.878, lng: -87.630, size:32, seed: 9, minT:0.52, maxT:1.00 },
-  { id:"hou", label:"Houston",       lat:29.760, lng: -95.370, size:26, seed:11, minT:0.54, maxT:1.00 },
-  { id:"mia", label:"Miami",         lat:25.762, lng: -80.192, size:24, seed:15, minT:0.54, maxT:1.00 },
-  { id:"den", label:"Denver",        lat:39.739, lng:-104.984, size:24, seed:35, minT:0.52, maxT:1.00 },
-  { id:"bos", label:"Boston",        lat:42.361, lng: -71.057, size:26, seed:19, minT:0.54, maxT:1.00 },
+  // ── Stage 2: West Coast — verified non-overlapping at zoom 1.8× ──────
+  //   SF (275,441)  LA (301,472)  Sea (278,370)  Den (377,422) — all 40px+ apart
+  { id:"sf",  label:"San Francisco", lat:37.774, lng:-122.419, size:32, seed: 1, minT:0.32, maxT:0.68 },
+  { id:"la",  label:"Los Angeles",   lat:34.052, lng:-118.244, size:34, seed: 3, minT:0.32, maxT:0.72 },
+  { id:"sea", label:"Seattle",       lat:47.606, lng:-122.332, size:28, seed:31, minT:0.34, maxT:0.70 },
+  { id:"den", label:"Denver",        lat:39.739, lng:-104.984, size:24, seed:35, minT:0.36, maxT:0.75 },
+
+  // ── Stage 3: national ─────────────────────────────────────────────────
+  { id:"ny",  label:"New York",      lat:40.713, lng: -74.006, size:38, seed:21, minT:0.55, maxT:1.00 },
+  { id:"chi", label:"Chicago",       lat:41.878, lng: -87.630, size:32, seed: 9, minT:0.55, maxT:1.00 },
+  { id:"hou", label:"Houston",       lat:29.760, lng: -95.370, size:26, seed:11, minT:0.57, maxT:1.00 },
+  { id:"mia", label:"Miami",         lat:25.762, lng: -80.192, size:24, seed:15, minT:0.57, maxT:1.00 },
+  { id:"bos", label:"Boston",        lat:42.361, lng: -71.057, size:26, seed:19, minT:0.57, maxT:1.00 },
 ];
 
 /* ── Camera keyframes: [t, zoomScale, cLat, cLng] ───────────────────────── *
  *  zoomScale multiplies the base globe radius (BASE_R × zoom = actual R).   *
  *                                                                            *
- *   32×  →  R ≈ 13.4× min(w,h).  Globe fills ~7800 px across; panel shows  *
- *           only ~400 km around Menlo Park.  Bay Area cities are spread      *
- *           clearly across the frame (SF ~24 px left, SJ ~30 px right).     *
+ *    5×  →  R ≈ 2.1× min(w,h).  Bay Area close-up.  Globe edge arcs in     *
+ *           from sides so it still reads as a sphere, not a flat map.       *
  *                                                                            *
- *    5×  →  R ≈ 2.1× min(w,h).  California coast fully visible; globe edge  *
- *           arcs in from top/bottom, still reads as a sphere.               *
+ *   1.8×  →  R ≈ 0.76× min(w,h).  California coast and Pacific visible;    *
+ *            West Coast cities spread comfortably across the frame.          *
  *                                                                            *
  *   0.90×  →  Full globe circle fits in the panel.  All of North America    *
- *            and the wider US visible.                                       */
+ *            and the wider US visible.  5.6:1 ratio Stage 1 → Stage 3.      */
 
 const CAM: readonly [number, number, number, number][] = [
-  [0.00, 32.0, 37.50, -122.20],  // Bay Area close-up (~400 km visible width)
-  [0.38,  5.0, 37.20, -119.80],  // California / West Coast pull-back
-  [0.68,  0.90, 39.00, -97.00],  // Full continental USA
-  [1.00,  0.90, 39.00, -97.00],  // Hold at USA for smooth loop reverse
+  [0.00,  5.00, 37.50, -122.20],  // Stage 1: Bay Area — zoomed in, globe edge arcs in from sides
+  [0.38,  1.80, 37.00, -120.00],  // California / West Coast pull-back
+  [0.65,  0.90, 39.00,  -97.00],  // Full continental USA
+  [1.00,  0.90, 39.00,  -97.00],  // Hold at USA for smooth loop reverse
 ];
 
 const BASE_R  = 0.42;    // globe radius as fraction of min(w,h) at zoom 1× (= 0.90 in Stage 3)
