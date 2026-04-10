@@ -1712,27 +1712,60 @@ export default function LandingPage() {
           <p className="text-[11px] tracking-widest uppercase text-zinc-700 mb-4 select-none">
             Explore through connection
           </p>
-          {/* Aggregate friends sphere */}
-          <div className="flex flex-col items-center mb-6">
-            <div className="text-[11px] tracking-widest uppercase text-zinc-600 mb-2">Friends</div>
-            <MiniSphere size={150} seed={99} />
-          </div>
-          {/* Friend spheres grid */}
-          <div className="grid grid-cols-3 gap-y-6 gap-x-6">
-            {[
-              { name: "Chris",   seed: 1 },
-              { name: "Adam",    seed: 5 },
-              { name: "Ethan",   seed: 9 },
-              { name: "Dole",    seed: 3 },
-              { name: "UCLA",    seed: 7 },
+
+          {/* Circular arrangement — Friends in centre, 6 friends orbiting */}
+          {(() => {
+            const friends = [
+              { name: "Chris",   seed:  1 },
+              { name: "Adam",    seed:  5 },
+              { name: "Ethan",   seed:  9 },
+              { name: "Dole",    seed:  3 },
+              { name: "UCLA",    seed:  7 },
               { name: "Atlanta", seed: 11 },
-            ].map(f => (
-              <div key={f.name} className="flex flex-col items-center gap-1">
-                <MiniSphere size={100} seed={f.seed} />
-                <span className="text-[13px] text-zinc-500">{f.name}</span>
+            ];
+            const SIZE   = 420;          // container px
+            const CX     = SIZE / 2;     // 210
+            const CY     = SIZE / 2;     // 210
+            const ORBIT  = 158;          // orbit radius
+            const N      = friends.length;
+            return (
+              <div style={{ position: "relative", width: SIZE, height: SIZE, flexShrink: 0 }}>
+
+                {/* Centre: Friends aggregate sphere */}
+                <div style={{
+                  position: "absolute",
+                  left: CX, top: CY,
+                  transform: "translate(-50%, -50%)",
+                  display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+                }}>
+                  <MiniSphere size={130} seed={99} />
+                  <span style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(255,255,255,0.30)" }}>
+                    Friends
+                  </span>
+                </div>
+
+                {/* Individual friend spheres in a circle */}
+                {friends.map((f, i) => {
+                  const angle = (i / N) * 2 * Math.PI - Math.PI / 2; // start at top
+                  const x = CX + ORBIT * Math.cos(angle);
+                  const y = CY + ORBIT * Math.sin(angle);
+                  return (
+                    <div key={f.name} style={{
+                      position: "absolute",
+                      left: x, top: y,
+                      transform: "translate(-50%, -50%)",
+                      display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
+                    }}>
+                      <MiniSphere size={80} seed={f.seed} />
+                      <span style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", whiteSpace: "nowrap" }}>
+                        {f.name}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
-            ))}
-          </div>
+            );
+          })()}
         </div>
 
         {/* ── RIGHT: copy ─────────────────────────────────────────────────────── */}
