@@ -28,7 +28,7 @@ type PlaceNode = {
 
 const PLACES: PlaceNode[] = [
   // ── Stage 1: just Menlo Park ──────────────────────────────────────────
-  { id:"mp",  label:"Menlo Park",    lat:37.453, lng:-122.182, size:28, seed:17, minT:0.00, maxT:0.30 },
+  { id:"mp",  label:"Menlo Park",    lat:37.453, lng:-122.182, size:28, seed:17, minT:-0.055, maxT:0.30 },
 
   // ── Stage 2: West Coast — verified non-overlapping at zoom 1.8× ──────
   //   SF (275,441)  LA (301,472)  Sea (278,370)  Den (377,422) — all 40px+ apart
@@ -38,11 +38,11 @@ const PLACES: PlaceNode[] = [
   { id:"den", label:"Denver",        lat:39.739, lng:-104.984, size:24, seed:35, minT:0.36, maxT:0.75 },
 
   // ── Stage 3: national ─────────────────────────────────────────────────
-  { id:"ny",  label:"New York",      lat:40.713, lng: -74.006, size:38, seed:21, minT:0.55, maxT:1.00 },
-  { id:"chi", label:"Chicago",       lat:41.878, lng: -87.630, size:32, seed: 9, minT:0.55, maxT:1.00 },
-  { id:"hou", label:"Houston",       lat:29.760, lng: -95.370, size:26, seed:11, minT:0.57, maxT:1.00 },
-  { id:"mia", label:"Miami",         lat:25.762, lng: -80.192, size:24, seed:15, minT:0.57, maxT:1.00 },
-  { id:"bos", label:"Boston",        lat:42.361, lng: -71.057, size:26, seed:19, minT:0.57, maxT:1.00 },
+  { id:"ny",  label:"New York",      lat:40.713, lng: -74.006, size:38, seed:21, minT:0.55, maxT:1.055 },
+  { id:"chi", label:"Chicago",       lat:41.878, lng: -87.630, size:32, seed: 9, minT:0.55, maxT:1.055 },
+  { id:"hou", label:"Houston",       lat:29.760, lng: -95.370, size:26, seed:11, minT:0.57, maxT:1.055 },
+  { id:"mia", label:"Miami",         lat:25.762, lng: -80.192, size:24, seed:15, minT:0.57, maxT:1.055 },
+  { id:"bos", label:"Boston",        lat:42.361, lng: -71.057, size:26, seed:19, minT:0.57, maxT:1.055 },
 ];
 
 /* ── Camera keyframes: [t, zoomScale, cLat, cLng] ───────────────────────── *
