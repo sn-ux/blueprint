@@ -9,22 +9,55 @@ type PlaceNode = {
   id: string; label: string;
   lat: number; lng: number;
   size: number; seed: number;
+  minT: number; maxT: number;
 };
 
-/* ── Place nodes (small fixed set — no zoom sequence yet) ───────────────── */
+/* ── Place nodes — US only, three zoom stages ───────────────────────────── *
+ *
+ *  Stage 1  (t 0.00–0.45)  Menlo Park close-up
+ *  Stage 2  (t 0.22–0.68)  Bay Area / California
+ *  Stage 3  (t 0.52–1.00)  Full USA
+ *
+ *  PLACES is the single source of truth.  Every entry renders exactly one
+ *  MiniSphere + one label, always paired in the same parent div.           */
 
 const PLACES: PlaceNode[] = [
-  { id:"mp",  label:"Menlo Park",    lat: 37.45, lng:-122.18, size:26, seed:17 },
-  { id:"sf",  label:"San Francisco", lat: 37.77, lng:-122.42, size:32, seed: 1 },
-  { id:"ny",  label:"New York",      lat: 40.71, lng: -74.01, size:36, seed:21 },
-  { id:"lon", label:"London",        lat: 51.51, lng:  -0.13, size:36, seed: 2 },
-  { id:"tok", label:"Tokyo",         lat: 35.68, lng: 139.69, size:32, seed:16 },
+  // ── Stage 1 ───────────────────────────────────────────────────────────
+  { id:"mp",  label:"Menlo Park",    lat:37.453, lng:-122.182, size:28, seed:17, minT:0.00, maxT:0.45 },
+
+  // ── Stage 2 ───────────────────────────────────────────────────────────
+  { id:"pa",  label:"Palo Alto",     lat:37.441, lng:-122.143, size:22, seed:23, minT:0.22, maxT:0.62 },
+  { id:"stn", label:"Stanford",      lat:37.427, lng:-122.170, size:18, seed:29, minT:0.24, maxT:0.60 },
+  { id:"sf",  label:"San Francisco", lat:37.774, lng:-122.419, size:32, seed: 1, minT:0.22, maxT:0.65 },
+  { id:"sj",  label:"San Jose",      lat:37.338, lng:-121.886, size:26, seed:13, minT:0.22, maxT:0.65 },
+  { id:"oak", label:"Oakland",       lat:37.804, lng:-122.271, size:22, seed: 7, minT:0.22, maxT:0.65 },
+
+  // ── Stage 3 ───────────────────────────────────────────────────────────
+  { id:"la",  label:"Los Angeles",   lat:34.052, lng:-118.244, size:34, seed: 3, minT:0.52, maxT:1.00 },
+  { id:"sea", label:"Seattle",       lat:47.606, lng:-122.332, size:28, seed:31, minT:0.52, maxT:1.00 },
+  { id:"ny",  label:"New York",      lat:40.713, lng: -74.006, size:38, seed:21, minT:0.54, maxT:1.00 },
+  { id:"chi", label:"Chicago",       lat:41.878, lng: -87.630, size:32, seed: 9, minT:0.54, maxT:1.00 },
+  { id:"hou", label:"Houston",       lat:29.760, lng: -95.370, size:26, seed:11, minT:0.56, maxT:1.00 },
+  { id:"mia", label:"Miami",         lat:25.762, lng: -80.192, size:24, seed:15, minT:0.56, maxT:1.00 },
+  { id:"den", label:"Denver",        lat:39.739, lng:-104.984, size:24, seed:35, minT:0.54, maxT:1.00 },
+  { id:"bos", label:"Boston",        lat:42.361, lng: -71.057, size:26, seed:19, minT:0.56, maxT:1.00 },
 ];
 
-/* ── Globe constants ────────────────────────────────────────────────────── */
+/* ── Camera keyframes: [t, zoomScale, cLat, cLng] ───────────────────────── *
+ *  zoomScale multiplies the base globe radius.                              *
+ *    1.70 → globe is very large / zoomed in (Stage 1)                       *
+ *    0.92 → globe fits comfortably in frame (Stage 3)                       */
 
-const CENTER_LAT = 20;    // fixed axial tilt (degrees N)
-const ROT_SPEED  = 0.03;  // degrees per frame → ~3 min per full rotation
+const CAM: readonly [number, number, number, number][] = [
+  [0.00, 1.70, 37.50, -122.20],  // Menlo Park — large globe, Bay Area centered
+  [0.35, 1.20, 37.60, -120.50],  // Bay Area / California pull-back
+  [0.65, 0.92, 39.00,  -97.00],  // Full continental USA
+  [1.00, 0.92, 39.00,  -97.00],  // Hold at USA (smooth reverse start)
+];
+
+const BASE_R  = 0.42;    // globe radius as fraction of min(w, h) at zoom 1×
+const SPEED   = 0.000036; // t units per ms → full cycle ≈ 28 s each way
+const FADE_W  = 0.055;    // t-width of label fade-in / fade-out ramp
 
 /* ── Continent outlines — [lng, lat] ────────────────────────────────────── */
 
@@ -60,9 +93,7 @@ const LAND: [number, number][][] = [
 ];
 
 /* ── Orthographic projection ─────────────────────────────────────────────
-   Standard formula. Returns screen [px, py] and depth z.
-   z > 0  → point faces the camera (front hemisphere, visible).
-   z <= 0 → point is behind the globe (hidden).                         */
+   Standard formula. z > 0 → front hemisphere (camera-facing, visible).  */
 
 type Proj = { px: number; py: number; z: number };
 
@@ -74,17 +105,16 @@ function orthoProject(
   const φ   = (lat  * Math.PI) / 180;
   const φ0  = (cLat * Math.PI) / 180;
   const dλ  = ((lng - cLng) * Math.PI) / 180;
-  const sinφ = Math.sin(φ),  cosφ = Math.cos(φ);
+  const sinφ  = Math.sin(φ),  cosφ  = Math.cos(φ);
   const sinφ0 = Math.sin(φ0), cosφ0 = Math.cos(φ0);
-  const x = cosφ * Math.sin(dλ);
+  const x = cosφ  * Math.sin(dλ);
   const y = cosφ0 * sinφ - sinφ0 * cosφ * Math.cos(dλ);
   const z = sinφ0 * sinφ + cosφ0 * cosφ * Math.cos(dλ);
   return { px: cx + x * R, py: cy - y * R, z };
 }
 
-/* Continent fills: back-hemisphere polygon vertices are pushed to the limb
-   so the continent silhouette wraps naturally to the globe edge rather than
-   spilling to the wrong side of the canvas.                             */
+/* Back-hemisphere vertices clamped to the limb ring so continent fills
+   wrap cleanly to the globe edge instead of spilling inward.            */
 function clampToLimb({ px, py, z }: Proj, R: number, cx: number, cy: number): Proj {
   if (z >= 0) return { px, py, z };
   const dx = px - cx, dy = py - cy;
@@ -93,35 +123,35 @@ function clampToLimb({ px, py, z }: Proj, R: number, cx: number, cy: number): Pr
   return { px: cx + (dx / dist) * R, py: cy + (dy / dist) * R, z: 0 };
 }
 
-/* ── Globe renderer — called every animation frame ───────────────────────
-   Pure canvas ops. No network. No tiles. Zero flash.                   */
+/* ── Globe renderer ──────────────────────────────────────────────────────
+   R is passed in so the caller can animate zoom by scaling it.          */
 
 function drawGlobe(
   ctx: CanvasRenderingContext2D,
   w: number, h: number,
   cLat: number, cLng: number,
+  R: number,
 ) {
-  const R  = Math.min(w, h) * 0.42;
   const cx = w / 2;
   const cy = h / 2;
 
   ctx.clearRect(0, 0, w, h);
 
-  // ── Deep space background ──────────────────────────────────────────────
+  // Space background
   ctx.fillStyle = "#03050b";
   ctx.fillRect(0, 0, w, h);
 
-  // ── Atmosphere glow (halo just outside the limb) ───────────────────────
+  // Atmosphere halo
   const atmos = ctx.createRadialGradient(cx, cy, R * 0.96, cx, cy, R * 1.14);
-  atmos.addColorStop(0, "rgba(20,70,200,0.20)");
+  atmos.addColorStop(0,   "rgba(20,70,200,0.20)");
   atmos.addColorStop(0.5, "rgba(10,40,120,0.07)");
-  atmos.addColorStop(1, "rgba(0,0,0,0)");
+  atmos.addColorStop(1,   "rgba(0,0,0,0)");
   ctx.beginPath();
   ctx.arc(cx, cy, R * 1.14, 0, Math.PI * 2);
   ctx.fillStyle = atmos;
   ctx.fill();
 
-  // ── Globe sphere — everything below is clipped to this circle ─────────
+  // Globe base + clip region
   ctx.save();
   ctx.beginPath();
   ctx.arc(cx, cy, R, 0, Math.PI * 2);
@@ -129,10 +159,9 @@ function drawGlobe(
   ctx.fill();
   ctx.clip();
 
-  // ── Graticule (lat/lng grid, very subtle) ─────────────────────────────
+  // Graticule — very subtle lat/lng grid
   ctx.strokeStyle = "rgba(30,80,160,0.11)";
   ctx.lineWidth = 0.5;
-  // Latitude parallels
   for (let lat = -60; lat <= 60; lat += 30) {
     ctx.beginPath();
     let fresh = true;
@@ -143,7 +172,6 @@ function drawGlobe(
     }
     ctx.stroke();
   }
-  // Longitude meridians
   for (let ln = -180; ln <= 180; ln += 30) {
     ctx.beginPath();
     let fresh = true;
@@ -155,9 +183,7 @@ function drawGlobe(
     ctx.stroke();
   }
 
-  // ── Continent fills ────────────────────────────────────────────────────
-  // Back-hemisphere vertices are clamped to the limb so the fill wraps
-  // cleanly to the globe edge — looks correct, not distorted.
+  // Continent fills — clamped projection keeps fills within the globe circle
   ctx.fillStyle = "#1d3352";
   for (const poly of LAND) {
     ctx.beginPath();
@@ -169,7 +195,7 @@ function drawGlobe(
     ctx.fill();
   }
 
-  // ── Continent edges (front-facing only — pen lifts at the limb) ────────
+  // Continent edges — only on front-facing portions, pen lifts at limb
   ctx.strokeStyle = "#2b4f74";
   ctx.lineWidth = 0.8;
   for (const poly of LAND) {
@@ -183,17 +209,16 @@ function drawGlobe(
     ctx.stroke();
   }
 
-  // ── Limb darkening — the key effect that sells the spherical form ──────
-  // Ocean brightens toward centre, darkens toward edge (atmospheric limb)
+  // Limb darkening — the primary effect that makes a disc read as a sphere
   const limb = ctx.createRadialGradient(cx, cy, 0, cx, cy, R);
-  limb.addColorStop(0.0, "rgba(0,0,0,0)");
+  limb.addColorStop(0.00, "rgba(0,0,0,0)");
   limb.addColorStop(0.55, "rgba(0,0,0,0)");
   limb.addColorStop(0.82, "rgba(0,4,18,0.28)");
-  limb.addColorStop(1.0,  "rgba(0,4,18,0.90)");
+  limb.addColorStop(1.00, "rgba(0,4,18,0.90)");
   ctx.fillStyle = limb;
   ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
 
-  // ── Specular highlight (light source upper-left) ───────────────────────
+  // Specular highlight — subtle light source, upper-left
   const spec = ctx.createRadialGradient(
     cx - R * 0.32, cy - R * 0.30, 0,
     cx - R * 0.32, cy - R * 0.30, R * 0.72,
@@ -203,9 +228,9 @@ function drawGlobe(
   ctx.fillStyle = spec;
   ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
 
-  ctx.restore(); // end clip
+  ctx.restore();
 
-  // ── Globe edge ring (thin bright circle defines the limb cleanly) ──────
+  // Globe edge ring
   ctx.beginPath();
   ctx.arc(cx, cy, R, 0, Math.PI * 2);
   ctx.strokeStyle = "rgba(40,100,220,0.28)";
@@ -219,7 +244,7 @@ export default function MapVisual() {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef    = useRef<HTMLCanvasElement>(null);
   const rafRef       = useRef(0);
-  const rotLngRef    = useRef(-60); // start facing Atlantic (MP, NY, London all visible)
+  const animRef      = useRef({ t: 0, dir: 1 });
   const elsRef       = useRef<Map<string, HTMLDivElement>>(new Map());
 
   useEffect(() => {
@@ -241,36 +266,66 @@ export default function MapVisual() {
     const ro = new ResizeObserver(sizeCanvas);
     ro.observe(container);
 
+    // Animation helpers
+    const lerp = (a: number, b: number, u: number) => a + (b - a) * u;
+    const ease = (u: number) =>
+      u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
+
+    function getCamera(t: number) {
+      let i = 0;
+      while (i < CAM.length - 2 && CAM[i + 1][0] <= t) i++;
+      const [t0, s0, la0, ln0] = CAM[i];
+      const [t1, s1, la1, ln1] = CAM[i + 1];
+      const e = ease(Math.max(0, Math.min(1, (t - t0) / (t1 - t0))));
+      return {
+        zoom: lerp(s0, s1, e),
+        cLat: lerp(la0, la1, e),
+        cLng: lerp(ln0, ln1, e),
+      };
+    }
+
     let last = 0;
 
     function frame(now: number) {
       const dt = last ? Math.min(now - last, 50) : 16;
       last = now;
 
-      // Slowly rotate the globe eastward
-      rotLngRef.current += ROT_SPEED * (dt / 16);
-      if (rotLngRef.current > 180) rotLngRef.current -= 360;
+      const a = animRef.current;
+      a.t += a.dir * SPEED * dt;
+      if (a.t >= 1) { a.t = 1; a.dir = -1; }
+      if (a.t <= 0) { a.t = 0; a.dir =  1; }
 
-      const cLat = CENTER_LAT;
-      const cLng = rotLngRef.current;
-      const w    = canvas.width;
-      const h    = canvas.height;
-      const R    = Math.min(w, h) * 0.42;
-      const cx   = w / 2;
-      const cy   = h / 2;
+      const { zoom, cLat, cLng } = getCamera(a.t);
+      const w  = canvas.width;
+      const h  = canvas.height;
+      const R  = Math.min(w, h) * BASE_R * zoom;
+      const cx = w / 2;
+      const cy = h / 2;
 
-      drawGlobe(ctx, w, h, cLat, cLng);
+      // Draw globe — stable dark sphere, no spinning
+      drawGlobe(ctx, w, h, cLat, cLng, R);
 
-      // Position each place node using the same orthographic projection.
-      // Only front-facing nodes (z > 0.05) are shown; they fade in near the limb.
+      // Position nodes using the same orthographic projection.
+      // Each node is visible only when:
+      //   (a) t is within [minT, maxT]  — zoom-stage gating
+      //   (b) z > 0.05                  — front-facing hemisphere only
+      // Sphere and label are in one div, so they always appear together.
       PLACES.forEach(p => {
         const el = elsRef.current.get(p.id);
         if (!el) return;
         const { px, py, z } = orthoProject(p.lat, p.lng, cLat, cLng, R, cx, cy);
-        if (z > 0.05) {
+
+        const tFade =
+          a.t < p.minT || a.t > p.maxT
+            ? 0
+            : Math.min((a.t - p.minT) / FADE_W, (p.maxT - a.t) / FADE_W, 1);
+        const zFade = Math.min(1, Math.max(0, (z - 0.05) / 0.18));
+        const opacity = tFade * zFade;
+
+        if (opacity > 0.004) {
           el.style.left    = `${px}px`;
           el.style.top     = `${py}px`;
-          el.style.opacity = `${Math.min(1, (z - 0.05) / 0.18)}`;
+          el.style.opacity = `${opacity}`;
         } else {
           el.style.opacity = "0";
         }
@@ -295,14 +350,16 @@ export default function MapVisual() {
         overflow: "hidden", background: "#03050b",
       }}
     >
-      {/* Canvas renders the globe every frame — pure canvas, no network, no flash */}
+      {/* Canvas — globe drawn fresh each frame, pure canvas, zero network */}
       <canvas ref={canvasRef} style={{ position: "absolute", inset: 0, display: "block" }} />
 
       {/* ── Place nodes ──────────────────────────────────────────────────────
-          PLACES is the single source of truth. Each entry renders exactly
-          one MiniSphere + one label. Both are in the same div — the opacity
-          of the parent controls both together, so a label is NEVER visible
-          without its sphere.                                             */}
+          PLACES is the only source of visible labels.  Each entry gets:
+            • one MiniSphere (colorful icosphere)
+            • one label span directly below it
+          Both live in the same parent div.  Opacity is set on the parent,
+          so sphere and label are ALWAYS shown or hidden together — a label
+          can never appear without its sphere.                             */}
       {PLACES.map(p => (
         <div
           key={p.id}
