@@ -65,7 +65,7 @@ const CAM: readonly [number, number, number, number][] = [
 ];
 
 const BASE_R  = 0.42;    // globe radius as fraction of min(w,h) at zoom 1× (= 0.90 in Stage 3)
-const SPEED   = 0.000036; // t units per ms → full cycle ≈ 28 s each way
+const SPEED   = 0.000110; // t units per ms → full cycle ≈ 9 s each way
 const FADE_W  = 0.055;    // t-width of label fade-in / fade-out ramp
 
 /* ── Continent outlines — [lng, lat] ────────────────────────────────────── */
