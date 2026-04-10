@@ -1723,10 +1723,10 @@ export default function LandingPage() {
               { name: "UCLA",    seed:  7 },
               { name: "Atlanta", seed: 11 },
             ];
-            const SIZE   = 420;          // container px
-            const CX     = SIZE / 2;     // 210
-            const CY     = SIZE / 2;     // 210
-            const ORBIT  = 158;          // orbit radius
+            const SIZE   = 560;          // container px
+            const CX     = SIZE / 2;     // 280
+            const CY     = SIZE / 2;     // 280
+            const ORBIT  = 210;          // orbit radius
             const N      = friends.length;
             return (
               <div style={{ position: "relative", width: SIZE, height: SIZE, flexShrink: 0 }}>
@@ -1738,7 +1738,7 @@ export default function LandingPage() {
                   transform: "translate(-50%, -50%)",
                   display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
                 }}>
-                  <MiniSphere size={130} seed={99} />
+                  <MiniSphere size={170} seed={99} />
                   <span style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(255,255,255,0.30)" }}>
                     Friends
                   </span>
@@ -1756,7 +1756,7 @@ export default function LandingPage() {
                       transform: "translate(-50%, -50%)",
                       display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
                     }}>
-                      <MiniSphere size={80} seed={f.seed} />
+                      <MiniSphere size={105} seed={f.seed} />
                       <span style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", whiteSpace: "nowrap" }}>
                         {f.name}
                       </span>
