@@ -60,8 +60,8 @@ const PLACES: PlaceNode[] = [
 const CAM: readonly [number, number, number, number][] = [
   [0.00,  5.00, 37.50, -122.20],  // Stage 1: Bay Area — zoomed in, globe edge arcs in from sides
   [0.38,  1.80, 37.00, -120.00],  // California / West Coast pull-back
-  [0.65,  0.90, 39.00,  -97.00],  // Full continental USA
-  [1.00,  0.90, 39.00,  -97.00],  // Hold at USA for smooth loop reverse
+  [0.82,  0.90, 39.00,  -97.00],  // Full continental USA
+  [1.00,  0.90, 39.00,  -97.00],  // Brief hold at USA for smooth loop reverse
 ];
 
 const BASE_R  = 0.42;    // globe radius as fraction of min(w,h) at zoom 1× (= 0.90 in Stage 3)
