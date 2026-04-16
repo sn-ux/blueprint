@@ -16,7 +16,7 @@ export default function RootLayout({
     <html lang="en">
       <body className="bg-black">
         <div className="w-full flex justify-center">
-          <div className="w-full max-w-[1200px] px-8 md:px-12 lg:px-20 xl:px-32 2xl:px-40">
+          <div className="w-full max-w-[1280px] px-6 md:px-10 lg:px-16 xl:px-24 2xl:px-32">
             <Providers>{children}</Providers>
           </div>
         </div>
