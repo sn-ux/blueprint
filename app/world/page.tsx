@@ -882,37 +882,37 @@ export default function WorldPage() {
       }
 
       // ── Subgenre labels (zoomed-in view of the selected plate) ────────────
-      // Labels are positioned by projecting each subgenre's pre-computed 3-D
-      // pole directly to screen space — the same rotation + perspective math
-      // used for all vertices.  This guarantees EVERY front-facing subgenre
-      // gets a label regardless of how many triangles it owns (including the
-      // single-triangle case), because we never depend on accumulating enough
-      // visible faces.
-      if (zoomRef.current >= 1.6 && selectedIdx >= 0 && subPolesRef.current.length > 0) {
-        // Labels fade in at 1.6 (same zoom as region faces appear), fully visible by 1.9
+      // Build a screen-space centroid from the actual rendered (front-facing)
+      // triangles owned by each subgenre.  This fixes single-triangle subgenres:
+      // a subgenre with one triangle at the sphere limb has depth ≥ -0.1 (it IS
+      // rendered) but its 3-D pole projects to z2 ≈ 0, causing the old pole
+      // approach to skip it.  Using the triangle's own screen center bypasses
+      // the limb problem entirely.
+      if (zoomRef.current >= 1.6 && selectedIdx >= 0) {
+        // One pass over fd: accumulate screen-space centers per subgenre index
+        const subTriMap = new Map<number, { sx: number; sy: number; n: number }>();
+        for (const { tri, fi, depth, ri } of fd) {
+          if (ri !== selectedIdx || depth < -0.1) continue;
+          const si = subRegionRef.current.get(fi);
+          if (si === undefined) continue;
+          const [ia, ib, ic] = tri;
+          const tsx = (pv[ia].sx + pv[ib].sx + pv[ic].sx) / 3;
+          const tsy = (pv[ia].sy + pv[ib].sy + pv[ic].sy) / 3;
+          const acc = subTriMap.get(si);
+          if (acc) { acc.sx += tsx; acc.sy += tsy; acc.n++; }
+          else { subTriMap.set(si, { sx: tsx, sy: tsy, n: 1 }); }
+        }
+
+        // Labels fade in at 1.6, fully visible by 1.9
         const labelReveal = Math.min(1, Math.max(0, (zoomRef.current - 1.6) / 0.3));
         ctx.globalAlpha = labelReveal;
 
-        const cosRx = Math.cos(rx), sinRx = Math.sin(rx);
-        const cosRy = Math.cos(ry), sinRy = Math.sin(ry);
-
         activeSubsRef.current.forEach((sub, si) => {
-          const poleEntry = subPolesRef.current[si];
-          if (!poleEntry) return;
+          const acc = subTriMap.get(si);
+          if (!acc) return; // no visible triangles — skip
 
-          // Project 3-D pole to screen space (identical to pv[] computation)
-          const [px, py, pz] = poleEntry.pole;
-          const x1 =  px * cosRy + pz * sinRy;
-          const z1 = -px * sinRy + pz * cosRy;
-          const y2 =  py * cosRx - z1 * sinRx;
-          const z2 =  py * sinRx + z1 * cosRx;
-
-          // Only label subgenres whose pole faces the camera
-          if (z2 < 0.05) return;
-
-          const s  = FOV / (FOV + z2);
-          const lx = cx + x1 * R * s;
-          const ly = cy + y2 * R * s;
+          const lx = acc.sx / acc.n;
+          const ly = acc.sy / acc.n;
 
           // Same brightness-shade derivation as face coloring
           const n = activeSubsRef.current.length;
