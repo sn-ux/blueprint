@@ -898,7 +898,7 @@ export default function WorldPage() {
           subAcc[si].sx += lx; subAcc[si].sy += ly; subAcc[si].n++;
         }
         for (const [siStr, a] of Object.entries(subAcc)) {
-          if (a.n < 2) continue;
+          if (a.n < 1) continue; // include single-triangle subgenres
           const si  = Number(siStr);
           const sub = activeSubsRef.current[si];
           if (!sub) continue;
@@ -1329,37 +1329,50 @@ export default function WorldPage() {
               />
 
               {/* ── Shelf header — loose, not boxed ──────────────────────── */}
-              <div className="flex-shrink-0 px-7 pt-6 pb-4">
-                {focusedSubgenre ? (
-                  <>
-                    <button
-                      onClick={() => {
-                        setSelectedSubgenre(null); selectedSubgenreRef.current = null;
-                        setZoomSubgenre(null); zoomSubgenreRef.current = null;
-                      }}
-                      className="text-xs mb-3 flex items-center gap-1.5 transition-opacity hover:opacity-100"
-                      style={{ color: `rgba(${sr},${sg},${sb},0.45)` }}
-                    >
-                      ← {selected}
-                    </button>
-                    <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>
-                      {focusedSubgenre}
-                    </h2>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-xs tracking-widest uppercase mb-2"
-                      style={{ color: `rgba(${sr},${sg},${sb},0.38)` }}>
-                      Now exploring
-                    </p>
-                    <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>
-                      {selected}
-                    </h2>
-                  </>
-                )}
-                <p className="text-zinc-600 text-xs mt-1.5">
-                  {tracksLoading ? "—" : `${displayedTracks.length} tracks`}
-                </p>
+              <div className="flex-shrink-0 px-7 pt-5 pb-4 flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  {focusedSubgenre ? (
+                    <>
+                      <button
+                        onClick={() => {
+                          setSelectedSubgenre(null); selectedSubgenreRef.current = null;
+                          setZoomSubgenre(null); zoomSubgenreRef.current = null;
+                        }}
+                        className="text-xs mb-3 flex items-center gap-1.5 transition-opacity hover:opacity-100"
+                        style={{ color: `rgba(${sr},${sg},${sb},0.45)` }}
+                      >
+                        ← {selected}
+                      </button>
+                      <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>
+                        {focusedSubgenre}
+                      </h2>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-xs tracking-widest uppercase mb-2"
+                        style={{ color: `rgba(${sr},${sg},${sb},0.38)` }}>
+                        Now exploring
+                      </p>
+                      <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>
+                        {selected}
+                      </h2>
+                    </>
+                  )}
+                  <p className="text-zinc-600 text-xs mt-1.5">
+                    {tracksLoading ? "—" : `${displayedTracks.length} tracks`}
+                  </p>
+                </div>
+                {/* Close — top-right of panel */}
+                <button
+                  onClick={() => {
+                    setSelected(null); setSelectedSubgenre(null); selectedSubgenreRef.current = null;
+                    setZoomSubgenre(null); zoomSubgenreRef.current = null; autoSelectedRef.current = false;
+                  }}
+                  className="flex-shrink-0 text-zinc-600 hover:text-zinc-300 text-sm transition-colors mt-0.5"
+                  aria-label="Close panel"
+                >
+                  ✕
+                </button>
               </div>
 
               {/* ── Subgenre filter row — minimal, navigation-feel ─────── */}
@@ -1430,19 +1443,6 @@ export default function WorldPage() {
                 )}
               </div>
 
-              {/* ── Quiet close affordance ────────────────────────────────── */}
-              <div className="flex-shrink-0 flex justify-end px-6 py-3"
-                style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
-                <button
-                  onClick={() => {
-                    setSelected(null); setSelectedSubgenre(null); selectedSubgenreRef.current = null;
-                    setZoomSubgenre(null); zoomSubgenreRef.current = null; autoSelectedRef.current = false;
-                  }}
-                  className="text-zinc-700 hover:text-zinc-400 text-xs transition-colors"
-                >
-                  close ✕
-                </button>
-              </div>
             </>
           ) : (
             /* ── Overview state: world summary ───────────────────────────── */
