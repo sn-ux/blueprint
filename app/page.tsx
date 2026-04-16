@@ -1162,43 +1162,42 @@ export default function LandingPage() {
         style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
 
         {/* ── LEFT: problem copy ──────────────────────────────────────────────── */}
-        <div className="flex flex-col justify-between px-12 py-12 overflow-hidden"
+        <div className="flex flex-col justify-center px-12 py-12 gap-6 overflow-hidden"
           style={{ width: "54%", borderRight: "1px solid rgba(255,255,255,0.05)" }}>
 
-          {/* Main copy — vertically centered in the upper portion */}
-          <div className="flex flex-col gap-10 justify-center flex-1">
+          {/* Headline */}
+          <h2 className="text-[2.75rem] font-light leading-tight text-white">
+            You&apos;re seeing the internet<br />through a keyhole.
+          </h2>
 
-            {/* Headline */}
-            <h2 className="text-[2.75rem] font-light leading-tight text-white">
-              You&apos;re seeing the internet<br />through a keyhole.
-            </h2>
-
-            {/* Sub */}
-            <div className="space-y-3 text-[17px] text-zinc-400 leading-relaxed">
-              <p>Search shows what you already know to look for.</p>
-              <p>Feeds show what you&apos;re expected to like.</p>
-            </div>
-
-            {/* Punch */}
-            <p className="text-[1.2rem] font-semibold text-white">
-              Everything else stays invisible.
-            </p>
-
+          {/* Search + Feeds */}
+          <div className="space-y-1.5 text-[1.1rem] text-zinc-400 leading-snug">
+            <p>Search shows you what you already know.</p>
+            <p>Feeds show you what you&apos;re expected to like.</p>
           </div>
 
-          {/* Rotating discovery line — emotional payoff, synced to carousel */}
-          <div className="pt-6 border-t border-zinc-900 flex-shrink-0">
-            <p
-              key={carouselIdx}
-              className="text-[1.1rem] font-medium leading-snug"
-              style={{
-                color: COMPANIES[carouselIdx].accent,
-                animation: "fadeSlideUp 0.45s ease-out",
-              }}
-            >
-              {DISCOVERY[carouselIdx]}
-            </p>
-          </div>
+          {/* Bridge — "So you never see:" */}
+          <p className="text-[0.9rem] tracking-wide uppercase text-zinc-600">
+            So you never see:
+          </p>
+
+          {/* Rotating line — visual centrepiece */}
+          <p
+            key={carouselIdx}
+            className="text-[2rem] font-semibold leading-tight"
+            style={{
+              color: COMPANIES[carouselIdx].accent,
+              animation: "fadeSlideUp 0.45s ease-out",
+            }}
+          >
+            {DISCOVERY[carouselIdx]}
+          </p>
+
+          {/* Closing */}
+          <p className="text-[0.95rem] text-zinc-500 leading-relaxed">
+            Because if you don&apos;t know it exists,<br />
+            you&apos;ll never think to look for it.
+          </p>
 
         </div>
 
