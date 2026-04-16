@@ -24,7 +24,7 @@ export default function RootLayout({
     <html lang="en" className={inter.variable}>
       <body className="bg-black">
         <div className="w-full flex justify-center bg-black">
-          <div className="w-full max-w-[1280px] px-6 md:px-10 lg:px-16 xl:px-24 2xl:px-32">
+          <div className="w-full max-w-[1440px] px-6 md:px-10 lg:px-14 xl:px-20 2xl:px-24">
             <Providers>{children}</Providers>
           </div>
         </div>

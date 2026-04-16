@@ -1162,29 +1162,29 @@ export default function LandingPage() {
         style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
 
         {/* ── LEFT: problem copy ──────────────────────────────────────────────── */}
-        <div className="flex flex-col justify-center px-12 py-12 gap-4 overflow-hidden"
+        <div className="flex flex-col justify-center px-12 py-12 gap-3 overflow-hidden"
           style={{ width: "54%", borderRight: "1px solid rgba(255,255,255,0.05)" }}>
 
           {/* Headline */}
-          <h2 className="text-[48px] md:text-[56px] font-semibold leading-[1.08] text-white" style={{ letterSpacing: "-0.02em" }}>
+          <h2 className="text-[48px] md:text-[56px] font-semibold leading-[1.08] text-white mb-1" style={{ letterSpacing: "-0.02em" }}>
             You&apos;re seeing the internet<br />through a keyhole.
           </h2>
 
           {/* Search + Feeds */}
-          <div className="flex flex-col gap-2 mt-2">
+          <div className="flex flex-col gap-1.5">
             <p className="text-[22px] md:text-[24px] font-medium leading-snug" style={{ color: "rgba(255,255,255,0.82)" }}>Search shows you what you already know.</p>
             <p className="text-[22px] md:text-[24px] font-medium leading-snug" style={{ color: "rgba(255,255,255,0.82)" }}>Feeds show you what you&apos;re expected to like.</p>
           </div>
 
           {/* Bridge — "So you never see" */}
-          <p className="text-[14px] tracking-widest uppercase mt-2" style={{ color: "rgba(255,255,255,0.70)" }}>
+          <p className="text-[13px] tracking-widest uppercase mt-1" style={{ color: "rgba(255,255,255,0.65)" }}>
             So you never see
           </p>
 
           {/* Rotating line — visual centrepiece */}
           <p
             key={carouselIdx}
-            className="text-[36px] md:text-[44px] font-semibold leading-[1.2]"
+            className="text-[36px] md:text-[44px] font-semibold leading-[1.15]"
             style={{
               color: COMPANIES[carouselIdx].accent,
               animation: "fadeSlideUp 0.45s ease-out",
@@ -1195,7 +1195,7 @@ export default function LandingPage() {
           </p>
 
           {/* Closing */}
-          <p className="text-[17px] leading-relaxed" style={{ color: "rgba(255,255,255,0.68)" }}>
+          <p className="text-[18px] leading-[1.5]" style={{ color: "rgba(255,255,255,0.72)" }}>
             Because if you don&apos;t know it exists,<br />
             you&apos;ll never think to look for it.
           </p>
@@ -1710,7 +1710,7 @@ export default function LandingPage() {
             const ORBIT  = 170;          // orbit radius
             const N      = friends.length;
             return (
-              <div style={{ position: "relative", width: SIZE, height: SIZE, flexShrink: 0 }}>
+              <div style={{ position: "relative", width: SIZE, height: SIZE, flexShrink: 0, transform: "translateX(-32px)" }}>
 
                 {/* Centre: Friends aggregate sphere */}
                 <div style={{
