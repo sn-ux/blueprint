@@ -14,8 +14,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>
-        <Providers>{children}</Providers>
+      <body className="bg-black">
+        <div className="w-full flex justify-center">
+          <div className="w-full max-w-[1200px] px-8 md:px-12 lg:px-20 xl:px-32 2xl:px-40">
+            <Providers>{children}</Providers>
+          </div>
+        </div>
       </body>
     </html>
   );
