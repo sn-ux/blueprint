@@ -1205,7 +1205,7 @@ export default function LandingPage() {
         {/* ── RIGHT: rotating company showcase ─────────────────────────────── */}
         <div className="flex flex-col py-8 px-7 overflow-hidden" style={{ width: "46%" }}>
 
-          <p className="text-[11px] tracking-widest uppercase text-zinc-700 mb-4 select-none flex-shrink-0">
+          <p className="text-[11px] tracking-widest uppercase mb-4 select-none flex-shrink-0" style={{ color: "rgba(255,255,255,0.35)" }}>
             Different content.<br />Same model.
           </p>
 
@@ -1690,7 +1690,7 @@ export default function LandingPage() {
 
         {/* ── LEFT: spheres ───────────────────────────────────────────────────── */}
         <div className="flex flex-col items-center justify-center py-8 px-6 flex-shrink-0" style={{ width: "54%" }}>
-          <p className="text-[11px] tracking-widest uppercase text-zinc-700 mb-4 select-none">
+          <p className="text-[11px] tracking-widest uppercase mb-4 select-none" style={{ color: "rgba(255,255,255,0.35)" }}>
             Explore through connection
           </p>
 
@@ -1791,7 +1791,7 @@ export default function LandingPage() {
 
         {/* ── RIGHT: animated map visual ──────────────────────────────────────── */}
         <div className="relative overflow-hidden" style={{ width: "46%", alignSelf: "stretch" }}>
-          <p className="absolute top-8 left-7 text-[11px] tracking-widest uppercase text-zinc-700 select-none pointer-events-none" style={{ zIndex: 10 }}>
+          <p className="absolute top-8 left-7 text-[11px] tracking-widest uppercase select-none pointer-events-none" style={{ zIndex: 10, color: "rgba(255,255,255,0.35)" }}>
             The Universal Intellect
           </p>
           <MapVisual />
