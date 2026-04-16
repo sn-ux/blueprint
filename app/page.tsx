@@ -963,6 +963,7 @@ export default function LandingPage() {
 
   return (
     <div className="bg-black text-white">
+      <div className="w-full max-w-[1440px] mx-auto">
 
       {/* ══ SECTION 1 — The Constraint ════════════════════════════════════════ */}
       <section className="h-screen overflow-hidden flex flex-col">
@@ -1842,6 +1843,7 @@ export default function LandingPage() {
 
       </section>
 
+      </div>{/* /max-w-[1440px] rail */}
     </div>
   );
 }
