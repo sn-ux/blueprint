@@ -1005,10 +1005,10 @@ export default function LandingPage() {
               transition: "opacity 0.4s ease-in-out",
             }}
           >
-            <h1 className="text-2xl md:text-3xl font-light leading-[1.25] text-white mb-2 max-w-sm">
+            <h1 className="text-[40px] md:text-[52px] font-semibold leading-[1.08] text-white mb-3 max-w-sm" style={{ letterSpacing: "-0.02em" }}>
               This is what your taste looks like.
             </h1>
-            <p className="text-[11px] text-zinc-500 tracking-widest uppercase">
+            <p className="text-[18px] md:text-[20px]" style={{ color: "rgba(255,255,255,0.80)", letterSpacing: "0.04em" }}>
               Zoom. Explore. Discover.
             </p>
           </div>
@@ -1162,39 +1162,40 @@ export default function LandingPage() {
         style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
 
         {/* ── LEFT: problem copy ──────────────────────────────────────────────── */}
-        <div className="flex flex-col justify-center px-12 py-12 gap-6 overflow-hidden"
+        <div className="flex flex-col justify-center px-12 py-12 gap-4 overflow-hidden"
           style={{ width: "54%", borderRight: "1px solid rgba(255,255,255,0.05)" }}>
 
           {/* Headline */}
-          <h2 className="text-[2.75rem] font-light leading-tight text-white">
+          <h2 className="text-[48px] md:text-[56px] font-semibold leading-[1.08] text-white" style={{ letterSpacing: "-0.02em" }}>
             You&apos;re seeing the internet<br />through a keyhole.
           </h2>
 
           {/* Search + Feeds */}
-          <div className="space-y-1.5 text-[1.1rem] text-zinc-400 leading-snug">
-            <p>Search shows you what you already know.</p>
-            <p>Feeds show you what you&apos;re expected to like.</p>
+          <div className="flex flex-col gap-2 mt-2">
+            <p className="text-[22px] md:text-[24px] font-medium leading-snug" style={{ color: "rgba(255,255,255,0.82)" }}>Search shows you what you already know.</p>
+            <p className="text-[22px] md:text-[24px] font-medium leading-snug" style={{ color: "rgba(255,255,255,0.82)" }}>Feeds show you what you&apos;re expected to like.</p>
           </div>
 
           {/* Bridge — "So you never see" */}
-          <p className="text-[0.9rem] tracking-wide uppercase text-zinc-600">
+          <p className="text-[14px] tracking-widest uppercase mt-2" style={{ color: "rgba(255,255,255,0.70)" }}>
             So you never see
           </p>
 
           {/* Rotating line — visual centrepiece */}
           <p
             key={carouselIdx}
-            className="text-[2rem] font-semibold leading-tight"
+            className="text-[36px] md:text-[44px] font-semibold leading-[1.2]"
             style={{
               color: COMPANIES[carouselIdx].accent,
               animation: "fadeSlideUp 0.45s ease-out",
+              letterSpacing: "-0.01em",
             }}
           >
             {DISCOVERY[carouselIdx]}
           </p>
 
           {/* Closing */}
-          <p className="text-[0.95rem] text-zinc-500 leading-relaxed">
+          <p className="text-[17px] leading-relaxed" style={{ color: "rgba(255,255,255,0.68)" }}>
             Because if you don&apos;t know it exists,<br />
             you&apos;ll never think to look for it.
           </p>
@@ -1749,18 +1750,18 @@ export default function LandingPage() {
         </div>
 
         {/* ── RIGHT: copy ─────────────────────────────────────────────────────── */}
-        <div className="flex flex-col justify-between py-12 px-12 overflow-hidden"
+        <div className="flex flex-col justify-center gap-5 py-12 px-12 overflow-hidden"
           style={{ width: "46%", borderLeft: "1px solid rgba(255,255,255,0.05)", alignSelf: "stretch" }}>
 
-          <h2 className="text-[2.75rem] font-light leading-tight text-white">
+          <h2 className="text-[48px] md:text-[56px] font-semibold leading-[1.08] text-white" style={{ letterSpacing: "-0.02em" }}>
             The people you trust<br />are the best filter.
           </h2>
 
-          <p className="text-[1.1rem] text-zinc-400 leading-snug">
+          <p className="text-[20px] md:text-[22px] font-medium leading-snug" style={{ color: "rgba(255,255,255,0.82)" }}>
             Explore what they actually love &mdash;<br />not what they just interacted with.
           </p>
 
-          <p className="text-[1.1rem] text-zinc-500 leading-snug">
+          <p className="text-[17px] leading-snug" style={{ color: "rgba(255,255,255,0.62)" }}>
             Find what no search bar<br />or feed would have shown you.
           </p>
         </div>
@@ -1772,18 +1773,18 @@ export default function LandingPage() {
         style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
 
         {/* ── LEFT: copy ──────────────────────────────────────────────────────── */}
-        <div className="flex flex-col justify-between px-12 py-12 overflow-hidden"
+        <div className="flex flex-col justify-center gap-5 px-12 py-12 overflow-hidden"
           style={{ width: "54%", borderRight: "1px solid rgba(255,255,255,0.05)" }}>
 
-          <h2 className="text-[2.75rem] font-light leading-tight text-white">
+          <h2 className="text-[48px] md:text-[56px] font-semibold leading-[1.08] text-white" style={{ letterSpacing: "-0.02em" }}>
             Every place has a taste.
           </h2>
 
-          <p className="text-[1.1rem] text-zinc-400 leading-snug">
+          <p className="text-[20px] md:text-[22px] font-medium leading-snug" style={{ color: "rgba(255,255,255,0.82)" }}>
             Explore what people in a city,<br />school, or community actually love.
           </p>
 
-          <p className="text-[1.1rem] text-zinc-500 leading-snug">
+          <p className="text-[17px] leading-snug" style={{ color: "rgba(255,255,255,0.62)" }}>
             Go there directly &mdash;<br />instead of waiting to be shown.
           </p>
         </div>
