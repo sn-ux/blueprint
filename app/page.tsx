@@ -536,7 +536,7 @@ export default function LandingPage() {
 
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
-      const R   = Math.min(W, H) * 0.38 * zoomRef.current;
+      const R   = Math.min(W, H) * 0.34 * zoomRef.current;
       const cx  = W / 2, cy = H / 2;
       const rx  = rotRef.current.x, ry = rotRef.current.y;
       labelHitsRef.current = [];
@@ -755,7 +755,7 @@ export default function LandingPage() {
       const mx   = e.clientX - rect.left;
       const my   = e.clientY - rect.top;
       const W    = canvas.clientWidth, H = canvas.clientHeight;
-      const R    = Math.min(W, H) * 0.38 * zoomRef.current;
+      const R    = Math.min(W, H) * 0.34 * zoomRef.current;
       const dx   = mx - W / 2, dy = my - H / 2;
       // Outside sphere circle → don't capture, let page scroll naturally
       if (dx * dx + dy * dy > R * R) return;
@@ -963,10 +963,15 @@ export default function LandingPage() {
 
   return (
     <div className="bg-black text-white">
-      <div className="w-full max-w-[1440px] mx-auto">
 
       {/* ══ SECTION 1 — The Constraint ════════════════════════════════════════ */}
-      <section className="h-screen overflow-hidden flex flex-col">
+      {/* Full-bleed: breaks out of the constrained rail so the canvas/sphere
+          fill the full viewport width. Works because the rail is centered with
+          flex justify-center, so 50% of the section = 50vw exactly.           */}
+      <section
+        className="h-screen overflow-hidden flex flex-col"
+        style={{ width: "100vw", marginLeft: "calc(50% - 50vw)" }}
+      >
 
         {/* Wordmark */}
         <div className="flex-shrink-0 flex items-center px-6 py-2.5 z-20 relative">
@@ -1724,10 +1729,10 @@ export default function LandingPage() {
               { name: "UCLA",    seed:  7 },
               { name: "Atlanta", seed: 11 },
             ];
-            const SIZE   = 560;          // container px
-            const CX     = SIZE / 2;     // 280
-            const CY     = SIZE / 2;     // 280
-            const ORBIT  = 210;          // orbit radius
+            const SIZE   = 460;          // container px — fits within constrained 54% column
+            const CX     = SIZE / 2;     // 230
+            const CY     = SIZE / 2;     // 230
+            const ORBIT  = 170;          // orbit radius
             const N      = friends.length;
             return (
               <div style={{ position: "relative", width: SIZE, height: SIZE, flexShrink: 0 }}>
@@ -1739,7 +1744,7 @@ export default function LandingPage() {
                   transform: "translate(-50%, -50%)",
                   display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
                 }}>
-                  <MiniSphere size={170} seed={99} />
+                  <MiniSphere size={140} seed={99} />
                   <span style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(255,255,255,0.30)" }}>
                     Friends
                   </span>
@@ -1757,7 +1762,7 @@ export default function LandingPage() {
                       transform: "translate(-50%, -50%)",
                       display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
                     }}>
-                      <MiniSphere size={105} seed={f.seed} />
+                      <MiniSphere size={88} seed={f.seed} />
                       <span style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", whiteSpace: "nowrap" }}>
                         {f.name}
                       </span>
@@ -1843,7 +1848,6 @@ export default function LandingPage() {
 
       </section>
 
-      </div>{/* /max-w-[1440px] rail */}
     </div>
   );
 }
