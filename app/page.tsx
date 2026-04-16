@@ -136,13 +136,13 @@ const DEMO_TRACKS: Record<string, TrackItem[]> = {
 // ── Per-platform discovery statements (indexed to COMPANIES order) ───────────
 
 const DISCOVERY = [
-  "The result you\u2019d love, but never thought to search for",   // Google
-  "The video you\u2019d love, but the algorithm never surfaced",    // TikTok
-  "The product you\u2019d love, but never knew existed",            // Amazon
-  "The song you\u2019d love, but haven\u2019t heard yet",           // Spotify
-  "The video you\u2019d love, but never came across",               // YouTube
-  "The answer you\u2019d love, but never knew to ask for",          // ChatGPT
-  "The dish you\u2019d love, but haven\u2019t tried yet",           // DoorDash
+  "The thing you need but don\u2019t know to search for.",    // Google
+  "The creator you\u2019d love but haven\u2019t found yet.",  // TikTok
+  "The product you\u2019d buy if you knew it existed.",       // Amazon
+  "The song you\u2019d love but haven\u2019t heard yet.",     // Spotify
+  "The video you\u2019d love but haven\u2019t seen yet.",     // YouTube
+  "The idea that would change your thinking.",                // ChatGPT
+  "The dish you\u2019d love but haven\u2019t tried yet.",     // DoorDash
 ];
 
 // ── Company showcase data ─────────────────────────────────────────────────────
@@ -1158,28 +1158,47 @@ export default function LandingPage() {
       </section>
 
       {/* ══ SECTION 2 — The Problem ═══════════════════════════════════════════ */}
-      <section className="min-h-[92vh] bg-black flex overflow-hidden"
+      <section className="min-h-[90vh] bg-black flex overflow-hidden"
         style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
 
         {/* ── LEFT: problem copy ──────────────────────────────────────────────── */}
-        <div className="flex flex-col justify-center px-12 py-12 gap-10 overflow-hidden"
+        <div className="flex flex-col justify-between px-12 py-12 overflow-hidden"
           style={{ width: "54%", borderRight: "1px solid rgba(255,255,255,0.05)" }}>
 
-          {/* Headline */}
-          <h2 className="text-[2.75rem] font-light leading-tight text-white">
-            You&apos;re seeing the internet<br />through a keyhole.
-          </h2>
+          {/* Main copy — vertically centered in the upper portion */}
+          <div className="flex flex-col gap-10 justify-center flex-1">
 
-          {/* Sub */}
-          <div className="space-y-3 text-[17px] text-zinc-400 leading-relaxed">
-            <p>Search shows what you already know to look for.</p>
-            <p>Feeds show what you&apos;re expected to like.</p>
+            {/* Headline */}
+            <h2 className="text-[2.75rem] font-light leading-tight text-white">
+              You&apos;re seeing the internet<br />through a keyhole.
+            </h2>
+
+            {/* Sub */}
+            <div className="space-y-3 text-[17px] text-zinc-400 leading-relaxed">
+              <p>Search shows what you already know to look for.</p>
+              <p>Feeds show what you&apos;re expected to like.</p>
+            </div>
+
+            {/* Punch */}
+            <p className="text-[1.2rem] font-semibold text-white">
+              Everything else stays invisible.
+            </p>
+
           </div>
 
-          {/* Punch */}
-          <p className="text-[1.2rem] font-semibold text-white">
-            Everything else stays invisible.
-          </p>
+          {/* Rotating discovery line — emotional payoff, synced to carousel */}
+          <div className="pt-6 border-t border-zinc-900 flex-shrink-0">
+            <p
+              key={carouselIdx}
+              className="text-[1.1rem] font-medium leading-snug"
+              style={{
+                color: COMPANIES[carouselIdx].accent,
+                animation: "fadeSlideUp 0.45s ease-out",
+              }}
+            >
+              {DISCOVERY[carouselIdx]}
+            </p>
+          </div>
 
         </div>
 
@@ -1666,7 +1685,7 @@ export default function LandingPage() {
       </section>
 
       {/* ══ SECTION 3 — Friends ═══════════════════════════════════════════════ */}
-      <section className="min-h-[92vh] bg-black flex items-center overflow-hidden"
+      <section className="min-h-[90vh] bg-black flex items-center overflow-hidden"
         style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
 
         {/* ── LEFT: spheres ───────────────────────────────────────────────────── */}
@@ -1762,7 +1781,7 @@ export default function LandingPage() {
       </section>
 
       {/* ══ SECTION 4 — Places ═══════════════════════════════════════════════ */}
-      <section className="min-h-[92vh] bg-black flex overflow-hidden"
+      <section className="min-h-[90vh] bg-black flex overflow-hidden"
         style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
 
         {/* ── LEFT: copy ──────────────────────────────────────────────────────── */}
