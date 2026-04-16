@@ -882,27 +882,38 @@ export default function WorldPage() {
       }
 
       // ── Subgenre labels (zoomed-in view of the selected plate) ────────────
-      if (zoomRef.current >= 1.6 && selectedIdx >= 0 && subgenres.length > 0) {
+      // Labels are positioned by projecting each subgenre's pre-computed 3-D
+      // pole directly to screen space — the same rotation + perspective math
+      // used for all vertices.  This guarantees EVERY front-facing subgenre
+      // gets a label regardless of how many triangles it owns (including the
+      // single-triangle case), because we never depend on accumulating enough
+      // visible faces.
+      if (zoomRef.current >= 1.6 && selectedIdx >= 0 && subPolesRef.current.length > 0) {
         // Labels fade in at 1.6 (same zoom as region faces appear), fully visible by 1.9
         const labelReveal = Math.min(1, Math.max(0, (zoomRef.current - 1.6) / 0.3));
         ctx.globalAlpha = labelReveal;
-        const subAcc: Record<number, { sx: number; sy: number; n: number }> = {};
-        for (const { tri, fi, depth, ri } of fd) {
-          if (ri !== selectedIdx || depth < 0) continue;
-          const si = subRegionRef.current.get(fi);
-          if (si === undefined) continue;
-          const [ia, ib, ic] = tri;
-          const lx = (pv[ia].sx + pv[ib].sx + pv[ic].sx) / 3;
-          const ly = (pv[ia].sy + pv[ib].sy + pv[ic].sy) / 3;
-          if (!subAcc[si]) subAcc[si] = { sx: 0, sy: 0, n: 0 };
-          subAcc[si].sx += lx; subAcc[si].sy += ly; subAcc[si].n++;
-        }
-        for (const [siStr, a] of Object.entries(subAcc)) {
-          if (a.n < 1) continue; // include single-triangle subgenres
-          const si  = Number(siStr);
-          const sub = activeSubsRef.current[si];
-          if (!sub) continue;
-          const lx = a.sx / a.n, ly = a.sy / a.n;
+
+        const cosRx = Math.cos(rx), sinRx = Math.sin(rx);
+        const cosRy = Math.cos(ry), sinRy = Math.sin(ry);
+
+        activeSubsRef.current.forEach((sub, si) => {
+          const poleEntry = subPolesRef.current[si];
+          if (!poleEntry) return;
+
+          // Project 3-D pole to screen space (identical to pv[] computation)
+          const [px, py, pz] = poleEntry.pole;
+          const x1 =  px * cosRy + pz * sinRy;
+          const z1 = -px * sinRy + pz * cosRy;
+          const y2 =  py * cosRx - z1 * sinRx;
+          const z2 =  py * sinRx + z1 * cosRx;
+
+          // Only label subgenres whose pole faces the camera
+          if (z2 < 0.05) return;
+
+          const s  = FOV / (FOV + z2);
+          const lx = cx + x1 * R * s;
+          const ly = cy + y2 * R * s;
+
           // Same brightness-shade derivation as face coloring
           const n = activeSubsRef.current.length;
           const t = n > 1 ? 1 - si / (n - 1) : 0.5;
@@ -913,7 +924,6 @@ export default function WorldPage() {
           const cb = Math.round(pb * scale);
           const isActiveSub = selectedSubgenreRef.current === sub.name;
           const isHovSub    = hoveredSubName === sub.name;
-          // selected > hovered > default for visual priority
           const subLit = isActiveSub || isHovSub;
           const fs  = subLit ? 12 : 11;
           ctx.font  = `${subLit ? 700 : 600} ${fs}px system-ui, sans-serif`;
@@ -945,12 +955,11 @@ export default function WorldPage() {
             ctx.roundRect(bx, by, bw, bh, rad);
             ctx.stroke();
           }
-          // Hovered sub text at full parent-genre brightness
           ctx.fillStyle = isHovSub ? `rgb(${cr},${cg},${cb})` : `rgba(${cr},${cg},${cb},0.80)`;
           ctx.fillText(sub.name, lx, ly);
-          // Record as clickable hit area with subgenre tag
           labelHitsRef.current.push({ name: selected!, subgenre: sub.name, x1: bx, y1: by, x2: bx + bw, y2: by + bh });
-        }
+        });
+
         ctx.globalAlpha = 1.0; // restore after subgenre label fade
       }
 
