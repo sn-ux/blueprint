@@ -136,13 +136,13 @@ const DEMO_TRACKS: Record<string, TrackItem[]> = {
 // ── Per-platform discovery statements (indexed to COMPANIES order) ───────────
 
 const DISCOVERY = [
-  "The thing you need but don\u2019t know to search for.",    // Google
-  "The creator you\u2019d love but haven\u2019t found yet.",  // TikTok
-  "The product you\u2019d buy if you knew it existed.",       // Amazon
-  "The song you\u2019d love but haven\u2019t heard yet.",     // Spotify
-  "The video you\u2019d love but haven\u2019t seen yet.",     // YouTube
-  "The idea that would change your thinking.",                // ChatGPT
-  "The dish you\u2019d love but haven\u2019t tried yet.",     // DoorDash
+  "The thing you need \u2014 but don\u2019t know to search for.",    // Google
+  "The creator you\u2019d love \u2014 but haven\u2019t found yet.",  // TikTok
+  "The product you\u2019d buy \u2014 if you knew it existed.",       // Amazon
+  "The song you\u2019d love \u2014 but haven\u2019t heard yet.",     // Spotify
+  "The video you\u2019d love \u2014 but haven\u2019t seen yet.",     // YouTube
+  "The idea that would change how you think.",                       // ChatGPT
+  "The dish you\u2019d love \u2014 but haven\u2019t tried yet.",     // DoorDash
 ];
 
 // ── Company showcase data ─────────────────────────────────────────────────────
@@ -1006,7 +1006,7 @@ export default function LandingPage() {
             }}
           >
             <h1 className="text-2xl md:text-3xl font-light leading-[1.25] text-white mb-2 max-w-sm">
-              This is what a music taste looks like.
+              This is what your taste looks like.
             </h1>
             <p className="text-[11px] text-zinc-500 tracking-widest uppercase">
               Zoom. Explore. Discover.
@@ -1176,9 +1176,9 @@ export default function LandingPage() {
             <p>Feeds show you what you&apos;re expected to like.</p>
           </div>
 
-          {/* Bridge — "So you never see:" */}
+          {/* Bridge — "So you never see" */}
           <p className="text-[0.9rem] tracking-wide uppercase text-zinc-600">
-            So you never see:
+            So you never see
           </p>
 
           {/* Rotating line — visual centrepiece */}
@@ -1205,7 +1205,7 @@ export default function LandingPage() {
         <div className="flex flex-col py-8 px-7 overflow-hidden" style={{ width: "46%" }}>
 
           <p className="text-[11px] tracking-widest uppercase text-zinc-700 mb-4 select-none flex-shrink-0">
-            Different content, same model
+            Different content.<br />Same model.
           </p>
 
           {/* Carousel slides */}
@@ -1756,25 +1756,13 @@ export default function LandingPage() {
             The people you trust<br />are the best filter.
           </h2>
 
-          <div className="space-y-6 leading-relaxed">
-            <div className="space-y-1.5 text-[17px]">
-              <p className="text-white font-semibold">What your friends love isn&apos;t in your feed.</p>
-              <p className="text-zinc-500">The algorithm only knows you. It doesn&apos;t know your friends — what they&apos;ve been obsessing over for years, what shaped them, what they&apos;d play you the moment you walked in the door.</p>
-            </div>
-            <div className="space-y-1.5 text-[17px]">
-              <p className="text-white font-semibold">Navigate their taste, not their recently played.</p>
-              <p className="text-zinc-500">See the full shape of what they love. Walk through their Jazz section, their Electronic corner, their deep cuts. Find what&apos;s been there for years — not just what they listened to yesterday.</p>
-            </div>
-            <div className="space-y-1.5 text-[17px]">
-              <p className="text-white font-semibold">Find what no search bar could surface.</p>
-              <p className="text-zinc-500">Things you didn&apos;t know to look for. Things outside your engagement profile. Things no one is paying to promote to you — but that someone you actually trust has loved for years.</p>
-            </div>
-          </div>
+          <p className="text-[1.1rem] text-zinc-400 leading-snug">
+            Explore what they actually love &mdash;<br />not what they just interacted with.
+          </p>
 
-          <div className="space-y-2.5 pt-6 border-t border-zinc-900 leading-relaxed">
-            <p className="text-[17px] font-semibold text-zinc-200">And you get closer in the process.</p>
-            <p className="text-[18px] text-zinc-300 font-medium">There&apos;s no better way to understand someone than to explore what they actually love.</p>
-          </div>
+          <p className="text-[1.1rem] text-zinc-500 leading-snug">
+            Find what no search bar<br />or feed would have shown you.
+          </p>
         </div>
 
       </section>
@@ -1788,28 +1776,16 @@ export default function LandingPage() {
           style={{ width: "54%", borderRight: "1px solid rgba(255,255,255,0.05)" }}>
 
           <h2 className="text-[2.75rem] font-light leading-tight text-white">
-            Every place has<br />a taste.
+            Every place has a taste.
           </h2>
 
-          <div className="space-y-6 leading-relaxed">
-            <div className="space-y-1.5 text-[17px]">
-              <p className="text-white font-semibold">A living map of human taste.</p>
-              <p className="text-zinc-500">Every city, school, and community has a visual — built from the combined taste of everyone in that place. Not what&apos;s trending. Not what&apos;s promoted. What the people there actually love.</p>
-            </div>
-            <div className="space-y-1.5 text-[17px]">
-              <p className="text-white font-semibold">Zoom out far enough and you see everything.</p>
-              <p className="text-zinc-500">The aggregate of everything everyone has ever discovered, saved, and loved. The complete record of human taste, mapped onto the planet that produced it.</p>
-            </div>
-            <div className="space-y-1.5 text-[17px]">
-              <p className="text-white font-semibold">The digital, tethered to the real.</p>
-              <p className="text-zinc-500">Find music from Atlanta, jazz from New Orleans, electronic from Berlin — not because an algorithm decided you&apos;d like it, but because you chose to go there.</p>
-            </div>
-          </div>
+          <p className="text-[1.1rem] text-zinc-400 leading-snug">
+            Explore what people in a city,<br />school, or community actually love.
+          </p>
 
-          <div className="space-y-2.5 pt-6 border-t border-zinc-900 leading-relaxed">
-            <p className="text-[17px] font-semibold text-zinc-200">This is the Universal Intellect.</p>
-            <p className="text-[18px] text-zinc-300 font-medium">Everything humanity has ever loved — all already out there. Now you can find it.</p>
-          </div>
+          <p className="text-[1.1rem] text-zinc-500 leading-snug">
+            Go there directly &mdash;<br />instead of waiting to be shown.
+          </p>
         </div>
 
         {/* ── RIGHT: animated map visual ──────────────────────────────────────── */}
