@@ -1158,72 +1158,28 @@ export default function LandingPage() {
       </section>
 
       {/* ══ SECTION 2 — The Problem ═══════════════════════════════════════════ */}
-      <section className="h-screen bg-black flex overflow-hidden"
+      <section className="min-h-[92vh] bg-black flex overflow-hidden"
         style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
 
         {/* ── LEFT: problem copy ──────────────────────────────────────────────── */}
-        <div className="flex flex-col justify-between px-12 py-12 overflow-hidden"
+        <div className="flex flex-col justify-center px-12 py-12 gap-10 overflow-hidden"
           style={{ width: "54%", borderRight: "1px solid rgba(255,255,255,0.05)" }}>
 
-          {/* Top: headline only */}
+          {/* Headline */}
           <h2 className="text-[2.75rem] font-light leading-tight text-white">
-            The modern &ldquo;internet&rdquo;<br />is a single model.
+            You&apos;re seeing the internet<br />through a keyhole.
           </h2>
 
-          {/* Middle: body blocks */}
-          <div className="space-y-6 leading-relaxed">
-
-            {/* Block 1 — the mechanism */}
-            <div className="space-y-0.5 text-[17px] text-white">
-              <p className="text-white font-semibold mb-3">Check every app you use.</p>
-              <p>1. You type into a search bar</p>
-              <p>2. You scroll a recommendation feed</p>
-            </div>
-
-            {/* Block 2 — the limits */}
-            <div className="space-y-1.5 text-[17px]">
-              <p>
-                <span className="text-white font-semibold">Search</span>
-                <span className="text-zinc-500"> shows you what you already know to look for.</span>
-              </p>
-              <p>
-                <span className="text-white font-semibold">Feeds</span>
-                <span className="text-zinc-500">{" "}show what the system predicts — based on what
-                you&apos;ve already seen, what people like you have seen, and what companies pay to promote.</span>
-              </p>
-            </div>
-
-            {/* Echo chamber line */}
-            <p className="text-[17px] text-white font-semibold">This puts you in an algorithmic echo chamber.</p>
-
-            {/* Block 3 — the gap */}
-            <div className="space-y-1.5 text-[17px]">
-              <p className="text-white font-semibold">Entire categories of information never reach you.</p>
-              <div className="space-y-0.5 text-zinc-500">
-                <p>1. What you don&apos;t know to search for</p>
-                <p>2. What exists outside your behavioral profile</p>
-                <p>3. What no one is paying to show you</p>
-              </div>
-            </div>
-
+          {/* Sub */}
+          <div className="space-y-3 text-[17px] text-zinc-400 leading-relaxed">
+            <p>Search shows what you already know to look for.</p>
+            <p>Feeds show what you&apos;re expected to like.</p>
           </div>
 
-          {/* Bottom: thesis + rotating line */}
-          <div className="space-y-2.5 pt-6 border-t border-zinc-900 leading-relaxed">
-            <p className="text-[17px] font-semibold text-zinc-200">This isn&apos;t a UX problem. It&apos;s a structural limit.</p>
-            <p className="text-[16px] text-zinc-500">
-              The modern internet is not designed for discovery. It is designed for engagement.
-            </p>
-            <p className="text-[19px] text-zinc-300 leading-relaxed font-medium">
-              <span
-                key={carouselIdx}
-                style={{ color: COMPANIES[carouselIdx].accent, transition: "color 0.5s ease-in-out" }}
-              >
-                {DISCOVERY[carouselIdx]}
-              </span>
-              {" "}— all already out there. Just never shown to you.
-            </p>
-          </div>
+          {/* Punch */}
+          <p className="text-[1.2rem] font-semibold text-white">
+            Everything else stays invisible.
+          </p>
 
         </div>
 
@@ -1710,7 +1666,7 @@ export default function LandingPage() {
       </section>
 
       {/* ══ SECTION 3 — Friends ═══════════════════════════════════════════════ */}
-      <section className="h-screen bg-black flex items-center overflow-hidden"
+      <section className="min-h-[92vh] bg-black flex items-center overflow-hidden"
         style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
 
         {/* ── LEFT: spheres ───────────────────────────────────────────────────── */}
@@ -1806,7 +1762,7 @@ export default function LandingPage() {
       </section>
 
       {/* ══ SECTION 4 — Places ═══════════════════════════════════════════════ */}
-      <section className="h-screen bg-black flex overflow-hidden"
+      <section className="min-h-[92vh] bg-black flex overflow-hidden"
         style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
 
         {/* ── LEFT: copy ──────────────────────────────────────────────────────── */}
