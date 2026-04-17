@@ -71,10 +71,26 @@ function fiboPoles(n: number): V3[] {
 
 // ── MiniSphere component ──────────────────────────────────────────────────────
 
-export default function MiniSphere({ size = 80, seed = 0 }: { size?: number; seed?: number }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const rotRef    = useRef({ x: 0.3 + seed * 0.18, y: seed * 0.55 });
-  const rafRef    = useRef(0);
+export default function MiniSphere({
+  size = 80,
+  seed = 0,
+  platformColor,
+}: {
+  size?: number;
+  seed?: number;
+  /** When set, overrides the multi-color palette with monochromatic shades of this hex color. */
+  platformColor?: string;
+}) {
+  const canvasRef        = useRef<HTMLCanvasElement>(null);
+  const rotRef           = useRef({ x: 0.3 + seed * 0.18, y: seed * 0.55 });
+  const rafRef           = useRef(0);
+  // Ref so draw() always reads the latest platform color without re-running setup
+  const platformColorRef = useRef(platformColor);
+
+  // Sync ref whenever the prop changes (instant, no effect teardown)
+  useEffect(() => {
+    platformColorRef.current = platformColor;
+  }, [platformColor]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -141,7 +157,31 @@ export default function MiniSphere({ size = 80, seed = 0 }: { size?: number; see
         .sort((a, b) => a.z - b.z);
       for (const { f, i, z } of sorted) {
         const [ia, ib, ic] = f;
-        const [r, g, b]    = hp(palette[faceRegion[i]]);
+
+        // Monochromatic mode: shade the platform color per Voronoi region
+        // (dark → mid → light) so patches stay visible without hue variation.
+        // Fallback: original multi-color palette.
+        let r: number, g: number, b: number;
+        if (platformColorRef.current) {
+          const [baseR, baseG, baseB] = hp(platformColorRef.current);
+          const regionIdx = faceRegion[i];             // 0..nC-1
+          const t = nC > 1 ? regionIdx / (nC - 1) : 0.5;
+          const factor = 0.30 + t * 0.80;             // 0.30× (dark) → 1.10× (light)
+          if (factor <= 1.0) {
+            r = Math.round(baseR * factor);
+            g = Math.round(baseG * factor);
+            b = Math.round(baseB * factor);
+          } else {
+            // Blend toward white for highlights above 100%
+            const excess = factor - 1.0;
+            r = Math.min(255, Math.round(baseR + (255 - baseR) * excess));
+            g = Math.min(255, Math.round(baseG + (255 - baseG) * excess));
+            b = Math.min(255, Math.round(baseB + (255 - baseB) * excess));
+          }
+        } else {
+          [r, g, b] = hp(palette[faceRegion[i]]);
+        }
+
         ctx.beginPath();
         ctx.moveTo(pv[ia].sx, pv[ia].sy);
         ctx.lineTo(pv[ib].sx, pv[ib].sy);
