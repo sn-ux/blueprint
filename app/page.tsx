@@ -1068,10 +1068,11 @@ export default function LandingPage() {
             </p>
           </div>
 
-          {/* Bottom center: Stats row */}
+          {/* Stats row — centered horizontally to align with the sphere,
+              which itself is centered at W/2 of the canvas.               */}
           {totalTrackCount > 0 && (
             <div
-              className="absolute bottom-[4vh] right-[6%] z-10 flex flex-row gap-8 pointer-events-none"
+              className="absolute bottom-[4vh] left-1/2 -translate-x-1/2 z-10 flex flex-row gap-8 pointer-events-none"
               style={{
                 opacity: textVisible ? 1 : 0,
                 transition: "opacity 0.4s ease-in-out",
