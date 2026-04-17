@@ -327,7 +327,10 @@ export default function LandingPage() {
   const textVisibleRef = useRef(true);
 
   // ── Company carousel ────────────────────────────────────────────────────────
-  const [carouselIdx, setCarouselIdx] = useState(0);
+  const [carouselIdx,   setCarouselIdx]   = useState(0);
+  // discoveryIdx trails carouselIdx by 250ms so the right-side visual leads
+  // and the left-side rotating line follows — feels deliberate, not abrupt.
+  const [discoveryIdx,  setDiscoveryIdx]  = useState(0);
 
   // ── Interaction refs ──────────────────────────────────────────────────────
   const zoomRef          = useRef(1);       // visual zoom — lerped each RAF frame
@@ -394,10 +397,17 @@ export default function LandingPage() {
   }, [selected]);
 
   // ── Auto-rotate company carousel ─────────────────────────────────────────
+  // 5000ms per slide (up from 4200ms) — enough time to read both the right-side
+  // UI mockup and the left-side rotating line.
+  // discoveryIdx updates 250ms after carouselIdx so the right visual leads.
   useEffect(() => {
     const id = setInterval(() => {
-      setCarouselIdx(i => (i + 1) % COMPANIES.length);
-    }, 4200);
+      setCarouselIdx(i => {
+        const next = (i + 1) % COMPANIES.length;
+        setTimeout(() => setDiscoveryIdx(next), 250);
+        return next;
+      });
+    }, 5000);
     return () => clearInterval(id);
   }, []);
 
@@ -1233,17 +1243,17 @@ export default function LandingPage() {
               So you never see
             </p>
 
-            {/* Rotating line — focal punchline, indexed to carouselIdx */}
+            {/* Rotating line — focal punchline, trails carousel by 250ms */}
             <p
-              key={carouselIdx}
+              key={discoveryIdx}
               className="text-[30px] md:text-[36px] lg:text-[40px] font-medium leading-[1.15] mt-4"
               style={{
-                color: COMPANIES[carouselIdx].accent,
+                color: COMPANIES[discoveryIdx].accent,
                 animation: "fadeSlideUp 0.45s ease-out",
                 letterSpacing: "-0.01em",
               }}
             >
-              {DISCOVERY[carouselIdx]}
+              {DISCOVERY[discoveryIdx]}
             </p>
 
             {/* Closing lines */}
