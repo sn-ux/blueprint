@@ -1045,12 +1045,17 @@ export default function LandingPage() {
             onClick={handleClick}
           />
 
-          {/* Top-left: Headline + supporting text */}
+          {/* Top-left: Headline + supporting text
+              maxWidth keeps the text anchored to the left column and prevents
+              it from visually bleeding into the sphere. The canvas remains
+              full-width with the sphere centered — the constraint is purely
+              on the text overlay, not the canvas dimensions.             */}
           <div
             className="absolute z-10 flex flex-col pointer-events-none"
             style={{
               top: "5%",
               left: "6%",
+              maxWidth: 420,
               opacity: textVisible ? 1 : 0,
               transition: "opacity 0.4s ease-in-out",
             }}
