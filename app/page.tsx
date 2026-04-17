@@ -159,6 +159,18 @@ const COMPANIES = [
   { name: "DoorDash", accent: "#FF3008", rgb: "255,48,8",    tag: "Delivery",   hasSearch: true,  hasFeed: true  },
 ];
 
+// ── Page 3 sphere platform colors — indexed to match COMPANIES order ──────────
+// Same 7-platform sequence: Google, TikTok, Amazon, Spotify, YouTube, ChatGPT, DoorDash
+const PAGE3_COLORS = [
+  "#4285F4", // Google   [0]
+  "#FE2C55", // TikTok   [1]
+  "#FF9900", // Amazon   [2]
+  "#1DB954", // Spotify  [3]
+  "#FF0000", // YouTube  [4]
+  "#10A37F", // ChatGPT  [5]
+  "#EA4335", // DoorDash [6]
+];
+
 // ── Geometry helpers (used by SphereCanvas logic below) ──────────────────────
 
 type V3  = [number, number, number];
@@ -1862,7 +1874,7 @@ export default function LandingPage() {
                   transform: "translate(-50%, -50%)",
                   display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
                 }}>
-                  <MiniSphere size={140} seed={99} />
+                  <MiniSphere size={140} seed={99} platformColor={PAGE3_COLORS[carouselIdx]} />
                   <span style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(255,255,255,0.30)" }}>
                     Friends
                   </span>
@@ -1880,7 +1892,7 @@ export default function LandingPage() {
                       transform: "translate(-50%, -50%)",
                       display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
                     }}>
-                      <MiniSphere size={88} seed={f.seed} />
+                      <MiniSphere size={88} seed={f.seed} platformColor={PAGE3_COLORS[carouselIdx]} />
                       <span style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", whiteSpace: "nowrap" }}>
                         {f.name}
                       </span>
