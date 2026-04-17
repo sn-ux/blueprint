@@ -1217,26 +1217,25 @@ export default function LandingPage() {
         style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
 
         {/* ── LEFT: problem copy ──────────────────────────────────────────────── */}
-        <div className="flex flex-col justify-start px-12 pt-[12vh] pb-16 overflow-hidden"
+        {/* h-full + flex-col turns the column into a vertical distribution system.
+            Groups 1–2 are fixed at the top, Group 3 gets flex-1 so it occupies
+            the middle stretch, Group 4 naturally lands at the bottom.          */}
+        <div className="flex flex-col h-full pt-[10vh] pb-[8vh] px-12 overflow-hidden"
           style={{ width: "54%", borderRight: "1px solid rgba(255,255,255,0.05)" }}>
 
-          {/* Slightly wider than before to give mono text room to breathe */}
+          {/* ── Group 1: Headline ─────────────────────────────────────────────── */}
           <div style={{ maxWidth: 600 }}>
-
-            {/* Headline — stepped down from 72px to avoid oversizing */}
             <h2
               className="text-[52px] md:text-[60px] lg:text-[64px] font-semibold leading-[1.05] text-white"
               style={{ letterSpacing: "-0.02em" }}
             >
               The internet runs on one model.
             </h2>
+          </div>
 
-            {/* SEARCH / FEED — core argument block
-                Hanging-indent technique: paddingLeft pushes the whole paragraph
-                right; textIndent pulls the first line back to column 0.
-                Any wrap on FEED lands cleanly under the explanation, not the label. */}
-            <div className="mt-8 mb-2 flex flex-col gap-1.5">
-              {/* SEARCH — fits on one line at this size / width */}
+          {/* ── Group 2: SEARCH / FEED constraint block ───────────────────────── */}
+          <div className="mt-10" style={{ maxWidth: 600 }}>
+            <div className="flex flex-col gap-1.5">
               <p
                 className="text-[16px] md:text-[17px] leading-snug font-mono"
                 style={{ paddingLeft: "9ch", textIndent: "-9ch" }}
@@ -1245,8 +1244,6 @@ export default function LandingPage() {
                 <span style={{ color: "rgba(255,255,255,0.35)" }}> → </span>
                 <span style={{ color: "rgba(255,255,255,0.65)" }}>shows what you know to look for</span>
               </p>
-              {/* FEED — full sentence in one <p>; if it wraps the continuation
-                  aligns under "shows", not under "FEED" */}
               <p
                 className="text-[16px] md:text-[17px] leading-snug font-mono"
                 style={{ paddingLeft: "9ch", textIndent: "-9ch" }}
@@ -1256,16 +1253,18 @@ export default function LandingPage() {
                 <span style={{ color: "rgba(255,255,255,0.65)" }}>shows what you&apos;re predicted to like &amp; what companies pay to promote</span>
               </p>
             </div>
+          </div>
 
-            {/* Bridge — "So you never see" */}
+          {/* ── Group 3: Rotating carousel line — flex-1 distributes it center ── */}
+          {/* flex-1 absorbs the space between Groups 2 and 4; justify-center
+              keeps the rotating line in the vertical middle of that space.      */}
+          <div className="flex-1 flex flex-col justify-center" style={{ maxWidth: 600 }}>
             <p
-              className="text-[12px] uppercase mt-10"
+              className="text-[12px] uppercase"
               style={{ letterSpacing: "0.25em", color: "rgba(255,255,255,0.40)" }}
             >
               So you never see
             </p>
-
-            {/* Rotating line — focal punchline, trails carousel by 250ms */}
             <p
               key={discoveryIdx}
               className="text-[30px] md:text-[36px] lg:text-[40px] font-medium leading-[1.15] mt-4"
@@ -1277,13 +1276,14 @@ export default function LandingPage() {
             >
               {DISCOVERY[discoveryIdx]}
             </p>
+          </div>
 
-            {/* Closing lines */}
-            <p className="text-[15px] md:text-[16px] leading-relaxed mt-6" style={{ color: "rgba(255,255,255,0.60)" }}>
+          {/* ── Group 4: Final tagline — naturally anchored at the bottom ─────── */}
+          <div style={{ maxWidth: 600 }}>
+            <p className="text-[15px] md:text-[16px] leading-relaxed" style={{ color: "rgba(255,255,255,0.60)" }}>
               We&apos;re living in algorithmic echo chambers.<br />
               Do you feel it?
             </p>
-
           </div>
 
         </div>
