@@ -1205,29 +1205,47 @@ export default function LandingPage() {
         <div className="flex flex-col justify-start px-12 pt-[12vh] pb-16 overflow-hidden"
           style={{ width: "54%", borderRight: "1px solid rgba(255,255,255,0.05)" }}>
 
-          {/* Constrain line length so text feels premium */}
-          <div style={{ maxWidth: 540 }}>
+          <div style={{ maxWidth: 520 }}>
 
             {/* Headline */}
-            <h2 className="text-[56px] md:text-[64px] lg:text-[72px] font-semibold leading-[1.05] text-white" style={{ letterSpacing: "-0.02em" }}>
-              You&apos;re seeing the internet<br />through a keyhole.
+            <h2
+              className="text-[56px] md:text-[64px] lg:text-[72px] font-semibold leading-[1.05] text-white"
+              style={{ letterSpacing: "-0.02em" }}
+            >
+              The internet runs on one model.
             </h2>
 
-            {/* Search + Feeds */}
-            <div className="flex flex-col gap-1 mt-6">
-              <p className="text-[18px] md:text-[20px] leading-snug" style={{ color: "rgba(255,255,255,0.70)" }}>Search shows you what you already know.</p>
-              <p className="text-[18px] md:text-[20px] leading-snug" style={{ color: "rgba(255,255,255,0.70)" }}>Feeds show you what you&apos;re expected to like.</p>
+            {/* SEARCH / FEED — system primitives */}
+            <div className="flex flex-col gap-3 mt-8">
+              <p className="text-[18px] md:text-[20px] font-medium" style={{ letterSpacing: "0.35em", color: "rgba(255,255,255,0.80)" }}>SEARCH</p>
+              <p className="text-[18px] md:text-[20px] font-medium" style={{ letterSpacing: "0.35em", color: "rgba(255,255,255,0.80)" }}>FEED</p>
+            </div>
+
+            {/* Explanation lines */}
+            <div className="mt-6" style={{ color: "rgba(255,255,255,0.70)" }}>
+              <p className="text-[16px] md:text-[17px] leading-relaxed font-mono">
+                SEARCH → shows what you know to look for
+              </p>
+              <p className="text-[16px] md:text-[17px] leading-relaxed font-mono">
+                FEED &nbsp; → shows what the system predicts you&apos;ll like
+              </p>
+              <p className="text-[16px] md:text-[17px] leading-relaxed font-mono" style={{ paddingLeft: "4.5ch" }}>
+                + what companies pay to promote
+              </p>
             </div>
 
             {/* Bridge — "So you never see" */}
-            <p className="text-[12px] uppercase mt-10" style={{ letterSpacing: "0.2em", color: "rgba(255,255,255,0.40)" }}>
+            <p
+              className="text-[12px] uppercase mt-10"
+              style={{ letterSpacing: "0.25em", color: "rgba(255,255,255,0.40)" }}
+            >
               So you never see
             </p>
 
-            {/* Rotating line — visual centrepiece */}
+            {/* Rotating line — focal punchline */}
             <p
               key={carouselIdx}
-              className="text-[28px] md:text-[34px] lg:text-[40px] font-medium leading-[1.15] mt-3"
+              className="text-[30px] md:text-[36px] lg:text-[40px] font-medium leading-[1.15] mt-4"
               style={{
                 color: COMPANIES[carouselIdx].accent,
                 animation: "fadeSlideUp 0.45s ease-out",
@@ -1237,10 +1255,13 @@ export default function LandingPage() {
               {DISCOVERY[carouselIdx]}
             </p>
 
-            {/* Closing */}
-            <p className="text-[16px] leading-[1.6] mt-6" style={{ color: "rgba(255,255,255,0.50)" }}>
-              Because if you don&apos;t know it exists,<br />
-              you&apos;ll never think to look for it.
+            {/* Final poetic lines */}
+            <p className="text-[15px] md:text-[16px] leading-relaxed mt-6" style={{ color: "rgba(255,255,255,0.60)" }}>
+              If you don&apos;t know it exists,<br />
+              you&apos;ll never search for it.<br />
+              <br />
+              If you never search,<br />
+              it never finds you.
             </p>
 
           </div>
