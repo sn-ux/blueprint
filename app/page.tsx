@@ -136,13 +136,13 @@ const DEMO_TRACKS: Record<string, TrackItem[]> = {
 // ── Per-platform discovery statements (indexed to COMPANIES order) ───────────
 
 const DISCOVERY = [
-  "The thing you need \u2014 but don\u2019t know to search for.",    // Google
-  "The creator you\u2019d love \u2014 but haven\u2019t found yet.",  // TikTok
-  "The product you\u2019d buy \u2014 if you knew it existed.",       // Amazon
-  "The song you\u2019d love \u2014 but haven\u2019t heard yet.",     // Spotify
-  "The video you\u2019d love \u2014 but haven\u2019t seen yet.",     // YouTube
-  "The idea that would change how you think.",                       // ChatGPT
-  "The dish you\u2019d love \u2014 but haven\u2019t tried yet.",     // DoorDash
+  "The thing you need \u2014 but don\u2019t know to search for",                          // Google
+  "The creator you\u2019d love \u2014 but would never show up in your feed",              // TikTok
+  "The product you\u2019d buy instantly \u2014 if you ever saw it",                       // Amazon
+  "The song you\u2019d love \u2014 but would never be recommended to you",                // Spotify
+  "The video you\u2019d love \u2014 but would never reach you",                           // YouTube
+  "The idea that would change your mind \u2014 but you\u2019d never think to ask for it", // ChatGPT
+  "The dish you\u2019d love \u2014 but would never think to order",                       // DoorDash
 ];
 
 // ── Company showcase data ─────────────────────────────────────────────────────
@@ -1215,22 +1215,13 @@ export default function LandingPage() {
               The internet runs on one model.
             </h2>
 
-            {/* SEARCH / FEED — system primitives */}
-            <div className="flex flex-col gap-3 mt-8">
-              <p className="text-[18px] md:text-[20px] font-medium" style={{ letterSpacing: "0.35em", color: "rgba(255,255,255,0.80)" }}>SEARCH</p>
-              <p className="text-[18px] md:text-[20px] font-medium" style={{ letterSpacing: "0.35em", color: "rgba(255,255,255,0.80)" }}>FEED</p>
-            </div>
-
-            {/* Explanation lines */}
-            <div className="mt-6" style={{ color: "rgba(255,255,255,0.70)" }}>
+            {/* SEARCH / FEED — explanation block */}
+            <div className="mt-8" style={{ color: "rgba(255,255,255,0.70)" }}>
               <p className="text-[16px] md:text-[17px] leading-relaxed font-mono">
-                SEARCH → shows what you know to look for
+                <strong className="text-white">SEARCH</strong> → shows what you know to look for
               </p>
               <p className="text-[16px] md:text-[17px] leading-relaxed font-mono">
-                FEED &nbsp; → shows what the system predicts you&apos;ll like
-              </p>
-              <p className="text-[16px] md:text-[17px] leading-relaxed font-mono" style={{ paddingLeft: "4.5ch" }}>
-                + what companies pay to promote
+                <strong className="text-white">FEED</strong> &nbsp; → shows what you&apos;re predicted to like &amp; what companies pay to promote
               </p>
             </div>
 
@@ -1242,7 +1233,7 @@ export default function LandingPage() {
               So you never see
             </p>
 
-            {/* Rotating line — focal punchline */}
+            {/* Rotating line — focal punchline, indexed to carouselIdx */}
             <p
               key={carouselIdx}
               className="text-[30px] md:text-[36px] lg:text-[40px] font-medium leading-[1.15] mt-4"
@@ -1255,13 +1246,10 @@ export default function LandingPage() {
               {DISCOVERY[carouselIdx]}
             </p>
 
-            {/* Final poetic lines */}
+            {/* Closing lines */}
             <p className="text-[15px] md:text-[16px] leading-relaxed mt-6" style={{ color: "rgba(255,255,255,0.60)" }}>
-              If you don&apos;t know it exists,<br />
-              you&apos;ll never search for it.<br />
-              <br />
-              If you never search,<br />
-              it never finds you.
+              We&apos;re living in algorithmic echo chambers.<br />
+              Do you feel it?
             </p>
 
           </div>
