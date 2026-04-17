@@ -1215,39 +1215,40 @@ export default function LandingPage() {
         <div className="flex flex-col justify-start px-12 pt-[12vh] pb-16 overflow-hidden"
           style={{ width: "54%", borderRight: "1px solid rgba(255,255,255,0.05)" }}>
 
-          <div style={{ maxWidth: 520 }}>
+          {/* Slightly wider than before to give mono text room to breathe */}
+          <div style={{ maxWidth: 600 }}>
 
-            {/* Headline */}
+            {/* Headline — stepped down from 72px to avoid oversizing */}
             <h2
-              className="text-[56px] md:text-[64px] lg:text-[72px] font-semibold leading-[1.05] text-white"
+              className="text-[52px] md:text-[60px] lg:text-[64px] font-semibold leading-[1.05] text-white"
               style={{ letterSpacing: "-0.02em" }}
             >
               The internet runs on one model.
             </h2>
 
-            {/* SEARCH / FEED — core argument block */}
-            <div className="mt-8 mb-2 flex flex-col gap-2">
-              {/* Line 1: SEARCH */}
-              <p className="text-[19px] md:text-[21px] leading-snug font-mono">
-                <strong
-                  className="font-bold"
-                  style={{ color: "rgba(255,255,255,0.95)", letterSpacing: "0.08em" }}
-                >SEARCH</strong>
+            {/* SEARCH / FEED — core argument block
+                Hanging-indent technique: paddingLeft pushes the whole paragraph
+                right; textIndent pulls the first line back to column 0.
+                Any wrap on FEED lands cleanly under the explanation, not the label. */}
+            <div className="mt-8 mb-2 flex flex-col gap-1.5">
+              {/* SEARCH — fits on one line at this size / width */}
+              <p
+                className="text-[16px] md:text-[17px] leading-snug font-mono"
+                style={{ paddingLeft: "9ch", textIndent: "-9ch" }}
+              >
+                <strong style={{ color: "rgba(255,255,255,0.95)", letterSpacing: "0.08em" }}>SEARCH</strong>
                 <span style={{ color: "rgba(255,255,255,0.35)" }}> → </span>
                 <span style={{ color: "rgba(255,255,255,0.65)" }}>shows what you know to look for</span>
               </p>
-              {/* Line 2: FEED — two-line wrap, second line indented to align under explanation */}
-              <p className="text-[19px] md:text-[21px] leading-snug font-mono">
-                <strong
-                  className="font-bold"
-                  style={{ color: "rgba(255,255,255,0.95)", letterSpacing: "0.08em" }}
-                >FEED</strong>
-                <span style={{ color: "rgba(255,255,255,0.35)" }}> &nbsp;→ </span>
-                <span style={{ color: "rgba(255,255,255,0.65)" }}>shows what you&apos;re predicted to like</span>
-              </p>
-              <p className="text-[19px] md:text-[21px] leading-snug font-mono"
-                style={{ paddingLeft: "6.6ch" }}>
-                <span style={{ color: "rgba(255,255,255,0.65)" }}>&amp; what companies pay to promote</span>
+              {/* FEED — full sentence in one <p>; if it wraps the continuation
+                  aligns under "shows", not under "FEED" */}
+              <p
+                className="text-[16px] md:text-[17px] leading-snug font-mono"
+                style={{ paddingLeft: "9ch", textIndent: "-9ch" }}
+              >
+                <strong style={{ color: "rgba(255,255,255,0.95)", letterSpacing: "0.08em" }}>FEED</strong>
+                <span style={{ color: "rgba(255,255,255,0.35)" }}>&nbsp;&nbsp;→ </span>
+                <span style={{ color: "rgba(255,255,255,0.65)" }}>shows what you&apos;re predicted to like &amp; what companies pay to promote</span>
               </p>
             </div>
 
