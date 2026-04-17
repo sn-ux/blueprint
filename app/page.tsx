@@ -1100,7 +1100,7 @@ export default function LandingPage() {
             className="absolute z-10 flex flex-col pointer-events-none"
             style={{
               top: "9%",
-              left: "9%",
+              left: "8%",
               maxWidth: 420,
               opacity: textVisible ? 1 : 0,
               transition: "opacity 0.4s ease-in-out",
@@ -1117,7 +1117,7 @@ export default function LandingPage() {
           {/* Stats row — bottom-right, clear of the sphere */}
           {totalTrackCount > 0 && (
             <div
-              className="absolute bottom-[7vh] right-[12%] z-10 flex flex-row gap-8 pointer-events-none"
+              className="absolute bottom-[7vh] right-[11%] z-10 flex flex-row gap-8 pointer-events-none"
               style={{
                 opacity: textVisible ? 1 : 0,
                 transition: "opacity 0.4s ease-in-out",
