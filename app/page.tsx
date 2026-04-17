@@ -341,6 +341,9 @@ export default function LandingPage() {
   const regionPolesRef   = useRef<{ name: string; pole: V3 }[]>([]);
   const hoveredRef       = useRef<{ genre: string; subgenre?: string } | null>(null);
   const autoSelectedRef  = useRef(false);
+  // Sync ref so the wheel handler (a stale closure) always reads the live selected value
+  const selectedRef      = useRef<string | null>(null);
+  selectedRef.current    = selected;
 
   // ── Fetch worlds on mount ────────────────────────────────────────────────
   useEffect(() => {
@@ -748,8 +751,13 @@ export default function LandingPage() {
       ctx.textBaseline="alphabetic";
     }
 
-    // ── Wheel handler: only capture when pointer is inside the sphere circle ──
-    // Outside the sphere, let the wheel event propagate so the page can scroll.
+    // ── Wheel handler ─────────────────────────────────────────────────────────
+    // Rules:
+    //   1. Outside the sphere circle → always pass through (page scroll).
+    //   2. At/below default zoom and scrolling DOWN → pass through (escape to page 2).
+    //   3. selectedRef (sync) not `selected` (stale closure) drives explore-mode check.
+    //   4. deltaY is clamped to [-50, 50] to prevent single-event zoom spikes from
+    //      trackpad momentum or bounce-back gestures.
     const onWheel = (e: WheelEvent) => {
       const rect = canvas.getBoundingClientRect();
       const mx   = e.clientX - rect.left;
@@ -757,21 +765,29 @@ export default function LandingPage() {
       const W    = canvas.clientWidth, H = canvas.clientHeight;
       const R    = Math.min(W, H) * 0.34 * zoomRef.current;
       const dx   = mx - W / 2, dy = my - H / 2;
-      // Outside sphere circle → don't capture, let page scroll naturally
+
+      // ── Gate 1: cursor outside sphere → page scroll ──────────────────────
       if (dx * dx + dy * dy > R * R) return;
-      // Hero state guard: genre selected, OR meaningfully zoomed in → explore mode (capture).
-      // Otherwise (nothing selected, near-default zoom) only block scroll-down (page-scroll intent);
-      // scroll-up over the sphere is still the entry point for zooming in.
-      const inExploreMode = selected !== null || zoomRef.current > 1.05;
+
+      // ── Gate 2: at default zoom, scrolling down → page scroll (escape hatch)
+      // zoomRef is a ref so this always reflects the live value, no stale-closure risk.
+      if (e.deltaY > 0 && zoomRef.current <= 1.02) return;
+
+      // ── Gate 3: not in explore mode + scrolling down → page scroll ────────
+      // Use selectedRef.current (sync) instead of `selected` (stale closure).
+      const inExploreMode = selectedRef.current !== null || zoomRef.current > 1.05;
       if (!inExploreMode && e.deltaY > 0) return;
 
       e.preventDefault();
 
+      // Clamp deltaY to avoid runaway zoom from large trackpad events
+      const clampedDelta = Math.max(-50, Math.min(50, e.deltaY));
       const prevZoom = zoomRef.current;
-      zoomRef.current = Math.max(0.5, Math.min(5, prevZoom * (1 - e.deltaY * 0.004)));
+      zoomRef.current = Math.max(0.5, Math.min(5, prevZoom * (1 - clampedDelta * 0.004)));
       const newZoom   = zoomRef.current;
 
-      if (newZoom >= 1.2 && selected === null && regionPolesRef.current.length > 0) {
+      // Auto-select genre when zooming past entry threshold
+      if (newZoom >= 1.2 && selectedRef.current === null && regionPolesRef.current.length > 0) {
         const rx = rotRef.current.x, ry = rotRef.current.y;
         let bestName = regionPolesRef.current[0].name, bestZ = -Infinity;
         for (const { name, pole: [px, py, pz] } of regionPolesRef.current) {
@@ -782,6 +798,9 @@ export default function LandingPage() {
         setSelected(bestName);
       }
 
+      // Auto-focus subgenre when zoomed in deep enough.
+      // Writing to BOTH selectedSubgenreRef and zoomSubgenreRef keeps them in sync
+      // so the panel always reflects the current zoom-targeted subgenre.
       if (newZoom >= 2.0 && subPolesRef.current.length > 0) {
         const rx2 = rotRef.current.x, ry2 = rotRef.current.y;
         let bestSubName = subPolesRef.current[0].name, bestSubZ = -Infinity;
@@ -789,16 +808,21 @@ export default function LandingPage() {
           const z2 = py*Math.sin(rx2) + (-px*Math.sin(ry2) + pz*Math.cos(ry2))*Math.cos(rx2);
           if (z2 > bestSubZ) { bestSubZ = z2; bestSubName = name; }
         }
-        if (zoomSubgenreRef.current !== bestSubName) { zoomSubgenreRef.current = bestSubName; setZoomSubgenre(bestSubName); }
+        if (zoomSubgenreRef.current !== bestSubName) {
+          zoomSubgenreRef.current    = bestSubName; setZoomSubgenre(bestSubName);
+          // Single source of truth: zoom focus always overrides any previous click selection
+          selectedSubgenreRef.current = bestSubName; setSelectedSubgenre(bestSubName);
+        }
       } else if (newZoom < 2.0) {
-        if (zoomSubgenreRef.current !== null) { zoomSubgenreRef.current = null; setZoomSubgenre(null); }
+        if (zoomSubgenreRef.current   !== null) { zoomSubgenreRef.current    = null; setZoomSubgenre(null); }
         if (selectedSubgenreRef.current !== null) { selectedSubgenreRef.current = null; setSelectedSubgenre(null); }
       }
 
-      if (newZoom < 1.1 && selected !== null) {
-        autoSelectedRef.current = false;
+      // Zoom back to default → deselect genre and reset all subgenre state
+      if (newZoom < 1.1 && selectedRef.current !== null) {
+        autoSelectedRef.current     = false;
         selectedSubgenreRef.current = null; setSelectedSubgenre(null);
-        zoomSubgenreRef.current = null; setZoomSubgenre(null);
+        zoomSubgenreRef.current     = null; setZoomSubgenre(null);
         setSelected(null);
       }
     };
@@ -907,8 +931,11 @@ export default function LandingPage() {
     for (const h of labelHitsRef.current) {
       if (mx>=h.x1&&mx<=h.x2&&my>=h.y1&&my<=h.y2) {
         if (h.subgenre) {
-          const next=selectedSubgenreRef.current===h.subgenre?null:h.subgenre;
-          selectedSubgenreRef.current=next; setSelectedSubgenre(next);
+          // Clicking a different subgenre always selects it; clicking the same one deselects.
+          const next = selectedSubgenreRef.current === h.subgenre ? null : h.subgenre;
+          // Keep both refs in sync — single source of truth for active subgenre.
+          selectedSubgenreRef.current = next; setSelectedSubgenre(next);
+          zoomSubgenreRef.current     = next; setZoomSubgenre(next);
         } else {
           autoSelectedRef.current=false;
           selectedSubgenreRef.current=null; setSelectedSubgenre(null);
@@ -940,8 +967,12 @@ export default function LandingPage() {
     if (selected!==null&&zoomRef.current>=2.0&&best.name===selected&&subPolesRef.current.length>0) {
       let bestSub=subPolesRef.current[0], bestSubDot=-Infinity;
       for (const sp of subPolesRef.current){const d=sp.pole[0]*x_w+sp.pole[1]*y_w+sp.pole[2]*z_w;if(d>bestSubDot){bestSubDot=d;bestSub=sp;}}
-      const next=selectedSubgenreRef.current===bestSub.name?null:bestSub.name;
-      selectedSubgenreRef.current=next; setSelectedSubgenre(next); return;
+      // Toggle if same subgenre; always replace if different — no stale selection.
+      const next = selectedSubgenreRef.current === bestSub.name ? null : bestSub.name;
+      // Keep both refs in sync — single source of truth for active subgenre.
+      selectedSubgenreRef.current = next; setSelectedSubgenre(next);
+      zoomSubgenreRef.current     = next; setZoomSubgenre(next);
+      return;
     }
     autoSelectedRef.current=false;
     selectedSubgenreRef.current=null; setSelectedSubgenre(null);
