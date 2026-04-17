@@ -555,8 +555,7 @@ export default function LandingPage() {
 
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
-      // Sphere slightly smaller than before (0.31 vs 0.34) — more breathing room
-      const R   = Math.min(W, H) * 0.31 * zoomRef.current;
+      const R   = Math.min(W, H) * 0.34 * zoomRef.current;
       const cx  = W / 2, cy = H / 2;
       const rx  = rotRef.current.x, ry = rotRef.current.y;
       labelHitsRef.current = [];
@@ -817,7 +816,7 @@ export default function LandingPage() {
       const mx   = e.clientX - rect.left;
       const my   = e.clientY - rect.top;
       const W    = canvas.clientWidth, H = canvas.clientHeight;
-      const R    = Math.min(W, H) * 0.31 * zoomRef.current;
+      const R    = Math.min(W, H) * 0.34 * zoomRef.current;
       const dx   = mx - W / 2, dy = my - H / 2;
       const overSphere = dx * dx + dy * dy <= R * R;
 
@@ -911,7 +910,7 @@ export default function LandingPage() {
     const canvas = canvasRef.current;
     if (!canvas || regionPolesRef.current.length === 0) return null;
     const W=canvas.clientWidth, H=canvas.clientHeight;
-    const R=Math.min(W,H)*0.32*zoomRef.current;
+    const R=Math.min(W,H)*0.35*zoomRef.current;
     const cx=W/2, cy=H/2;
     const nx=(mx-cx)/R, ny=(my-cy)/R;
     if (nx*nx+ny*ny > 1) return null;
@@ -965,7 +964,7 @@ export default function LandingPage() {
     if (selected!==null&&zoomRef.current>=2.0&&genreName===selected&&subPolesRef.current.length>0) {
       const canvas2=canvasRef.current!;
       const W2=canvas2.clientWidth, H2=canvas2.clientHeight;
-      const R2=Math.min(W2,H2)*0.32*zoomRef.current;
+      const R2=Math.min(W2,H2)*0.35*zoomRef.current;
       const nx2=(mx-W2/2)/R2, ny2=(my-H2/2)/R2;
       if (nx2*nx2+ny2*ny2<=1) {
         const nz2=Math.sqrt(Math.max(0,1-nx2*nx2-ny2*ny2));
@@ -1007,7 +1006,7 @@ export default function LandingPage() {
       }
     }
     const W=canvas.clientWidth, H=canvas.clientHeight;
-    const R=Math.min(W,H)*0.32*zoomRef.current;
+    const R=Math.min(W,H)*0.35*zoomRef.current;
     const cx=W/2, cy=H/2;
     const nx=(mx-cx)/R, ny=(my-cy)/R;
     if (nx*nx+ny*ny > 1) {
@@ -1116,7 +1115,7 @@ export default function LandingPage() {
           {/* Stats row — bottom-right, clear of the sphere */}
           {totalTrackCount > 0 && (
             <div
-              className="absolute bottom-[4vh] right-[16%] z-10 flex flex-row gap-8 pointer-events-none"
+              className="absolute bottom-[7vh] right-[12%] z-10 flex flex-row gap-8 pointer-events-none"
               style={{
                 opacity: textVisible ? 1 : 0,
                 transition: "opacity 0.4s ease-in-out",
