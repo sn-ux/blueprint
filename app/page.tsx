@@ -1855,11 +1855,15 @@ export default function LandingPage() {
         style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
 
         {/* ── LEFT: spheres ───────────────────────────────────────────────────── */}
-        <div className="flex flex-col items-center justify-center py-8 px-6 flex-shrink-0" style={{ width: "54%" }}>
+        {/* relative + alignSelf:stretch so the absolute label can anchor to top-left */}
+        <div className="relative flex flex-col items-center justify-center py-8 px-6 flex-shrink-0"
+          style={{ width: "54%", alignSelf: "stretch" }}>
+
+          {/* Domain label — top-left, colored to match active platform */}
           <p
             key={carouselIdx}
-            className="text-[12px] tracking-[0.20em] uppercase mb-4 select-none"
-            style={{ color: "rgba(255,255,255,0.50)", animation: "fadeSlideUp 0.35s ease-out" }}
+            className="absolute top-10 left-10 text-[13px] font-semibold tracking-[0.18em] uppercase select-none"
+            style={{ color: PAGE3_COLORS[carouselIdx], animation: "fadeSlideUp 0.35s ease-out" }}
           >
             {PAGE3_DOMAIN_LABELS[carouselIdx]}
           </p>
@@ -1874,13 +1878,13 @@ export default function LandingPage() {
               { name: "UCLA",    seed:  7 },
               { name: "Atlanta", seed: 11 },
             ];
-            const SIZE   = 460;          // container px — fits within constrained 54% column
-            const CX     = SIZE / 2;     // 230
-            const CY     = SIZE / 2;     // 230
-            const ORBIT  = 170;          // orbit radius
+            const SIZE   = 530;          // larger container for bigger spheres
+            const CX     = SIZE / 2;     // 265
+            const CY     = SIZE / 2;     // 265
+            const ORBIT  = 195;          // wider orbit to give larger spheres breathing room
             const N      = friends.length;
             return (
-              <div style={{ position: "relative", width: SIZE, height: SIZE, flexShrink: 0, transform: "translateX(-32px)" }}>
+              <div style={{ position: "relative", width: SIZE, height: SIZE, flexShrink: 0 }}>
 
                 {/* Centre: Friends aggregate sphere */}
                 <div style={{
@@ -1889,7 +1893,7 @@ export default function LandingPage() {
                   transform: "translate(-50%, -50%)",
                   display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
                 }}>
-                  <MiniSphere size={140} seed={99} platformColor={PAGE3_COLORS[carouselIdx]} />
+                  <MiniSphere size={170} seed={99} platformColor={PAGE3_COLORS[carouselIdx]} />
                   <span style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(255,255,255,0.30)" }}>
                     Friends
                   </span>
@@ -1907,7 +1911,7 @@ export default function LandingPage() {
                       transform: "translate(-50%, -50%)",
                       display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
                     }}>
-                      <MiniSphere size={88} seed={f.seed} platformColor={PAGE3_COLORS[carouselIdx]} />
+                      <MiniSphere size={108} seed={f.seed} platformColor={PAGE3_COLORS[carouselIdx]} />
                       <span style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", whiteSpace: "nowrap" }}>
                         {f.name}
                       </span>
