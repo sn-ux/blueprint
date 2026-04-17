@@ -1217,11 +1217,13 @@ export default function LandingPage() {
         style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
 
         {/* ── LEFT: problem copy ──────────────────────────────────────────────── */}
-        {/* h-full + flex-col turns the column into a vertical distribution system.
-            Groups 1–2 are fixed at the top, Group 3 gets flex-1 so it occupies
-            the middle stretch, Group 4 naturally lands at the bottom.          */}
-        <div className="flex flex-col h-full pt-[10vh] pb-[8vh] px-12 overflow-hidden"
-          style={{ width: "54%", borderRight: "1px solid rgba(255,255,255,0.05)" }}>
+        {/* justify-between on a min-h-screen column distributes the four groups
+            across the full page height. Each group is a plain flex child — no
+            mt-* margins — the browser handles the spacing between them.        */}
+        <div
+          className="flex flex-col justify-between px-12 pt-[10vh] pb-[8vh] overflow-hidden"
+          style={{ width: "54%", minHeight: "100vh", borderRight: "1px solid rgba(255,255,255,0.05)" }}
+        >
 
           {/* ── Group 1: Headline ─────────────────────────────────────────────── */}
           <div style={{ maxWidth: 600 }}>
@@ -1234,7 +1236,7 @@ export default function LandingPage() {
           </div>
 
           {/* ── Group 2: SEARCH / FEED constraint block ───────────────────────── */}
-          <div className="mt-10" style={{ maxWidth: 600 }}>
+          <div style={{ maxWidth: 600 }}>
             <div className="flex flex-col gap-1.5">
               <p
                 className="text-[16px] md:text-[17px] leading-snug font-mono"
@@ -1255,10 +1257,8 @@ export default function LandingPage() {
             </div>
           </div>
 
-          {/* ── Group 3: Rotating carousel line — flex-1 distributes it center ── */}
-          {/* flex-1 absorbs the space between Groups 2 and 4; justify-center
-              keeps the rotating line in the vertical middle of that space.      */}
-          <div className="flex-1 flex flex-col justify-center" style={{ maxWidth: 600 }}>
+          {/* ── Group 3: SO YOU NEVER SEE + rotating line ────────────────────── */}
+          <div style={{ maxWidth: 600 }}>
             <p
               className="text-[12px] uppercase"
               style={{ letterSpacing: "0.25em", color: "rgba(255,255,255,0.40)" }}
@@ -1278,7 +1278,7 @@ export default function LandingPage() {
             </p>
           </div>
 
-          {/* ── Group 4: Final tagline — naturally anchored at the bottom ─────── */}
+          {/* ── Group 4: Final tagline — last child sits at pb-[8vh] ─────────── */}
           <div style={{ maxWidth: 600 }}>
             <p className="text-[15px] md:text-[16px] leading-relaxed" style={{ color: "rgba(255,255,255,0.60)" }}>
               We&apos;re living in algorithmic echo chambers.<br />
