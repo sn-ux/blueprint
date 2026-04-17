@@ -790,7 +790,7 @@ export default function LandingPage() {
       // Clamp deltaY — prevents runaway zoom from trackpad momentum bursts
       const clampedDelta  = Math.max(-50, Math.min(50, e.deltaY));
       const prevTarget    = zoomTargetRef.current;
-      const newTarget     = Math.max(0.5, Math.min(5, prevTarget * (1 - clampedDelta * 0.004)));
+      const newTarget     = Math.max(0.5, Math.min(5, prevTarget * (1 - clampedDelta * 0.008)));
       zoomTargetRef.current = newTarget;
 
       // Auto-select the front-facing genre when zoom target crosses entry threshold
