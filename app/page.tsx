@@ -845,13 +845,58 @@ export default function LandingPage() {
     };
     canvas.addEventListener("wheel", onWheel, { passive: false });
 
+    // ── Safari GestureEvent handling ──────────────────────────────────────────
+    // Safari fires its own GestureEvent API (gesturestart / gesturechange /
+    // gestureend) for trackpad pinch. On some Safari versions these fire instead
+    // of ctrlKey+wheel; on others they fire alongside it. Either way, if we do
+    // NOT prevent them, Safari uses them to zoom the browser viewport directly.
+    //
+    // We ONLY block them in the exact edge case:
+    //   - sphere is already at MIN_ZOOM  (can't zoom out further)
+    //   - AND the gesture is moving in the zoom-out direction (scale shrinking)
+    //
+    // All other gesture events are left unblocked so normal sphere zoom via the
+    // ctrlKey+wheel path continues to work.
+    let gestureStartScale = 1;
+
+    const onGestureStart = (e: Event) => {
+      // Record the reference scale at gesture start — no prevention needed here.
+      gestureStartScale = (e as any).scale ?? 1;
+    };
+
+    const onGestureChange = (e: Event) => {
+      const scale = (e as any).scale ?? 1;
+      // If the pinch is opening (scale < gestureStartScale = zooming out) and
+      // the sphere is already at the floor, block the browser from zooming.
+      if (scale < gestureStartScale && zoomTargetRef.current <= MIN_ZOOM + 0.02) {
+        e.preventDefault();
+      }
+    };
+
+    const onGestureEnd = (e: Event) => {
+      // Cover the tail of a zoom-out gesture that ends at the floor.
+      if (zoomTargetRef.current <= MIN_ZOOM + 0.02) {
+        e.preventDefault();
+      }
+      gestureStartScale = 1;
+    };
+
+    // gesturestart is passive — we only read the scale, never call preventDefault.
+    // gesturechange / gestureend are non-passive so we can preventDefault when needed.
+    canvas.addEventListener("gesturestart",  onGestureStart,  { passive: true  });
+    canvas.addEventListener("gesturechange", onGestureChange, { passive: false });
+    canvas.addEventListener("gestureend",    onGestureEnd,    { passive: false });
+
     function animate() { drawFrame(); rafRef.current = requestAnimationFrame(animate); }
     rafRef.current = requestAnimationFrame(animate);
 
     return () => {
       cancelAnimationFrame(rafRef.current);
       ro.disconnect();
-      canvas.removeEventListener("wheel", onWheel);
+      canvas.removeEventListener("wheel",          onWheel);
+      canvas.removeEventListener("gesturestart",   onGestureStart);
+      canvas.removeEventListener("gesturechange",  onGestureChange);
+      canvas.removeEventListener("gestureend",     onGestureEnd);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [worlds, selected, subgenres]);
