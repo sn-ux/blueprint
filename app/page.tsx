@@ -758,42 +758,17 @@ export default function LandingPage() {
       ctx.textBaseline="alphabetic";
     }
 
-    // ── Wheel handler ─────────────────────────────────────────────────────────
-    // Design rules:
-    //   1. Outside sphere circle → page scroll (never captured).
-    //   2. At/below floor zoom scrolling down → page scroll (escape to Page 2).
-    //   3. selectedRef.current (sync) used — never the stale closure `selected`.
-    //   4. deltaY clamped to [-50, 50] to kill trackpad momentum/bounce spikes.
-    //   5. Only zoomTargetRef is updated here — zoomRef lerps in drawFrame.
-    //   6. Subgenres are NEVER auto-selected by zoom. Selection = explicit click only.
-    const onWheel = (e: WheelEvent) => {
-      const rect = canvas.getBoundingClientRect();
-      const mx   = e.clientX - rect.left;
-      const my   = e.clientY - rect.top;
-      const W    = canvas.clientWidth, H = canvas.clientHeight;
-      // Use visual zoomRef for the circle hit-test so it matches what the user sees
-      const R    = Math.min(W, H) * 0.31 * zoomRef.current;
-      const dx   = mx - W / 2, dy = my - H / 2;
+    // ── Zoom constants ────────────────────────────────────────────────────────
+    const MIN_ZOOM = 1.0;  // hero state is the hard floor — cannot zoom smaller
+    const MAX_ZOOM = 5.0;
 
-      // Gate 1: cursor outside visual sphere → let page scroll
-      if (dx * dx + dy * dy > R * R) return;
-
-      // Gate 2: at floor zoom scrolling down → let page scroll (escape hatch to Page 2)
-      if (e.deltaY > 0 && zoomTargetRef.current <= 1.02) return;
-
-      // Gate 3: not in explore mode + scrolling down → let page scroll
-      const inExploreMode = selectedRef.current !== null || zoomTargetRef.current > 1.05;
-      if (!inExploreMode && e.deltaY > 0) return;
-
-      e.preventDefault();
-
-      // Clamp deltaY — prevents runaway zoom from trackpad momentum bursts
-      const clampedDelta  = Math.max(-50, Math.min(50, e.deltaY));
-      const prevTarget    = zoomTargetRef.current;
-      const newTarget     = Math.max(0.5, Math.min(5, prevTarget * (1 - clampedDelta * 0.008)));
+    // ── Shared zoom-apply helper (used by both wheel paths below) ────────────
+    const applyZoomDelta = (rawDelta: number) => {
+      const clampedDelta = Math.max(-50, Math.min(50, rawDelta));
+      const prevTarget   = zoomTargetRef.current;
+      const newTarget    = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, prevTarget * (1 - clampedDelta * 0.008)));
       zoomTargetRef.current = newTarget;
 
-      // Auto-select the front-facing genre when zoom target crosses entry threshold
       if (newTarget >= 1.2 && selectedRef.current === null && regionPolesRef.current.length > 0) {
         const rx = rotRef.current.x, ry = rotRef.current.y;
         let bestName = regionPolesRef.current[0].name, bestZ = -Infinity;
@@ -804,23 +779,71 @@ export default function LandingPage() {
         autoSelectedRef.current = true;
         setSelected(bestName);
       }
-
-      // Zooming below subgenre threshold clears any existing subgenre selection.
-      // NOTE: zoom does NOT create subgenre selection — only clicks do.
       if (newTarget < 2.0) {
         if (zoomSubgenreRef.current     !== null) { zoomSubgenreRef.current     = null; setZoomSubgenre(null); }
         if (selectedSubgenreRef.current !== null) { selectedSubgenreRef.current = null; setSelectedSubgenre(null); }
       }
-
-      // Zoom target back to default → deselect genre, reset everything
-      if (newTarget < 1.1 && selectedRef.current !== null) {
+      if (newTarget <= MIN_ZOOM + 0.1 && selectedRef.current !== null) {
         autoSelectedRef.current     = false;
         selectedSubgenreRef.current = null; setSelectedSubgenre(null);
         zoomSubgenreRef.current     = null; setZoomSubgenre(null);
         setSelected(null);
       }
     };
+
+    // ── Wheel handler ─────────────────────────────────────────────────────────
+    // Design rules:
+    //   1. ctrlKey wheel = trackpad pinch gesture. ALWAYS prevent browser viewport
+    //      zoom. Apply to sphere if cursor is inside, otherwise silently swallow.
+    //   2. Outside sphere circle → page scroll (never captured).
+    //   3. At floor zoom scrolling down → page scroll (escape to Page 2).
+    //   4. selectedRef.current (sync) — never the stale closure `selected`.
+    //   5. deltaY clamped to [-50, 50] to kill trackpad momentum/bounce spikes.
+    //   6. Only zoomTargetRef is updated here — zoomRef lerps in drawFrame.
+    //   7. Subgenres are NEVER auto-selected by zoom. Selection = explicit click only.
+    const onWheel = (e: WheelEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const mx   = e.clientX - rect.left;
+      const my   = e.clientY - rect.top;
+      const W    = canvas.clientWidth, H = canvas.clientHeight;
+      const R    = Math.min(W, H) * 0.31 * zoomRef.current;
+      const dx   = mx - W / 2, dy = my - H / 2;
+      const overSphere = dx * dx + dy * dy <= R * R;
+
+      // ── Pinch-to-zoom (ctrlKey + wheel) ────────────────────────────────────
+      // On macOS trackpad, pinch fires as ctrlKey+wheel. Always call preventDefault
+      // here to stop the BROWSER from zooming the viewport. Then apply to the sphere
+      // only if the cursor is inside it; otherwise silently swallow the gesture.
+      if (e.ctrlKey) {
+        e.preventDefault();
+        if (overSphere) applyZoomDelta(e.deltaY);
+        return;
+      }
+
+      // ── Regular scroll ──────────────────────────────────────────────────────
+      // Gate 1: cursor outside visual sphere → let page scroll
+      if (!overSphere) return;
+
+      // Gate 2: at floor zoom scrolling down → let page scroll (escape to Page 2)
+      if (e.deltaY > 0 && zoomTargetRef.current <= MIN_ZOOM + 0.02) return;
+
+      // Gate 3: not in explore mode + scrolling down → let page scroll
+      const inExploreMode = selectedRef.current !== null || zoomTargetRef.current > 1.05;
+      if (!inExploreMode && e.deltaY > 0) return;
+
+      e.preventDefault();
+      applyZoomDelta(e.deltaY);
+    };
     canvas.addEventListener("wheel", onWheel, { passive: false });
+
+    // ── Safari GestureEvents (gesturestart / gesturechange / gestureend) ──────
+    // Safari uses a separate GestureEvent API for pinch zoom that is independent
+    // of wheel events. Without prevention these bypass everything above and
+    // zoom the browser viewport directly. Block them on the canvas entirely.
+    const blockGesture = (e: Event) => { e.preventDefault(); };
+    canvas.addEventListener("gesturestart",  blockGesture, { passive: false });
+    canvas.addEventListener("gesturechange", blockGesture, { passive: false });
+    canvas.addEventListener("gestureend",    blockGesture, { passive: false });
 
     function animate() { drawFrame(); rafRef.current = requestAnimationFrame(animate); }
     rafRef.current = requestAnimationFrame(animate);
@@ -828,7 +851,10 @@ export default function LandingPage() {
     return () => {
       cancelAnimationFrame(rafRef.current);
       ro.disconnect();
-      canvas.removeEventListener("wheel", onWheel);
+      canvas.removeEventListener("wheel",         onWheel);
+      canvas.removeEventListener("gesturestart",  blockGesture);
+      canvas.removeEventListener("gesturechange", blockGesture);
+      canvas.removeEventListener("gestureend",    blockGesture);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [worlds, selected, subgenres]);
