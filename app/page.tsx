@@ -1280,43 +1280,46 @@ export default function LandingPage() {
             </h2>
           </div>
 
-          {/* ── Group 2: SEARCH / FEED — stable, no dependency on group 3 ──────── */}
+          {/* ── Group 2: SEARCH / FEED — primary supporting argument ────────────
+              Increased to 19/21px (+20%) to feel like thesis-level copy,
+              not secondary footnotes.                                       */}
           <div className="mt-[6vh]" style={{ maxWidth: 600 }}>
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-2">
               <p
-                className="text-[16px] md:text-[17px] leading-snug font-mono"
+                className="text-[19px] md:text-[21px] leading-snug font-mono"
                 style={{ paddingLeft: "9ch", textIndent: "-9ch" }}
               >
-                <strong style={{ color: "rgba(255,255,255,0.95)", letterSpacing: "0.08em" }}>SEARCH</strong>
+                <strong style={{ color: "rgba(255,255,255,0.97)", letterSpacing: "0.08em" }}>SEARCH</strong>
                 <span style={{ color: "rgba(255,255,255,0.35)" }}> → </span>
-                <span style={{ color: "rgba(255,255,255,0.65)" }}>shows what you know to look for</span>
+                <span style={{ color: "rgba(255,255,255,0.68)" }}>shows what you know to look for</span>
               </p>
               <p
-                className="text-[16px] md:text-[17px] leading-snug font-mono"
+                className="text-[19px] md:text-[21px] leading-snug font-mono"
                 style={{ paddingLeft: "9ch", textIndent: "-9ch" }}
               >
-                <strong style={{ color: "rgba(255,255,255,0.95)", letterSpacing: "0.08em" }}>FEED</strong>
+                <strong style={{ color: "rgba(255,255,255,0.97)", letterSpacing: "0.08em" }}>FEED</strong>
                 <span style={{ color: "rgba(255,255,255,0.35)" }}>&nbsp;&nbsp;→ </span>
-                <span style={{ color: "rgba(255,255,255,0.65)" }}>shows things similar to what you&apos;ve engaged with &amp; what companies pay to promote</span>
+                <span style={{ color: "rgba(255,255,255,0.68)" }}>shows things similar to what you&apos;ve engaged with &amp; what companies pay to promote</span>
               </p>
             </div>
           </div>
 
           {/* ── Group 3: SO YOU NEVER SEE + rotating line ────────────────────── */}
-          {/* minHeight = label (~18px) + mt-4 gap (16px) + 2 lines of text at
-              largest size (40px × 1.15 × 2 ≈ 92px) + buffer = 160px.
-              The container never shrinks when text is short, never grows when
-              text is long → nothing above or below ever shifts.               */}
-          <div className="mt-[6vh]" style={{ maxWidth: 600, minHeight: 160 }}>
+          {/* minHeight covers label + gap + 2 lines of carousel at 34px max.
+              Container dimensions never change → nothing above/below shifts. */}
+          <div className="mt-[6vh]" style={{ maxWidth: 600, minHeight: 110 }}>
+            {/* "SO YOU NEVER SEE" — strong transition marker, not a whisper */}
             <p
-              className="text-[12px] uppercase"
-              style={{ letterSpacing: "0.25em", color: "rgba(255,255,255,0.40)" }}
+              className="text-[13px] font-semibold uppercase"
+              style={{ letterSpacing: "0.22em", color: "rgba(255,255,255,1.0)" }}
             >
               So you never see
             </p>
+            {/* Carousel line — unified with SEARCH/FEED at 19/21px so it
+                reads as a vivid example, not a competing headline.         */}
             <p
               key={discoveryIdx}
-              className="text-[30px] md:text-[36px] lg:text-[40px] font-medium leading-[1.15] mt-4"
+              className="text-[19px] md:text-[21px] font-semibold leading-snug mt-4"
               style={{
                 color: COMPANIES[discoveryIdx].accent,
                 animation: "fadeSlideUp 0.45s ease-out",
@@ -1327,12 +1330,12 @@ export default function LandingPage() {
             </p>
           </div>
 
-          {/* ── Group 4: Final tagline — mt-8 places it directly below the
-              rotating block, not glued to the bottom of the screen.
-              Position is stable: Group 3 has a fixed minHeight, so this
-              div never shifts regardless of rotating text length.         */}
+          {/* ── Group 4: Final tagline ────────────────────────────────────────── */}
           <div className="mt-8" style={{ maxWidth: 600 }}>
-            <p className="text-[15px] md:text-[16px] leading-relaxed" style={{ color: "rgba(255,255,255,0.60)" }}>
+            <p
+              className="text-[16px] md:text-[17px] leading-relaxed"
+              style={{ color: "rgba(255,255,255,0.65)" }}
+            >
               We&apos;re living in algorithmic echo chambers.<br />
               Do you feel it?
             </p>
