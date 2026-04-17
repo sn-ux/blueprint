@@ -1055,11 +1055,11 @@ export default function LandingPage() {
               transition: "opacity 0.4s ease-in-out",
             }}
           >
-            <h1 className="text-[40px] md:text-[52px] font-semibold leading-[1.08] text-white mb-3 max-w-sm" style={{ letterSpacing: "-0.02em" }}>
-              This is what your taste looks like.
+            <h1 className="text-[44px] md:text-[52px] lg:text-[56px] font-semibold leading-[1.06] text-white mb-3" style={{ letterSpacing: "-0.02em" }}>
+              This is what a taste looks like.
             </h1>
-            <p className="text-[18px] md:text-[20px]" style={{ color: "rgba(255,255,255,0.80)", letterSpacing: "0.04em" }}>
-              Zoom. Explore. Discover.
+            <p className="text-xs tracking-[0.22em] uppercase" style={{ color: "rgba(255,255,255,0.62)" }}>
+              Zoom. Scroll. Explore.
             </p>
           </div>
 
