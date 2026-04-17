@@ -135,14 +135,16 @@ const DEMO_TRACKS: Record<string, TrackItem[]> = {
 
 // ── Per-platform discovery statements (indexed to COMPANIES order) ───────────
 
-const DISCOVERY = [
-  "The thing you need \u2014 but don\u2019t know to search for",                          // Google
-  "The creator you\u2019d love \u2014 but would never show up in your feed",              // TikTok
-  "The product you\u2019d buy instantly \u2014 if you ever saw it",                       // Amazon
-  "The song you\u2019d love \u2014 but would never be recommended to you",                // Spotify
-  "The video you\u2019d love \u2014 but would never reach you",                           // YouTube
-  "The idea that would change your mind \u2014 but you\u2019d never think to ask for it", // ChatGPT
-  "The dish you\u2019d love \u2014 but would never think to order",                       // DoorDash
+// Each entry maps 1-to-1 with COMPANIES by index.
+// Order: Google, TikTok, Amazon, Spotify, YouTube, ChatGPT, DoorDash
+const DISCOVERY: { line1: string; line2: string }[] = [
+  { line1: "The information you need",    line2: "that you never thought to search for"      }, // Google   [0]
+  { line1: "The creator you\u2019d love", line2: "that doesn\u2019t match what you engage with" }, // TikTok   [1]
+  { line1: "The product you\u2019d buy",  line2: "that no one paid to show you"               }, // Amazon   [2]
+  { line1: "The artist you\u2019d love",  line2: "that doesn\u2019t sound like what you listen to" }, // Spotify  [3]
+  { line1: "The video you\u2019d love",   line2: "that\u2019s unlike what you watch"          }, // YouTube  [4]
+  { line1: "The life changing idea",      line2: "that you never thought to ask for"          }, // ChatGPT  [5]
+  { line1: "The dish you\u2019d love",    line2: "that\u2019s not what you usually order"     }, // DoorDash [6]
 ];
 
 // ── Company showcase data ─────────────────────────────────────────────────────
@@ -1326,7 +1328,8 @@ export default function LandingPage() {
                 letterSpacing: "-0.01em",
               }}
             >
-              {DISCOVERY[discoveryIdx]}
+              {DISCOVERY[discoveryIdx].line1}<br />
+              {DISCOVERY[discoveryIdx].line2}
             </p>
           </div>
 
