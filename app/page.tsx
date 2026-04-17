@@ -1307,21 +1307,20 @@ export default function LandingPage() {
           </div>
 
           {/* ── Group 3: SO YOU NEVER SEE + rotating line ────────────────────── */}
-          {/* minHeight covers label + gap + 2 lines of carousel at 34px max.
+          {/* minHeight covers label + gap + 2 lines of carousel at 25px max.
               Container dimensions never change → nothing above/below shifts. */}
-          <div className="mt-[6vh]" style={{ maxWidth: 600, minHeight: 110 }}>
+          <div className="mt-[6vh]" style={{ maxWidth: 600, minHeight: 130 }}>
             {/* "SO YOU NEVER SEE" — strong transition marker, not a whisper */}
             <p
-              className="text-[13px] font-semibold uppercase"
+              className="text-[15px] font-semibold uppercase"
               style={{ letterSpacing: "0.22em", color: "rgba(255,255,255,1.0)" }}
             >
               So you never see
             </p>
-            {/* Carousel line — unified with SEARCH/FEED at 19/21px so it
-                reads as a vivid example, not a competing headline.         */}
+            {/* Carousel line — grown to feel like a key statement            */}
             <p
               key={discoveryIdx}
-              className="text-[19px] md:text-[21px] font-semibold leading-snug mt-4"
+              className="text-[22px] md:text-[25px] font-semibold leading-snug mt-4"
               style={{
                 color: COMPANIES[discoveryIdx].accent,
                 animation: "fadeSlideUp 0.45s ease-out",
@@ -1336,7 +1335,7 @@ export default function LandingPage() {
           {/* ── Group 4: Final tagline ────────────────────────────────────────── */}
           <div className="mt-8" style={{ maxWidth: 600 }}>
             <p
-              className="text-[16px] md:text-[17px] leading-relaxed"
+              className="text-[18px] md:text-[19px] leading-relaxed"
               style={{ color: "rgba(255,255,255,0.65)" }}
             >
               We&apos;re living in algorithmic echo chambers.<br />
