@@ -171,6 +171,17 @@ const PAGE3_COLORS = [
   "#EA4335", // DoorDash [6]
 ];
 
+// ── Page 3 domain labels — indexed to match COMPANIES / PAGE3_COLORS order ───
+const PAGE3_DOMAIN_LABELS = [
+  "Information", // Google   [0]
+  "Video",       // TikTok   [1]
+  "Products",    // Amazon   [2]
+  "Music",       // Spotify  [3]
+  "Video",       // YouTube  [4]
+  "Ideas",       // ChatGPT  [5]
+  "Food",        // DoorDash [6]
+];
+
 // ── Geometry helpers (used by SphereCanvas logic below) ──────────────────────
 
 type V3  = [number, number, number];
@@ -1845,8 +1856,12 @@ export default function LandingPage() {
 
         {/* ── LEFT: spheres ───────────────────────────────────────────────────── */}
         <div className="flex flex-col items-center justify-center py-8 px-6 flex-shrink-0" style={{ width: "54%" }}>
-          <p className="text-[11px] tracking-widest uppercase mb-4 select-none" style={{ color: "rgba(255,255,255,0.35)" }}>
-            Explore through connection
+          <p
+            key={carouselIdx}
+            className="text-[12px] tracking-[0.20em] uppercase mb-4 select-none"
+            style={{ color: "rgba(255,255,255,0.50)", animation: "fadeSlideUp 0.35s ease-out" }}
+          >
+            {PAGE3_DOMAIN_LABELS[carouselIdx]}
           </p>
 
           {/* Circular arrangement — Friends in centre, 6 friends orbiting */}
