@@ -1053,8 +1053,8 @@ export default function LandingPage() {
           <div
             className="absolute z-10 flex flex-col pointer-events-none"
             style={{
-              top: "5%",
-              left: "6%",
+              top: "9%",
+              left: "9%",
               maxWidth: 420,
               opacity: textVisible ? 1 : 0,
               transition: "opacity 0.4s ease-in-out",
@@ -1071,7 +1071,7 @@ export default function LandingPage() {
           {/* Stats row — bottom-right, clear of the sphere */}
           {totalTrackCount > 0 && (
             <div
-              className="absolute bottom-[4vh] right-[6%] z-10 flex flex-row gap-8 pointer-events-none"
+              className="absolute bottom-[4vh] right-[16%] z-10 flex flex-row gap-8 pointer-events-none"
               style={{
                 opacity: textVisible ? 1 : 0,
                 transition: "opacity 0.4s ease-in-out",
@@ -1253,7 +1253,7 @@ export default function LandingPage() {
               >
                 <strong style={{ color: "rgba(255,255,255,0.95)", letterSpacing: "0.08em" }}>FEED</strong>
                 <span style={{ color: "rgba(255,255,255,0.35)" }}>&nbsp;&nbsp;→ </span>
-                <span style={{ color: "rgba(255,255,255,0.65)" }}>shows what you&apos;re predicted to like &amp; what companies pay to promote</span>
+                <span style={{ color: "rgba(255,255,255,0.65)" }}>shows things similar to what you&apos;ve engaged with &amp; what companies pay to promote</span>
               </p>
             </div>
           </div>
@@ -1283,8 +1283,11 @@ export default function LandingPage() {
             </p>
           </div>
 
-          {/* ── Group 4: Final tagline — mt-auto pins it to the bottom ──────── */}
-          <div className="mt-auto" style={{ maxWidth: 600 }}>
+          {/* ── Group 4: Final tagline — mt-8 places it directly below the
+              rotating block, not glued to the bottom of the screen.
+              Position is stable: Group 3 has a fixed minHeight, so this
+              div never shifts regardless of rotating text length.         */}
+          <div className="mt-8" style={{ maxWidth: 600 }}>
             <p className="text-[15px] md:text-[16px] leading-relaxed" style={{ color: "rgba(255,255,255,0.60)" }}>
               We&apos;re living in algorithmic echo chambers.<br />
               Do you feel it?
