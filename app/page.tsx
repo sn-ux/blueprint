@@ -1061,7 +1061,7 @@ export default function LandingPage() {
             }}
           >
             <h1 className="text-[44px] md:text-[52px] lg:text-[56px] font-semibold leading-[1.06] text-white mb-3" style={{ letterSpacing: "-0.02em" }}>
-              This is what a taste looks like.
+              This is what a <span style={{ color: "#1DB954", textShadow: "0 0 8px rgba(29,185,84,0.28)" }}>music</span> taste looks like.
             </h1>
             <p className="text-xs tracking-[0.22em] uppercase" style={{ color: "rgba(255,255,255,0.62)" }}>
               Zoom. Scroll. Explore.
