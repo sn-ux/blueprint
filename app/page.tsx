@@ -793,14 +793,15 @@ export default function LandingPage() {
 
     // ── Wheel handler ─────────────────────────────────────────────────────────
     // Design rules:
-    //   1. ctrlKey wheel = trackpad pinch gesture. ALWAYS prevent browser viewport
-    //      zoom. Apply to sphere if cursor is inside, otherwise silently swallow.
-    //   2. Outside sphere circle → page scroll (never captured).
-    //   3. At floor zoom scrolling down → page scroll (escape to Page 2).
+    //   1. Outside sphere circle → let page scroll (never captured).
+    //   2. At floor zoom scrolling down → let page scroll (escape to Page 2).
+    //   3. Not in explore mode + scrolling down → let page scroll.
     //   4. selectedRef.current (sync) — never the stale closure `selected`.
     //   5. deltaY clamped to [-50, 50] to kill trackpad momentum/bounce spikes.
     //   6. Only zoomTargetRef is updated here — zoomRef lerps in drawFrame.
     //   7. Subgenres are NEVER auto-selected by zoom. Selection = explicit click only.
+    //   8. Narrow edge-case block: pinch-zoom-out (ctrlKey) at MIN_ZOOM prevents
+    //      the browser viewport from zooming. All other paths run normally.
     const onWheel = (e: WheelEvent) => {
       const rect = canvas.getBoundingClientRect();
       const mx   = e.clientX - rect.left;
@@ -810,17 +811,15 @@ export default function LandingPage() {
       const dx   = mx - W / 2, dy = my - H / 2;
       const overSphere = dx * dx + dy * dy <= R * R;
 
-      // ── Pinch-to-zoom (ctrlKey + wheel) ────────────────────────────────────
-      // On macOS trackpad, pinch fires as ctrlKey+wheel. Always call preventDefault
-      // here to stop the BROWSER from zooming the viewport. Then apply to the sphere
-      // only if the cursor is inside it; otherwise silently swallow the gesture.
-      if (e.ctrlKey) {
+      // ── Narrow fix: pinch-zoom-out (ctrlKey) when already at the floor ──────
+      // ctrlKey+wheel is how macOS trackpad pinch fires. If the sphere is already
+      // at MIN_ZOOM and the user pinches out, the browser would normally zoom the
+      // viewport. Block ONLY that specific case — nothing else.
+      if (e.ctrlKey && overSphere && e.deltaY > 0 && zoomTargetRef.current <= MIN_ZOOM + 0.02) {
         e.preventDefault();
-        if (overSphere) applyZoomDelta(e.deltaY);
         return;
       }
 
-      // ── Regular scroll ──────────────────────────────────────────────────────
       // Gate 1: cursor outside visual sphere → let page scroll
       if (!overSphere) return;
 
@@ -836,25 +835,13 @@ export default function LandingPage() {
     };
     canvas.addEventListener("wheel", onWheel, { passive: false });
 
-    // ── Safari GestureEvents (gesturestart / gesturechange / gestureend) ──────
-    // Safari uses a separate GestureEvent API for pinch zoom that is independent
-    // of wheel events. Without prevention these bypass everything above and
-    // zoom the browser viewport directly. Block them on the canvas entirely.
-    const blockGesture = (e: Event) => { e.preventDefault(); };
-    canvas.addEventListener("gesturestart",  blockGesture, { passive: false });
-    canvas.addEventListener("gesturechange", blockGesture, { passive: false });
-    canvas.addEventListener("gestureend",    blockGesture, { passive: false });
-
     function animate() { drawFrame(); rafRef.current = requestAnimationFrame(animate); }
     rafRef.current = requestAnimationFrame(animate);
 
     return () => {
       cancelAnimationFrame(rafRef.current);
       ro.disconnect();
-      canvas.removeEventListener("wheel",         onWheel);
-      canvas.removeEventListener("gesturestart",  blockGesture);
-      canvas.removeEventListener("gesturechange", blockGesture);
-      canvas.removeEventListener("gestureend",    blockGesture);
+      canvas.removeEventListener("wheel", onWheel);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [worlds, selected, subgenres]);
