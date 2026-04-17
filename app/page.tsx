@@ -1225,13 +1225,29 @@ export default function LandingPage() {
               The internet runs on one model.
             </h2>
 
-            {/* SEARCH / FEED — explanation block */}
-            <div className="mt-8" style={{ color: "rgba(255,255,255,0.70)" }}>
-              <p className="text-[16px] md:text-[17px] leading-relaxed font-mono">
-                <strong className="text-white">SEARCH</strong> → shows what you know to look for
+            {/* SEARCH / FEED — core argument block */}
+            <div className="mt-8 mb-2 flex flex-col gap-2">
+              {/* Line 1: SEARCH */}
+              <p className="text-[19px] md:text-[21px] leading-snug font-mono">
+                <strong
+                  className="font-bold"
+                  style={{ color: "rgba(255,255,255,0.95)", letterSpacing: "0.08em" }}
+                >SEARCH</strong>
+                <span style={{ color: "rgba(255,255,255,0.35)" }}> → </span>
+                <span style={{ color: "rgba(255,255,255,0.65)" }}>shows what you know to look for</span>
               </p>
-              <p className="text-[16px] md:text-[17px] leading-relaxed font-mono">
-                <strong className="text-white">FEED</strong> &nbsp; → shows what you&apos;re predicted to like &amp; what companies pay to promote
+              {/* Line 2: FEED — two-line wrap, second line indented to align under explanation */}
+              <p className="text-[19px] md:text-[21px] leading-snug font-mono">
+                <strong
+                  className="font-bold"
+                  style={{ color: "rgba(255,255,255,0.95)", letterSpacing: "0.08em" }}
+                >FEED</strong>
+                <span style={{ color: "rgba(255,255,255,0.35)" }}> &nbsp;→ </span>
+                <span style={{ color: "rgba(255,255,255,0.65)" }}>shows what you&apos;re predicted to like</span>
+              </p>
+              <p className="text-[19px] md:text-[21px] leading-snug font-mono"
+                style={{ paddingLeft: "6.6ch" }}>
+                <span style={{ color: "rgba(255,255,255,0.65)" }}>&amp; what companies pay to promote</span>
               </p>
             </div>
 
