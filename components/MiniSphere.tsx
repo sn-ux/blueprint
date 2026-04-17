@@ -75,22 +75,42 @@ export default function MiniSphere({
   size = 80,
   seed = 0,
   platformColor,
+  transitionDelay = 0,
+  transitionDuration = 250,
 }: {
   size?: number;
   seed?: number;
   /** When set, overrides the multi-color palette with monochromatic shades of this hex color. */
   platformColor?: string;
+  /** Milliseconds to wait before starting the color transition (used for left→right stagger). */
+  transitionDelay?: number;
+  /** Milliseconds for the color transition to complete. */
+  transitionDuration?: number;
 }) {
   const canvasRef        = useRef<HTMLCanvasElement>(null);
   const rotRef           = useRef({ x: 0.3 + seed * 0.18, y: seed * 0.55 });
   const rafRef           = useRef(0);
-  // Ref so draw() always reads the latest platform color without re-running setup
-  const platformColorRef = useRef(platformColor);
 
-  // Sync ref whenever the prop changes (instant, no effect teardown)
+  // Target color the sphere is transitioning TO
+  const platformColorRef = useRef(platformColor);
+  // Color the sphere is transitioning FROM (undefined = snap, no lerp)
+  const fromColorRef     = useRef<string | undefined>(undefined);
+  // performance.now() timestamp when the transition should BEGIN
+  // (accounting for delay). -1 means no active transition.
+  const transitionStartRef = useRef<number>(-1);
+
+  // When platformColor changes: capture the old color as fromColor,
+  // update the target, and schedule the transition start after the delay.
   useEffect(() => {
-    platformColorRef.current = platformColor;
-  }, [platformColor]);
+    const prev = platformColorRef.current;
+    if (platformColor !== prev) {
+      fromColorRef.current       = prev;
+      platformColorRef.current   = platformColor;
+      transitionStartRef.current = performance.now() + transitionDelay;
+    }
+  // transitionDelay is stable per-sphere; platformColor drives the change.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [platformColor, transitionDelay]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -140,6 +160,23 @@ export default function MiniSphere({
     const hp = (h: string) =>
       [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)] as const;
 
+    // Compute a monochromatic shade of a hex color for a given Voronoi region index.
+    // regionIdx 0..nC-1 → brightness 0.30× (dark patch) → 1.10× (light highlight).
+    const shade = (hex: string, regionIdx: number): [number, number, number] => {
+      const [baseR, baseG, baseB] = hp(hex);
+      const t      = nC > 1 ? regionIdx / (nC - 1) : 0.5;
+      const factor = 0.30 + t * 0.80;
+      if (factor <= 1.0) {
+        return [Math.round(baseR * factor), Math.round(baseG * factor), Math.round(baseB * factor)];
+      }
+      const excess = factor - 1.0;
+      return [
+        Math.min(255, Math.round(baseR + (255 - baseR) * excess)),
+        Math.min(255, Math.round(baseG + (255 - baseG) * excess)),
+        Math.min(255, Math.round(baseB + (255 - baseB) * excess)),
+      ];
+    };
+
     function draw() {
       ctx.clearRect(0, 0, size, size);
       rotRef.current.y += 0.006;
@@ -155,30 +192,41 @@ export default function MiniSphere({
       const sorted = faces
         .map((f, i) => ({ f, i, z: (pv[f[0]].z + pv[f[1]].z + pv[f[2]].z) / 3 }))
         .sort((a, b) => a.z - b.z);
+
       for (const { f, i, z } of sorted) {
         const [ia, ib, ic] = f;
 
-        // Monochromatic mode: shade the platform color per Voronoi region
-        // (dark → mid → light) so patches stay visible without hue variation.
-        // Fallback: original multi-color palette.
         let r: number, g: number, b: number;
+
         if (platformColorRef.current) {
-          const [baseR, baseG, baseB] = hp(platformColorRef.current);
-          const regionIdx = faceRegion[i];             // 0..nC-1
-          const t = nC > 1 ? regionIdx / (nC - 1) : 0.5;
-          const factor = 0.30 + t * 0.80;             // 0.30× (dark) → 1.10× (light)
-          if (factor <= 1.0) {
-            r = Math.round(baseR * factor);
-            g = Math.round(baseG * factor);
-            b = Math.round(baseB * factor);
+          const regionIdx = faceRegion[i];
+          const toHex     = platformColorRef.current;
+          const fromHex   = fromColorRef.current;
+
+          if (fromHex && transitionStartRef.current >= 0) {
+            const elapsed = performance.now() - transitionStartRef.current;
+
+            if (elapsed < 0) {
+              // Still in pre-delay — hold the from color
+              [r, g, b] = shade(fromHex, regionIdx);
+            } else {
+              // Lerp with ease-in-out over transitionDuration
+              const rawT  = Math.min(1, elapsed / transitionDuration);
+              const eased = rawT < 0.5
+                ? 2 * rawT * rawT
+                : -1 + (4 - 2 * rawT) * rawT;
+              const [fr, fg, fb] = shade(fromHex, regionIdx);
+              const [tr, tg, tb] = shade(toHex,   regionIdx);
+              r = Math.round(fr + (tr - fr) * eased);
+              g = Math.round(fg + (tg - fg) * eased);
+              b = Math.round(fb + (tb - fb) * eased);
+            }
           } else {
-            // Blend toward white for highlights above 100%
-            const excess = factor - 1.0;
-            r = Math.min(255, Math.round(baseR + (255 - baseR) * excess));
-            g = Math.min(255, Math.round(baseG + (255 - baseG) * excess));
-            b = Math.min(255, Math.round(baseB + (255 - baseB) * excess));
+            // No prior color — snap directly to target
+            [r, g, b] = shade(toHex, regionIdx);
           }
         } else {
+          // No platformColor — use original multi-color palette
           [r, g, b] = hp(palette[faceRegion[i]]);
         }
 
