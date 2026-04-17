@@ -1005,9 +1005,11 @@ export default function LandingPage() {
       {/* ══ SECTION 1 — The Constraint ════════════════════════════════════════ */}
       {/* Full-bleed: breaks out of the constrained rail so the canvas/sphere
           fill the full viewport width. Works because the rail is centered with
-          flex justify-center, so 50% of the section = 50vw exactly.           */}
+          flex justify-center, so 50% of the section = 50vw exactly.
+          94vh (not 100vh) so the Page 2 headline peeks below the fold,
+          signalling scroll naturally.                                           */}
       <section
-        className="h-screen overflow-hidden flex flex-col"
+        className="h-[94vh] overflow-hidden flex flex-col"
         style={{ width: "100vw", marginLeft: "calc(50% - 50vw)" }}
       >
 
@@ -1196,47 +1198,52 @@ export default function LandingPage() {
       </section>
 
       {/* ══ SECTION 2 — The Problem ═══════════════════════════════════════════ */}
-      <section className="min-h-[90vh] bg-black flex overflow-hidden"
+      <section className="min-h-screen bg-black flex overflow-hidden"
         style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
 
         {/* ── LEFT: problem copy ──────────────────────────────────────────────── */}
-        <div className="flex flex-col justify-center px-12 py-12 gap-3 overflow-hidden"
+        <div className="flex flex-col justify-start px-12 pt-[12vh] pb-16 overflow-hidden"
           style={{ width: "54%", borderRight: "1px solid rgba(255,255,255,0.05)" }}>
 
-          {/* Headline */}
-          <h2 className="text-[48px] md:text-[56px] font-semibold leading-[1.08] text-white mb-1" style={{ letterSpacing: "-0.02em" }}>
-            You&apos;re seeing the internet<br />through a keyhole.
-          </h2>
+          {/* Constrain line length so text feels premium */}
+          <div style={{ maxWidth: 540 }}>
 
-          {/* Search + Feeds */}
-          <div className="flex flex-col gap-1.5">
-            <p className="text-[22px] md:text-[24px] font-medium leading-snug" style={{ color: "rgba(255,255,255,0.82)" }}>Search shows you what you already know.</p>
-            <p className="text-[22px] md:text-[24px] font-medium leading-snug" style={{ color: "rgba(255,255,255,0.82)" }}>Feeds show you what you&apos;re expected to like.</p>
+            {/* Headline */}
+            <h2 className="text-[56px] md:text-[64px] lg:text-[72px] font-semibold leading-[1.05] text-white" style={{ letterSpacing: "-0.02em" }}>
+              You&apos;re seeing the internet<br />through a keyhole.
+            </h2>
+
+            {/* Search + Feeds */}
+            <div className="flex flex-col gap-1 mt-6">
+              <p className="text-[18px] md:text-[20px] leading-snug" style={{ color: "rgba(255,255,255,0.70)" }}>Search shows you what you already know.</p>
+              <p className="text-[18px] md:text-[20px] leading-snug" style={{ color: "rgba(255,255,255,0.70)" }}>Feeds show you what you&apos;re expected to like.</p>
+            </div>
+
+            {/* Bridge — "So you never see" */}
+            <p className="text-[12px] uppercase mt-10" style={{ letterSpacing: "0.2em", color: "rgba(255,255,255,0.40)" }}>
+              So you never see
+            </p>
+
+            {/* Rotating line — visual centrepiece */}
+            <p
+              key={carouselIdx}
+              className="text-[28px] md:text-[34px] lg:text-[40px] font-medium leading-[1.15] mt-3"
+              style={{
+                color: COMPANIES[carouselIdx].accent,
+                animation: "fadeSlideUp 0.45s ease-out",
+                letterSpacing: "-0.01em",
+              }}
+            >
+              {DISCOVERY[carouselIdx]}
+            </p>
+
+            {/* Closing */}
+            <p className="text-[16px] leading-[1.6] mt-6" style={{ color: "rgba(255,255,255,0.50)" }}>
+              Because if you don&apos;t know it exists,<br />
+              you&apos;ll never think to look for it.
+            </p>
+
           </div>
-
-          {/* Bridge — "So you never see" */}
-          <p className="text-[13px] tracking-widest uppercase mt-1" style={{ color: "rgba(255,255,255,0.65)" }}>
-            So you never see
-          </p>
-
-          {/* Rotating line — visual centrepiece */}
-          <p
-            key={carouselIdx}
-            className="text-[36px] md:text-[44px] font-semibold leading-[1.15]"
-            style={{
-              color: COMPANIES[carouselIdx].accent,
-              animation: "fadeSlideUp 0.45s ease-out",
-              letterSpacing: "-0.01em",
-            }}
-          >
-            {DISCOVERY[carouselIdx]}
-          </p>
-
-          {/* Closing */}
-          <p className="text-[18px] leading-[1.5]" style={{ color: "rgba(255,255,255,0.72)" }}>
-            Because if you don&apos;t know it exists,<br />
-            you&apos;ll never think to look for it.
-          </p>
 
         </div>
 
