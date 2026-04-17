@@ -1217,11 +1217,12 @@ export default function LandingPage() {
         style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
 
         {/* ── LEFT: problem copy ──────────────────────────────────────────────── */}
-        {/* justify-between on a min-h-screen column distributes the four groups
-            across the full page height. Each group is a plain flex child — no
-            mt-* margins — the browser handles the spacing between them.        */}
+        {/* Explicit mt-[6vh] between groups 1–3, mt-auto on group 4.
+            Avoids justify-between (which re-distributes gaps when rotating text
+            changes height). Group 3 has a fixed minHeight so text length changes
+            never affect the position of anything above or below it.            */}
         <div
-          className="flex flex-col justify-between px-12 pt-[10vh] pb-[8vh] overflow-hidden"
+          className="flex flex-col px-12 pt-[10vh] pb-[8vh] overflow-hidden"
           style={{ width: "54%", minHeight: "100vh", borderRight: "1px solid rgba(255,255,255,0.05)" }}
         >
 
@@ -1235,8 +1236,8 @@ export default function LandingPage() {
             </h2>
           </div>
 
-          {/* ── Group 2: SEARCH / FEED constraint block ───────────────────────── */}
-          <div style={{ maxWidth: 600 }}>
+          {/* ── Group 2: SEARCH / FEED — stable, no dependency on group 3 ──────── */}
+          <div className="mt-[6vh]" style={{ maxWidth: 600 }}>
             <div className="flex flex-col gap-1.5">
               <p
                 className="text-[16px] md:text-[17px] leading-snug font-mono"
@@ -1258,7 +1259,11 @@ export default function LandingPage() {
           </div>
 
           {/* ── Group 3: SO YOU NEVER SEE + rotating line ────────────────────── */}
-          <div style={{ maxWidth: 600 }}>
+          {/* minHeight = label (~18px) + mt-4 gap (16px) + 2 lines of text at
+              largest size (40px × 1.15 × 2 ≈ 92px) + buffer = 160px.
+              The container never shrinks when text is short, never grows when
+              text is long → nothing above or below ever shifts.               */}
+          <div className="mt-[6vh]" style={{ maxWidth: 600, minHeight: 160 }}>
             <p
               className="text-[12px] uppercase"
               style={{ letterSpacing: "0.25em", color: "rgba(255,255,255,0.40)" }}
@@ -1278,8 +1283,8 @@ export default function LandingPage() {
             </p>
           </div>
 
-          {/* ── Group 4: Final tagline — last child sits at pb-[8vh] ─────────── */}
-          <div style={{ maxWidth: 600 }}>
+          {/* ── Group 4: Final tagline — mt-auto pins it to the bottom ──────── */}
+          <div className="mt-auto" style={{ maxWidth: 600 }}>
             <p className="text-[15px] md:text-[16px] leading-relaxed" style={{ color: "rgba(255,255,255,0.60)" }}>
               We&apos;re living in algorithmic echo chambers.<br />
               Do you feel it?
