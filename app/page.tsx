@@ -1920,19 +1920,20 @@ export default function LandingPage() {
               { name: "UCLA",    seed:  7 },
               { name: "Atlanta", seed: 11 },
             ];
-            const SIZE          = 530;          // larger container for bigger spheres
-            const CX            = SIZE / 2;     // 265
-            const CY            = SIZE / 2;     // 265
-            const ORBIT         = 195;          // wider orbit to give larger spheres breathing room
+            const SIZE          = 660;          // scaled up ~25% for visual dominance
+            const CX            = SIZE / 2;     // 330
+            const CY            = SIZE / 2;     // 330
+            const ORBIT         = 240;          // scaled orbit (~+23%)
             const N             = friends.length;
             // Stagger: map x-position linearly to delay (leftmost = 0ms, rightmost = 200ms)
             const STAGGER_RANGE = 200;          // ms — total sweep duration
-            const minX          = CX - ORBIT;  // ~70
-            const maxX          = CX + ORBIT;  // ~460
+            const minX          = CX - ORBIT;  // 90
+            const maxX          = CX + ORBIT;  // 570
             const xToDelay      = (x: number) =>
               Math.round(((x - minX) / (maxX - minX)) * STAGGER_RANGE);
             return (
-              <div style={{ position: "relative", width: SIZE, height: SIZE, flexShrink: 0, transform: "translateX(-40px)" }}>
+              // No translateX — items-center on the parent centers the cluster naturally
+              <div style={{ position: "relative", width: SIZE, height: SIZE, flexShrink: 0 }}>
 
                 {/* Centre: Friends aggregate sphere — x=CX → ~100ms delay */}
                 <div style={{
@@ -1941,7 +1942,7 @@ export default function LandingPage() {
                   transform: "translate(-50%, -50%)",
                   display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
                 }}>
-                  <MiniSphere size={170} seed={99}
+                  <MiniSphere size={210} seed={99}
                     platformColor={PAGE3_COLORS[carouselIdx]}
                     transitionDelay={xToDelay(CX)} />
                   <span style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(255,255,255,0.30)" }}>
@@ -1961,7 +1962,7 @@ export default function LandingPage() {
                       transform: "translate(-50%, -50%)",
                       display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
                     }}>
-                      <MiniSphere size={108} seed={f.seed}
+                      <MiniSphere size={132} seed={f.seed}
                         platformColor={PAGE3_COLORS[carouselIdx]}
                         transitionDelay={xToDelay(x)} />
                       <span style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", whiteSpace: "nowrap" }}>
