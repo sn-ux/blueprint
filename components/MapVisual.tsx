@@ -6,9 +6,9 @@
  * Renders a full MapLibre GL globe using CartoDB Dark Matter tiles (free, no API
  * key) with a 60-second autonomous animation loop:
  *
- *   Phase A  0.00–0.40 (24 s) — ease-in-out zoom out: Menlo Park → full Earth
+ *   Phase A  0.00–0.40 (24 s) — linear zoom out: Menlo Park → full Earth
  *   Phase B  0.40–0.65 (15 s) — linear full-globe rotation, 360° westward
- *   Phase C  0.65–1.00 (21 s) — ease-in-out zoom in: full Earth → Menlo Park
+ *   Phase C  0.65–1.00 (21 s) — linear zoom in: full Earth → Menlo Park
  *
  * All phase boundaries are camera-continuous (no visual jumps at loop wrap-around).
  * MapLibre handles map detail, label hierarchy, and collision detection natively.
@@ -32,24 +32,26 @@ const P_ROTATE_END   = 0.65;    // 0.40–0.65 → rotation  (15 s)
  *  t=0: Menlo Park street level (MapLibre zoom 14)                           *
  *  t=1: Full Earth (MapLibre zoom 1.8)                                       *
  *                                                                            *
- *  getCamera() linearly interpolates between keyframes.                     *
- *  Easing is applied once by getLoopCamera() — no double-easing.            */
+ *  Keyframes are distributed so every segment covers ~1.5 MapLibre zoom      *
+ *  units, giving a constant rate of scale change throughout the animation.   *
+ *  Combined with linear interpolation this eliminates speed variation.       *
+ *  Total zoom span: 14.0 → 1.8 = 12.2 units across 8 equal steps.          */
 
 const CAM_PATH = [
-  { t: 0.00, zoom: 14.0, lat:  37.453, lng: -122.182 },  // Menlo Park
-  { t: 0.25, zoom:  9.5, lat:  37.50,  lng: -122.10  },  // Bay Area
-  { t: 0.50, zoom:  6.0, lat:  37.50,  lng: -119.50  },  // California
-  { t: 0.75, zoom:  3.8, lat:  38.00,  lng:  -97.00  },  // Continental USA
-  { t: 1.00, zoom:  1.8, lat:  25.00,  lng:  -30.00  },  // Full Earth
+  { t: 0.000, zoom: 14.0, lat:  37.453, lng: -122.182 },  // Menlo Park street
+  { t: 0.125, zoom: 12.5, lat:  37.65,  lng: -122.35  },  // SF Bay close
+  { t: 0.250, zoom: 11.0, lat:  37.75,  lng: -122.25  },  // Bay Area
+  { t: 0.375, zoom:  9.5, lat:  37.70,  lng: -121.50  },  // N. California
+  { t: 0.500, zoom:  8.0, lat:  37.50,  lng: -120.50  },  // Central California
+  { t: 0.625, zoom:  6.5, lat:  37.00,  lng: -119.00  },  // California wide
+  { t: 0.750, zoom:  5.0, lat:  36.00,  lng: -112.00  },  // Southwest USA
+  { t: 0.875, zoom:  3.5, lat:  39.00,  lng:  -97.00  },  // Continental USA
+  { t: 1.000, zoom:  1.8, lat:  25.00,  lng:  -30.00  },  // Full Earth
 ];
 
 /* ── Helpers ──────────────────────────────────────────────────────────────── */
 
-/** Smooth cubic ease-in-out — applied to zoom-out and zoom-in phases. */
-const easeIO = (u: number): number =>
-  u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
-
-/** Linear interpolation between CAM_PATH keyframes. No inner easing. */
+/** Linear interpolation between CAM_PATH keyframes. */
 function getCamFromPath(t: number): { zoom: number; lat: number; lng: number } {
   let i = 0;
   while (i < CAM_PATH.length - 2 && CAM_PATH[i + 1].t <= t) i++;
@@ -65,9 +67,13 @@ function getCamFromPath(t: number): { zoom: number; lat: number; lng: number } {
 /**
  * Returns the MapLibre camera state for a given animation loop phase (0→1).
  *
- * Phase A (zoom out): eased t 0→1 through camera path.
+ * Phase A (zoom out): linear t 0→1 through camera path.
  * Phase B (rotate):   globe held at t=1, longitude advances linearly −360°.
- * Phase C (zoom in):  eased t 1→0 through camera path.
+ * Phase C (zoom in):  linear t 1→0 through camera path.
+ *
+ * Using linear interpolation (no easing) combined with equal-velocity
+ * keyframes (each segment ≈ 1.5 zoom units) means every second of animation
+ * covers the same change in map scale — no slow-start, no mid-zoom rush.
  *
  * Camera is continuous at all phase boundaries:
  *   A→B: both yield getCamFromPath(1)
@@ -75,9 +81,9 @@ function getCamFromPath(t: number): { zoom: number; lat: number; lng: number } {
  *   C→A: both yield getCamFromPath(0) = Menlo Park
  */
 function getLoopCamera(p: number): { center: [number, number]; zoom: number } {
-  // Phase A — zoom out
+  // Phase A — zoom out (linear, constant zoom rate)
   if (p < P_ZOOM_OUT_END) {
-    const cam = getCamFromPath(easeIO(p / P_ZOOM_OUT_END));
+    const cam = getCamFromPath(p / P_ZOOM_OUT_END);
     return { center: [cam.lng, cam.lat], zoom: cam.zoom };
   }
 
@@ -89,9 +95,9 @@ function getLoopCamera(p: number): { center: [number, number]; zoom: number } {
     return { center: [base.lng - u * 360, base.lat], zoom: base.zoom };
   }
 
-  // Phase C — zoom in (exact reverse of Phase A)
+  // Phase C — zoom in (linear reverse, same constant rate as zoom out)
   const u   = (p - P_ROTATE_END) / (1 - P_ROTATE_END);
-  const cam = getCamFromPath(1 - easeIO(u));
+  const cam = getCamFromPath(1 - u);
   return { center: [cam.lng, cam.lat], zoom: cam.zoom };
 }
 
