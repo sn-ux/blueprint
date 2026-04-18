@@ -1877,7 +1877,7 @@ export default function LandingPage() {
 
         {/* ── LEFT: spheres ───────────────────────────────────────────────────── */}
         {/* relative + alignSelf:stretch so the absolute label can anchor to top-left */}
-        <div className="relative flex flex-col items-center justify-center py-8 px-6 flex-shrink-0"
+        <div className="relative flex flex-col items-center justify-center py-8 pl-6 pr-14 flex-shrink-0"
           style={{ width: "54%", alignSelf: "stretch" }}>
 
           {/* Domain label — top-left, single text node.
@@ -1932,8 +1932,7 @@ export default function LandingPage() {
             const xToDelay      = (x: number) =>
               Math.round(((x - minX) / (maxX - minX)) * STAGGER_RANGE);
             return (
-              // No translateX — items-center on the parent centers the cluster naturally
-              <div style={{ position: "relative", width: SIZE, height: SIZE, flexShrink: 0 }}>
+              <div style={{ position: "relative", width: SIZE, height: SIZE, flexShrink: 0, transform: "translateX(-16px)" }}>
 
                 {/* Centre: Friends aggregate sphere — x=CX → ~100ms delay */}
                 <div style={{
@@ -1977,7 +1976,7 @@ export default function LandingPage() {
         </div>
 
         {/* ── RIGHT: copy ─────────────────────────────────────────────────────── */}
-        <div className="flex flex-col justify-center py-12 px-12 overflow-hidden"
+        <div className="flex flex-col justify-center py-12 pl-16 pr-10 overflow-hidden"
           style={{ width: "46%", borderLeft: "1px solid rgba(255,255,255,0.05)", alignSelf: "stretch" }}>
 
           {/* maxWidth 620 — wider than before so headline fits on one line */}
