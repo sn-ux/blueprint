@@ -1880,32 +1880,30 @@ export default function LandingPage() {
         <div className="relative flex flex-col items-center justify-center py-8 px-6 flex-shrink-0"
           style={{ width: "54%", alignSelf: "stretch" }}>
 
-          {/* Domain label — top-left, wipes in left→right when platform changes.
-              Two layers: prev label sits underneath (absolute), new label
-              clips in over it via clip-path inset wipe.                     */}
+          {/* Domain label — top-left, single text node.
+              On platform change: a 200%-wide gradient (new color left | old color
+              right) is applied via background-clip:text. Animating background-
+              position from 100%→0% reveals the new color left-to-right across
+              the letters. No second text node = no overlap ever.             */}
           <div className="absolute top-10 left-10 select-none">
-            {/* Previous label — stays visible underneath until covered */}
-            {prevPage3LabelIdx !== null && (
-              <span style={{
-                position: "absolute", left: 0, top: 0,
-                fontSize: 13, fontWeight: 600, letterSpacing: "0.18em",
-                textTransform: "uppercase", whiteSpace: "nowrap",
-                color: PAGE3_COLORS[prevPage3LabelIdx],
-              }}>
-                {PAGE3_DOMAIN_LABELS[prevPage3LabelIdx]}
-              </span>
-            )}
-            {/* Current label — wipes in from left to right */}
             <span
               key={page3LabelAnimKey}
               style={{
                 display: "block",
                 fontSize: 13, fontWeight: 600, letterSpacing: "0.18em",
                 textTransform: "uppercase", whiteSpace: "nowrap",
-                color: PAGE3_COLORS[carouselIdx],
-                animation: page3LabelAnimKey > 0
-                  ? "labelWipeIn 260ms ease-out forwards"
-                  : "none",
+                // Animating: gradient wipe via background-clip
+                // Static (first render): plain color
+                ...(page3LabelAnimKey > 0 && prevPage3LabelIdx !== null ? {
+                  background: `linear-gradient(to right, ${PAGE3_COLORS[carouselIdx]} 50%, ${PAGE3_COLORS[prevPage3LabelIdx]} 50%)`,
+                  backgroundSize: "200% 100%",
+                  WebkitBackgroundClip: "text",
+                  backgroundClip: "text",
+                  color: "transparent",
+                  animation: "labelColorWipe 260ms ease-out forwards",
+                } : {
+                  color: PAGE3_COLORS[carouselIdx],
+                }),
               }}
             >
               {PAGE3_DOMAIN_LABELS[carouselIdx]}
