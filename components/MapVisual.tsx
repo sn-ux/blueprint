@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import MiniSphere from "@/components/MiniSphere";
+import { feature } from "topojson-client";
 
 /* ── Types ────────────────────────────────────────────────────────────────── */
 
@@ -20,9 +21,7 @@ type GeoLabel = {
   type: "state" | "country" | "continent";
 };
 
-/* ── City nodes ───────────────────────────────────────────────────────────── *
- *  All nodes are always rendered when on the front hemisphere.              *
- *  No minT/maxT: size scales with camera zoom instead of gating visibility. */
+/* ── City nodes ───────────────────────────────────────────────────────────── */
 
 const PLACES: PlaceNode[] = [
   { id:"mp",  label:"Menlo Park",    lat:37.453, lng:-122.182, size:22, seed:17 },
@@ -37,8 +36,7 @@ const PLACES: PlaceNode[] = [
   { id:"bos", label:"Boston",        lat:42.361, lng:-71.057,  size:20, seed:19 },
 ];
 
-/* ── Geographic text labels ───────────────────────────────────────────────── *
- *  Text-only labels (no sphere) that fade in/out at appropriate zoom levels. */
+/* ── Geographic text labels ───────────────────────────────────────────────── */
 
 const GEO_LABELS: GeoLabel[] = [
   // States — appear at medium zoom
@@ -85,39 +83,6 @@ const CAM_MIN_ZOOM = CAM_PATH[CAM_PATH.length - 1][1]; // 0.62
 const BASE_R = 0.42;  // globe radius as fraction of min(w,h) at zoom 1×
 const FADE_W = 0.06;  // normalised-zoom window for geo label fade
 
-/* ── Continent outlines ───────────────────────────────────────────────────── */
-
-const LAND: [number, number][][] = [
-  // North America
-  [[-165,68],[-148,70],[-130,56],[-124,49],[-124,46],[-124,42],
-   [-117,33],[-110,23],[-90,15],[-83,9],[-77,8],[-77,10],[-83,15],
-   [-88,21],[-91,19],[-97,26],[-81,25],[-80,26],[-80,32],[-73,41],
-   [-66,44],[-60,47],[-53,47],[-56,53],[-60,60],[-64,64],[-80,73],
-   [-100,74],[-125,70],[-150,62],[-162,60],[-165,64],[-165,68]],
-  // South America
-  [[-80,10],[-75,11],[-65,11],[-52,5],[-35,-5],[-36,-10],[-40,-20],
-   [-43,-23],[-50,-29],[-55,-35],[-58,-42],[-65,-55],[-68,-57],[-70,-55],
-   [-76,-52],[-72,-45],[-70,-40],[-72,-35],[-70,-18],[-77,-14],[-80,-8],
-   [-80,0],[-80,10]],
-  // Europe
-  [[-10,36],[40,35],[42,37],[40,42],[32,47],[28,57],[18,71],[10,63],
-   [5,58],[3,51],[-5,50],[-5,48],[-2,44],[0,43],[2,41],[-5,37],
-   [-9,39],[-9,44],[-5,44],[-10,36]],
-  // Africa
-  [[-17,35],[10,37],[32,30],[42,37],[50,30],[45,22],[44,12],[42,5],
-   [40,-10],[35,-20],[26,-34],[18,-35],[14,-20],[10,-8],[8,5],[-5,5],
-   [-16,12],[-17,20],[-15,25],[-17,35]],
-  // Asia
-  [[30,70],[50,75],[80,73],[100,73],[120,73],[140,72],[160,68],[170,64],
-   [165,55],[145,43],[140,35],[130,20],[115,8],[100,10],[95,18],[88,22],
-   [82,10],[77,8],[80,13],[78,20],[72,22],[63,22],[58,22],[50,25],
-   [42,37],[40,42],[32,47],[30,52],[30,60],[30,70]],
-  // Australia
-  [[114,-22],[117,-20],[128,-14],[136,-12],[140,-12],[148,-15],[152,-18],
-   [155,-25],[152,-30],[152,-36],[150,-38],[148,-38],[143,-38],[140,-35],
-   [136,-36],[128,-35],[122,-34],[116,-33],[114,-30],[112,-26],[114,-22]],
-];
-
 /* ── Orthographic projection ──────────────────────────────────────────────── */
 
 type Proj = { px: number; py: number; z: number };
@@ -147,46 +112,59 @@ function clampToLimb({ px, py, z }: Proj, R: number, cx: number, cy: number): Pr
 }
 
 /* ── Globe renderer ───────────────────────────────────────────────────────── *
- *  Apple Maps dark-mode palette: black bg, near-black water, dark-gray land */
+ *  Receives decoded Natural Earth land rings ([lng,lat][] each).            *
+ *  Apple Maps dark-mode palette with realistic depth + lighting.            */
 
 function drawGlobe(
   ctx: CanvasRenderingContext2D,
   w: number, h: number,
   cLat: number, cLng: number,
   R: number,
+  landRings: [number, number][][],
 ) {
   const cx = w / 2, cy = h / 2;
   ctx.clearRect(0, 0, w, h);
 
-  // Pure black background
+  // ── 1. Pure black background ───────────────────────────────────────────────
   ctx.fillStyle = "#000000";
   ctx.fillRect(0, 0, w, h);
 
-  // Very subtle white atmosphere halo (no blue)
-  const atmos = ctx.createRadialGradient(cx, cy, R * 0.97, cx, cy, R * 1.07);
-  atmos.addColorStop(0,   "rgba(255,255,255,0.045)");
-  atmos.addColorStop(0.6, "rgba(255,255,255,0.010)");
-  atmos.addColorStop(1,   "rgba(0,0,0,0)");
+  // ── 2. Outer atmospheric halo — very subtle blue-white limb glow ───────────
+  const atmoOuter = ctx.createRadialGradient(cx, cy, R * 0.93, cx, cy, R * 1.14);
+  atmoOuter.addColorStop(0,   "rgba(160,195,255,0.07)");
+  atmoOuter.addColorStop(0.45,"rgba(120,165,255,0.022)");
+  atmoOuter.addColorStop(1,   "rgba(0,0,0,0)");
   ctx.beginPath();
-  ctx.arc(cx, cy, R * 1.07, 0, Math.PI * 2);
-  ctx.fillStyle = atmos;
+  ctx.arc(cx, cy, R * 1.14, 0, Math.PI * 2);
+  ctx.fillStyle = atmoOuter;
   ctx.fill();
 
-  // Globe base — near-black water
+  // ── 3. Globe sphere + clip ─────────────────────────────────────────────────
   ctx.save();
   ctx.beginPath();
   ctx.arc(cx, cy, R, 0, Math.PI * 2);
-  ctx.fillStyle = "#0d0d12";
-  ctx.fill();
   ctx.clip();
 
-  // Graticule — barely visible
-  ctx.strokeStyle = "rgba(255,255,255,0.028)";
-  ctx.lineWidth = 0.4;
+  // Ocean base — deep blue-black with subtle radial depth gradient
+  // (center of visible hemisphere slightly lighter = depth perception)
+  const ocean = ctx.createRadialGradient(
+    cx - R * 0.18, cy - R * 0.22, 0,
+    cx, cy, R * 1.05,
+  );
+  ocean.addColorStop(0.00, "#0d1119");
+  ocean.addColorStop(0.35, "#090d14");
+  ocean.addColorStop(0.70, "#05070f");
+  ocean.addColorStop(1.00, "#020308");
+  ctx.fillStyle = ocean;
+  ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
+
+  // ── 4. Graticule — barely perceptible grid ─────────────────────────────────
+  ctx.strokeStyle = "rgba(255,255,255,0.018)";
+  ctx.lineWidth   = 0.35;
   for (let lat = -60; lat <= 60; lat += 30) {
     ctx.beginPath();
     let fresh = true;
-    for (let ln = -180; ln <= 180; ln += 3) {
+    for (let ln = -180; ln <= 180; ln += 2) {
       const { px, py, z } = orthoProject(lat, ln, cLat, cLng, R, cx, cy);
       if (z >= 0) { fresh ? ctx.moveTo(px, py) : ctx.lineTo(px, py); fresh = false; }
       else fresh = true;
@@ -196,7 +174,7 @@ function drawGlobe(
   for (let ln = -180; ln <= 180; ln += 30) {
     ctx.beginPath();
     let fresh = true;
-    for (let lt = -80; lt <= 80; lt += 3) {
+    for (let lt = -80; lt <= 80; lt += 2) {
       const { px, py, z } = orthoProject(lt, ln, cLat, cLng, R, cx, cy);
       if (z >= 0) { fresh ? ctx.moveTo(px, py) : ctx.lineTo(px, py); fresh = false; }
       else fresh = true;
@@ -204,58 +182,91 @@ function drawGlobe(
     ctx.stroke();
   }
 
-  // Land fill — very dark gray (slightly lighter than water)
-  ctx.fillStyle = "#1c1c22";
-  for (const poly of LAND) {
+  // ── 5. Land polygons — Natural Earth 110m ─────────────────────────────────
+  // Directional gradient: cool light from upper-left, shadow lower-right.
+  // Feels like sunlight coming from the north-west.
+  const landFill = ctx.createLinearGradient(
+    cx - R * 0.55, cy - R * 0.55,
+    cx + R * 0.65, cy + R * 0.65,
+  );
+  landFill.addColorStop(0.00, "#252530");
+  landFill.addColorStop(0.40, "#1c1c26");
+  landFill.addColorStop(1.00, "#0d0d16");
+
+  ctx.fillStyle   = landFill;
+  ctx.strokeStyle = "rgba(255,255,255,0.13)";
+  ctx.lineWidth   = 0.5;
+
+  for (const ring of landRings) {
+    if (ring.length < 3) continue;
+
+    // Project every vertex; detect if any lies on the front hemisphere
+    let hasFront = false;
+    const pts: Array<{ px: number; py: number; z: number }> = [];
+    for (const coord of ring) {
+      const lng = coord[0] as number;
+      const lat = coord[1] as number;
+      const raw = orthoProject(lat, lng, cLat, cLng, R, cx, cy);
+      if (raw.z > -0.1) hasFront = true;
+      const c = clampToLimb(raw, R, cx, cy);
+      pts.push({ px: c.px, py: c.py, z: raw.z });
+    }
+    if (!hasFront) continue;
+
+    // Land fill — clamped points so back-hemisphere sections hug the limb
     ctx.beginPath();
-    poly.forEach(([lng, lat], i) => {
-      const p = clampToLimb(orthoProject(lat, lng, cLat, cLng, R, cx, cy), R, cx, cy);
-      i === 0 ? ctx.moveTo(p.px, p.py) : ctx.lineTo(p.px, p.py);
-    });
+    for (let i = 0; i < pts.length; i++) {
+      i === 0 ? ctx.moveTo(pts[i].px, pts[i].py) : ctx.lineTo(pts[i].px, pts[i].py);
+    }
     ctx.closePath();
     ctx.fill();
-  }
 
-  // Coastlines — subtle edges on front hemisphere only
-  ctx.strokeStyle = "#30303a";
-  ctx.lineWidth = 0.7;
-  for (const poly of LAND) {
+    // Coastlines — only visible (front-hemisphere) segments; no limb artefacts
     ctx.beginPath();
     let pen = false;
-    for (const [lng, lat] of poly) {
-      const { px, py, z } = orthoProject(lat, lng, cLat, cLng, R, cx, cy);
+    for (const { px, py, z } of pts) {
       if (z >= 0) { pen ? ctx.lineTo(px, py) : ctx.moveTo(px, py); pen = true; }
       else pen = false;
     }
     ctx.stroke();
   }
 
-  // Limb darkening — deep black rim makes disc read as sphere
+  // ── 6. Inner atmospheric edge — thin blue-white haze at globe rim ──────────
+  const innerAtmo = ctx.createRadialGradient(cx, cy, R * 0.80, cx, cy, R);
+  innerAtmo.addColorStop(0.00, "rgba(0,0,0,0)");
+  innerAtmo.addColorStop(0.72, "rgba(130,168,255,0.016)");
+  innerAtmo.addColorStop(1.00, "rgba(160,198,255,0.052)");
+  ctx.fillStyle = innerAtmo;
+  ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
+
+  // ── 7. Limb darkening — deep black at globe edge; reads as a sphere ────────
   const limb = ctx.createRadialGradient(cx, cy, 0, cx, cy, R);
   limb.addColorStop(0.00, "rgba(0,0,0,0)");
-  limb.addColorStop(0.62, "rgba(0,0,0,0)");
-  limb.addColorStop(0.85, "rgba(0,0,0,0.38)");
+  limb.addColorStop(0.58, "rgba(0,0,0,0)");
+  limb.addColorStop(0.76, "rgba(0,0,0,0.14)");
+  limb.addColorStop(0.88, "rgba(0,0,0,0.52)");
   limb.addColorStop(1.00, "rgba(0,0,0,0.94)");
   ctx.fillStyle = limb;
   ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
 
-  // Specular highlight — very subtle white, upper-left
+  // ── 8. Specular highlight — single soft reflection, upper-left ─────────────
   const spec = ctx.createRadialGradient(
     cx - R * 0.30, cy - R * 0.28, 0,
-    cx - R * 0.30, cy - R * 0.28, R * 0.65,
+    cx - R * 0.30, cy - R * 0.28, R * 0.60,
   );
-  spec.addColorStop(0, "rgba(255,255,255,0.052)");
-  spec.addColorStop(1, "rgba(0,0,0,0)");
+  spec.addColorStop(0,    "rgba(255,255,255,0.08)");
+  spec.addColorStop(0.35, "rgba(255,255,255,0.022)");
+  spec.addColorStop(1,    "rgba(0,0,0,0)");
   ctx.fillStyle = spec;
   ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
 
   ctx.restore();
 
-  // Thin edge ring — barely visible white
+  // ── 9. Thin edge ring — barely visible white ring at limb ──────────────────
   ctx.beginPath();
   ctx.arc(cx, cy, R, 0, Math.PI * 2);
-  ctx.strokeStyle = "rgba(255,255,255,0.07)";
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = "rgba(255,255,255,0.055)";
+  ctx.lineWidth   = 0.8;
   ctx.stroke();
 }
 
@@ -268,11 +279,49 @@ export default function MapVisual() {
   const cityElsRef   = useRef<Map<string, HTMLDivElement>>(new Map());
   const geoElsRef    = useRef<Map<string, HTMLDivElement>>(new Map());
 
-  // tRef: smoothly lerped current position (0 = Menlo Park, 1 = full globe)
-  // targetTRef: set from scroll position / wheel interaction
-  const tRef       = useRef(0);
-  const targetTRef = useRef(0);
+  const tRef         = useRef(0);
+  const targetTRef   = useRef(0);
 
+  // Decoded Natural Earth 110m land polygon rings — [lng, lat][] each.
+  // Populated async from CDN; render loop reads from ref each frame.
+  const landRingsRef = useRef<[number, number][][]>([]);
+
+  // ── Fetch Natural Earth 110m land topology (world-atlas, public domain) ────
+  useEffect(() => {
+    fetch("https://cdn.jsdelivr.net/npm/world-atlas@2/land-110m.json")
+      .then(r => r.json())
+      .then((topo: Record<string, unknown>) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const geo = feature(topo as any, (topo.objects as any).land) as any;
+        const rings: [number, number][][] = [];
+
+        function collectGeom(geom: Record<string, unknown> | null) {
+          if (!geom) return;
+          if (geom.type === "Polygon") {
+            for (const ring of geom.coordinates as [number, number][][]) {
+              rings.push(ring);
+            }
+          } else if (geom.type === "MultiPolygon") {
+            for (const poly of geom.coordinates as [number, number][][][]) {
+              for (const ring of poly) rings.push(ring);
+            }
+          }
+        }
+
+        if (geo.type === "Feature") {
+          collectGeom(geo.geometry as Record<string, unknown>);
+        } else if (geo.type === "FeatureCollection") {
+          for (const f of geo.features as Array<{ geometry: Record<string, unknown> }>) {
+            collectGeom(f.geometry);
+          }
+        }
+
+        landRingsRef.current = rings;
+      })
+      .catch(() => {/* degrade gracefully — globe renders without land */});
+  }, []);
+
+  // ── Main render loop ───────────────────────────────────────────────────────
   useEffect(() => {
     const container = containerRef.current;
     const canvas    = canvasRef.current;
@@ -289,17 +338,13 @@ export default function MapVisual() {
     const ro = new ResizeObserver(sizeCanvas);
     ro.observe(container);
 
-    // ── Scroll driver ──────────────────────────────────────────────────────
-    // Maps section scroll progress (0 = just entering view, 1 = scrolled through)
-    // to targetT so camera smoothly pans Menlo Park → Globe as user scrolls.
+    // Scroll driver — maps section progress to targetT (0 = close, 1 = globe)
     function updateScroll() {
       if (!container) return;
       const section = container.closest("section") as HTMLElement | null;
       if (!section) return;
-      const rect = section.getBoundingClientRect();
-      const vh = window.innerHeight;
-      // traveled: pixels scrolled past section top entering viewport
-      // range: section height + 60% of viewport (gives comfortable scroll feel)
+      const rect     = section.getBoundingClientRect();
+      const vh       = window.innerHeight;
       const traveled = vh - rect.top;
       const range    = section.offsetHeight + vh * 0.6;
       targetTRef.current = Math.max(0, Math.min(1, traveled / range));
@@ -307,7 +352,7 @@ export default function MapVisual() {
     updateScroll();
     window.addEventListener("scroll", updateScroll, { passive: true });
 
-    // ── Wheel on globe: interactive zoom nudge ─────────────────────────────
+    // Wheel nudge — interactive fine-tune of zoom level
     function onWheel(e: WheelEvent) {
       e.preventDefault();
       targetTRef.current = Math.max(0, Math.min(1,
@@ -316,7 +361,7 @@ export default function MapVisual() {
     }
     container.addEventListener("wheel", onWheel, { passive: false });
 
-    // ── Camera interpolation helpers ───────────────────────────────────────
+    // Camera helpers
     const lerp = (a: number, b: number, u: number) => a + (b - a) * u;
     const ease = (u: number) =>
       u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
@@ -358,19 +403,16 @@ export default function MapVisual() {
       const R  = Math.min(w, h) * BASE_R * zoom;
       const cx = w / 2, cy = h / 2;
 
-      drawGlobe(ctx, w, h, cLat, cLng, R);
+      drawGlobe(ctx, w, h, cLat, cLng, R, landRingsRef.current);
 
       const nz = normZoom(zoom);
 
-      // ── City nodes ────────────────────────────────────────────────────────
-      // Always visible on front hemisphere; scale CSS transform with zoom
-      // so spheres shrink gracefully instead of disappearing.
+      // ── City nodes — scale with zoom; always visible on front hemisphere ───
       cityElsRef.current.forEach((el, id) => {
         const p = PLACES.find(pl => pl.id === id);
         if (!p) return;
         const { px, py, z } = orthoProject(p.lat, p.lng, cLat, cLng, R, cx, cy);
         const zFade  = Math.min(1, Math.max(0, (z - 0.05) / 0.15));
-        // Scale: full size when zoomed in (zoom≥3), smallest at full globe
         const sScale = Math.max(0.30, Math.min(1.5, zoom / 3.2));
         el.style.left      = `${px}px`;
         el.style.top       = `${py}px`;
@@ -378,8 +420,7 @@ export default function MapVisual() {
         el.style.transform = `translate(-50%, -50%) scale(${sScale})`;
       });
 
-      // ── Geographic text labels ────────────────────────────────────────────
-      // Fade in/out based on normalised-zoom window; hidden on back hemisphere.
+      // ── Geographic text labels — fade per normalised-zoom window ──────────
       geoElsRef.current.forEach((el, id) => {
         const g = GEO_LABELS.find(gl => gl.id === id);
         if (!g) return;
