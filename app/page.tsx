@@ -2026,20 +2026,41 @@ export default function LandingPage() {
         style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
 
         {/* ── LEFT: copy ──────────────────────────────────────────────────────── */}
-        <div className="flex flex-col justify-center gap-5 px-12 py-12 overflow-hidden"
+        <div className="flex flex-col justify-center px-12 py-12 overflow-hidden"
           style={{ width: "54%", borderRight: "1px solid rgba(255,255,255,0.05)" }}>
 
-          <h2 className="text-[48px] md:text-[56px] font-semibold leading-[1.08] text-white" style={{ letterSpacing: "-0.02em" }}>
-            Every place has a taste.
-          </h2>
+          <div style={{ maxWidth: 540 }}>
 
-          <p className="text-[20px] md:text-[22px] font-medium leading-snug" style={{ color: "rgba(255,255,255,0.82)" }}>
-            Explore what people in a city,<br />school, or community actually love.
-          </p>
+            {/* Headline */}
+            <h2 className="text-[38px] md:text-[42px] font-semibold leading-[1.07] text-white" style={{ letterSpacing: "-0.02em" }}>
+              Every place has a taste.
+            </h2>
 
-          <p className="text-[17px] leading-snug" style={{ color: "rgba(255,255,255,0.62)" }}>
-            Go there directly &mdash;<br />instead of waiting to be shown.
-          </p>
+            {/* Body line 1 */}
+            <p className="text-[20px] md:text-[22px] font-normal leading-[1.45]"
+              style={{ color: "rgba(255,255,255,0.75)", marginTop: 32 }}>
+              Neighborhoods, Cities, Countries
+            </p>
+
+            {/* Body line 2 — sits directly below line 1 */}
+            <p className="text-[20px] md:text-[22px] font-normal leading-[1.45]"
+              style={{ color: "rgba(255,255,255,0.75)", marginTop: 6 }}>
+              Each one sees something different.
+            </p>
+
+            {/* "Step into them." — slight separation above */}
+            <p className="text-[20px] md:text-[22px] font-normal leading-[1.45]"
+              style={{ color: "rgba(255,255,255,0.75)", marginTop: 24 }}>
+              Step into them.
+            </p>
+
+            {/* Final CTA — larger, semibold, full white */}
+            <p className="text-[26px] md:text-[28px] font-semibold leading-[1.15] text-white"
+              style={{ letterSpacing: "-0.01em", marginTop: 48 }}>
+              Leave the limits of your algorithm behind.
+            </p>
+
+          </div>
         </div>
 
         {/* ── RIGHT: animated map visual ──────────────────────────────────────── */}
