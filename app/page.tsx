@@ -1350,10 +1350,20 @@ export default function LandingPage() {
             </div>
           </div>
 
+          {/* ── Bridge: structural consequence ───────────────────────────────── */}
+          <div className="mt-[6vh]" style={{ maxWidth: 600 }}>
+            <p
+              className="text-[17px] md:text-[18px] font-normal leading-snug"
+              style={{ color: "rgba(255,255,255,0.50)" }}
+            >
+              This structurally limits everything you see.
+            </p>
+          </div>
+
           {/* ── Group 3: SO YOU NEVER SEE + rotating line ────────────────────── */}
           {/* minHeight covers label + gap + 2 lines of carousel at 25px max.
               Container dimensions never change → nothing above/below shifts. */}
-          <div className="mt-[6vh]" style={{ maxWidth: 600, minHeight: 130 }}>
+          <div className="mt-[4vh]" style={{ maxWidth: 600, minHeight: 130 }}>
             {/* "SO YOU NEVER SEE" — strong transition marker, not a whisper */}
             <p
               className="text-[15px] font-semibold uppercase"
