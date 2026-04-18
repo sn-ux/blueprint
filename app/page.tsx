@@ -1353,8 +1353,8 @@ export default function LandingPage() {
           {/* ── Bridge: structural consequence ───────────────────────────────── */}
           <div className="mt-[6vh]" style={{ maxWidth: 600 }}>
             <p
-              className="text-[17px] md:text-[18px] font-normal leading-snug"
-              style={{ color: "rgba(255,255,255,0.50)" }}
+              className="text-[18px] md:text-[19px] font-normal leading-relaxed"
+              style={{ color: "rgba(255,255,255,0.55)" }}
             >
               This structurally limits everything you see.
             </p>
@@ -1389,8 +1389,8 @@ export default function LandingPage() {
           {/* ── Group 4: Final tagline ────────────────────────────────────────── */}
           <div className="mt-8" style={{ maxWidth: 600 }}>
             <p
-              className="text-[18px] md:text-[19px] leading-relaxed"
-              style={{ color: "rgba(255,255,255,0.65)" }}
+              className="text-[18px] md:text-[19px] font-normal leading-relaxed"
+              style={{ color: "rgba(255,255,255,0.55)" }}
             >
               We&apos;re living in algorithmic echo chambers.<br />
               Do you feel it?
