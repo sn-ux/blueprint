@@ -1890,7 +1890,7 @@ export default function LandingPage() {
               key={page3LabelAnimKey}
               style={{
                 display: "block",
-                fontSize: 13, fontWeight: 600, letterSpacing: "0.18em",
+                fontSize: 17, fontWeight: 600, letterSpacing: "0.18em",
                 textTransform: "uppercase", whiteSpace: "nowrap",
                 // Animating: gradient wipe via background-clip
                 // Static (first render): plain color
@@ -1932,7 +1932,7 @@ export default function LandingPage() {
             const xToDelay      = (x: number) =>
               Math.round(((x - minX) / (maxX - minX)) * STAGGER_RANGE);
             return (
-              <div style={{ position: "relative", width: SIZE, height: SIZE, flexShrink: 0 }}>
+              <div style={{ position: "relative", width: SIZE, height: SIZE, flexShrink: 0, transform: "translateX(-40px)" }}>
 
                 {/* Centre: Friends aggregate sphere — x=CX → ~100ms delay */}
                 <div style={{
@@ -1976,9 +1976,8 @@ export default function LandingPage() {
         </div>
 
         {/* ── RIGHT: copy ─────────────────────────────────────────────────────── */}
-        {/* justify-start + pt-[10vh] anchors text to top of section (like Page 2) */}
-        <div className="flex flex-col justify-start px-12 overflow-hidden"
-          style={{ width: "46%", paddingTop: "10vh", paddingBottom: "8vh", borderLeft: "1px solid rgba(255,255,255,0.05)", alignSelf: "stretch" }}>
+        <div className="flex flex-col justify-center py-12 px-12 overflow-hidden"
+          style={{ width: "46%", borderLeft: "1px solid rgba(255,255,255,0.05)", alignSelf: "stretch" }}>
 
           {/* maxWidth 620 — wider than before so headline fits on one line */}
           <div style={{ maxWidth: 620 }}>
