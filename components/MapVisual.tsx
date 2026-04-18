@@ -21,25 +21,31 @@ type GeoLabel = {
   type: "state" | "country" | "continent";
 };
 
-/* ── City nodes ───────────────────────────────────────────────────────────── */
+/* ── City nodes ───────────────────────────────────────────────────────────── *
+ *  All nodes scale with zoom rather than appearing/disappearing.             */
 
 const PLACES: PlaceNode[] = [
-  { id:"mp",  label:"Menlo Park",    lat:37.453, lng:-122.182, size:22, seed:17 },
-  { id:"sf",  label:"San Francisco", lat:37.774, lng:-122.419, size:26, seed:1  },
-  { id:"la",  label:"Los Angeles",   lat:34.052, lng:-118.244, size:28, seed:3  },
-  { id:"sea", label:"Seattle",       lat:47.606, lng:-122.332, size:22, seed:31 },
-  { id:"den", label:"Denver",        lat:39.739, lng:-104.984, size:20, seed:35 },
-  { id:"ny",  label:"New York",      lat:40.713, lng:-74.006,  size:30, seed:21 },
-  { id:"chi", label:"Chicago",       lat:41.878, lng:-87.630,  size:26, seed:9  },
-  { id:"hou", label:"Houston",       lat:29.760, lng:-95.370,  size:22, seed:11 },
-  { id:"mia", label:"Miami",         lat:25.762, lng:-80.192,  size:20, seed:15 },
-  { id:"bos", label:"Boston",        lat:42.361, lng:-71.057,  size:20, seed:19 },
+  { id:"mp",  label:"Menlo Park",    lat: 37.453, lng:-122.182, size:20, seed:17 },
+  { id:"pa",  label:"Palo Alto",     lat: 37.441, lng:-122.143, size:18, seed:23 },
+  { id:"sj",  label:"San Jose",      lat: 37.338, lng:-121.886, size:22, seed:27 },
+  { id:"sf",  label:"San Francisco", lat: 37.774, lng:-122.419, size:26, seed:1  },
+  { id:"la",  label:"Los Angeles",   lat: 34.052, lng:-118.244, size:28, seed:3  },
+  { id:"sea", label:"Seattle",       lat: 47.606, lng:-122.332, size:22, seed:31 },
+  { id:"den", label:"Denver",        lat: 39.739, lng:-104.984, size:20, seed:35 },
+  { id:"ny",  label:"New York",      lat: 40.713, lng:  -74.006, size:30, seed:21 },
+  { id:"chi", label:"Chicago",       lat: 41.878, lng:  -87.630, size:26, seed:9  },
+  { id:"hou", label:"Houston",       lat: 29.760, lng:  -95.370, size:22, seed:11 },
+  { id:"mia", label:"Miami",         lat: 25.762, lng:  -80.192, size:20, seed:15 },
+  { id:"bos", label:"Boston",        lat: 42.361, lng:  -71.057, size:20, seed:19 },
 ];
 
-/* ── Geographic text labels ───────────────────────────────────────────────── */
+/* ── Geographic text labels ───────────────────────────────────────────────── *
+ *  Each label has a normalised-zoom window [minZ, maxZ] that controls when  *
+ *  it fades in. Labels transition cleanly: city nodes → state → country →   *
+ *  continent as the camera pulls back.                                       */
 
 const GEO_LABELS: GeoLabel[] = [
-  // States — appear at medium zoom
+  // States — visible at intermediate zoom
   { id:"gca",  label:"California",    lat: 37.0, lng:-119.5, minZ:0.18, maxZ:0.60, size:11, type:"state"     },
   { id:"gore", label:"Oregon",        lat: 44.0, lng:-120.5, minZ:0.24, maxZ:0.60, size: 9, type:"state"     },
   { id:"gwsh", label:"Washington",    lat: 47.5, lng:-120.5, minZ:0.24, maxZ:0.60, size: 9, type:"state"     },
@@ -48,40 +54,52 @@ const GEO_LABELS: GeoLabel[] = [
   { id:"gtex", label:"Texas",         lat: 31.0, lng: -99.0, minZ:0.32, maxZ:0.66, size:11, type:"state"     },
   { id:"gflo", label:"Florida",       lat: 27.5, lng: -82.5, minZ:0.34, maxZ:0.66, size: 9, type:"state"     },
   { id:"gnys", label:"New York",      lat: 43.0, lng: -75.5, minZ:0.34, maxZ:0.66, size: 9, type:"state"     },
-  // Countries — appear at wider zoom
+  // Countries — visible at wider zoom
   { id:"cusa", label:"UNITED STATES", lat: 39.5, lng: -97.0, minZ:0.58, maxZ:0.88, size:14, type:"country"   },
   { id:"ccan", label:"CANADA",        lat: 56.0, lng: -96.0, minZ:0.58, maxZ:0.88, size:12, type:"country"   },
   { id:"cmex", label:"MEXICO",        lat: 23.5, lng:-102.5, minZ:0.60, maxZ:0.88, size:11, type:"country"   },
   { id:"cbra", label:"BRAZIL",        lat:-10.0, lng: -51.0, minZ:0.70, maxZ:0.96, size:12, type:"country"   },
-  { id:"cgbr", label:"U.K.",          lat: 54.0, lng:  -3.0, minZ:0.70, maxZ:0.96, size: 9, type:"country"   },
-  { id:"cfra", label:"FRANCE",        lat: 46.0, lng:   2.0, minZ:0.70, maxZ:0.96, size: 9, type:"country"   },
-  { id:"cchn", label:"CHINA",         lat: 35.0, lng: 105.0, minZ:0.70, maxZ:0.96, size:12, type:"country"   },
-  { id:"cind", label:"INDIA",         lat: 22.0, lng:  79.0, minZ:0.70, maxZ:0.96, size:11, type:"country"   },
-  { id:"caus", label:"AUSTRALIA",     lat:-25.0, lng: 135.0, minZ:0.70, maxZ:0.96, size:11, type:"country"   },
-  // Continents — appear at full globe zoom
+  { id:"cgbr", label:"U.K.",          lat: 54.0, lng:   -3.0, minZ:0.70, maxZ:0.96, size: 9, type:"country"   },
+  { id:"cfra", label:"FRANCE",        lat: 46.0, lng:    2.0, minZ:0.70, maxZ:0.96, size: 9, type:"country"   },
+  { id:"cchn", label:"CHINA",         lat: 35.0, lng:  105.0, minZ:0.70, maxZ:0.96, size:12, type:"country"   },
+  { id:"cind", label:"INDIA",         lat: 22.0, lng:   79.0, minZ:0.70, maxZ:0.96, size:11, type:"country"   },
+  { id:"caus", label:"AUSTRALIA",     lat:-25.0, lng:  135.0, minZ:0.70, maxZ:0.96, size:11, type:"country"   },
+  // Continents — visible only at full globe zoom
   { id:"xnam", label:"NORTH AMERICA", lat: 46.0, lng:-100.0, minZ:0.80, maxZ:1.05, size:14, type:"continent" },
   { id:"xsam", label:"SOUTH AMERICA", lat:-15.0, lng: -60.0, minZ:0.80, maxZ:1.05, size:13, type:"continent" },
-  { id:"xeur", label:"EUROPE",        lat: 50.0, lng:  15.0, minZ:0.80, maxZ:1.05, size:13, type:"continent" },
-  { id:"xafr", label:"AFRICA",        lat:  0.0, lng:  22.0, minZ:0.80, maxZ:1.05, size:13, type:"continent" },
-  { id:"xasi", label:"ASIA",          lat: 45.0, lng:  90.0, minZ:0.80, maxZ:1.05, size:14, type:"continent" },
+  { id:"xeur", label:"EUROPE",        lat: 50.0, lng:   15.0, minZ:0.80, maxZ:1.05, size:13, type:"continent" },
+  { id:"xafr", label:"AFRICA",        lat:  0.0, lng:   22.0, minZ:0.80, maxZ:1.05, size:13, type:"continent" },
+  { id:"xasi", label:"ASIA",          lat: 45.0, lng:   90.0, minZ:0.80, maxZ:1.05, size:14, type:"continent" },
 ];
 
 /* ── Camera path: [t, zoomScale, cLat, cLng] ─────────────────────────────── *
- *  t=0: zoomed in on Menlo Park (zoom 5×)  →  t=1: full globe (zoom ~0.62) */
+ *  Defines zoom levels at specific t-values (0=Menlo Park, 1=full globe).   *
+ *  getCamera() linearly interpolates between keyframes; the animation loop  *
+ *  applies easing on top so there is no double-easing.                      */
 
 const CAM_PATH: readonly [number, number, number, number][] = [
-  [0.00, 5.00, 37.45, -122.18],  // Menlo Park close-up
-  [0.28, 2.20, 37.20, -121.00],  // Bay Area
-  [0.55, 1.30, 38.50, -117.00],  // West Coast / California
-  [0.80, 0.90, 39.00,  -97.00],  // Continental USA
-  [1.00, 0.62, 28.00,  -55.00],  // North America + Atlantic
+  [0.00, 5.00,  37.45, -122.18],  // Menlo Park close-up
+  [0.28, 2.20,  37.20, -121.00],  // Bay Area
+  [0.55, 1.30,  38.50, -117.00],  // West Coast / California
+  [0.80, 0.90,  39.00,  -97.00],  // Continental USA
+  [1.00, 0.62,  28.00,  -55.00],  // North America + Atlantic
 ];
 
 const CAM_MAX_ZOOM = CAM_PATH[0][1];                    // 5.00
 const CAM_MIN_ZOOM = CAM_PATH[CAM_PATH.length - 1][1]; // 0.62
 
-const BASE_R = 0.42;  // globe radius as fraction of min(w,h) at zoom 1×
-const FADE_W = 0.06;  // normalised-zoom window for geo label fade
+const BASE_R = 0.42;
+const FADE_W = 0.06;
+
+/* ── Animation loop constants ─────────────────────────────────────────────── *
+ *  Total: 20 s.  Three phases:                                               *
+ *    0.00–0.30 (6 s): ease-in-out zoom out, Menlo Park → full globe         *
+ *    0.30–0.70 (8 s): linear full-globe rotation, 360° westward             *
+ *    0.70–1.00 (6 s): ease-in-out zoom in, full globe → Menlo Park          */
+
+const LOOP_MS        = 20_000;
+const P_ZOOM_OUT_END = 0.30;
+const P_ROTATE_END   = 0.70;
 
 /* ── Orthographic projection ──────────────────────────────────────────────── */
 
@@ -111,9 +129,7 @@ function clampToLimb({ px, py, z }: Proj, R: number, cx: number, cy: number): Pr
   return { px: cx + (dx / dist) * R, py: cy + (dy / dist) * R, z: 0 };
 }
 
-/* ── Globe renderer ───────────────────────────────────────────────────────── *
- *  Receives decoded Natural Earth land rings ([lng,lat][] each).            *
- *  Apple Maps dark-mode palette with realistic depth + lighting.            */
+/* ── Globe renderer ───────────────────────────────────────────────────────── */
 
 function drawGlobe(
   ctx: CanvasRenderingContext2D,
@@ -125,32 +141,26 @@ function drawGlobe(
   const cx = w / 2, cy = h / 2;
   ctx.clearRect(0, 0, w, h);
 
-  // ── 1. Pure black background ───────────────────────────────────────────────
   ctx.fillStyle = "#000000";
   ctx.fillRect(0, 0, w, h);
 
-  // ── 2. Outer atmospheric halo — very subtle blue-white limb glow ───────────
+  // Outer atmospheric halo — very subtle blue-white limb glow
   const atmoOuter = ctx.createRadialGradient(cx, cy, R * 0.93, cx, cy, R * 1.14);
-  atmoOuter.addColorStop(0,   "rgba(160,195,255,0.07)");
-  atmoOuter.addColorStop(0.45,"rgba(120,165,255,0.022)");
-  atmoOuter.addColorStop(1,   "rgba(0,0,0,0)");
+  atmoOuter.addColorStop(0,    "rgba(160,195,255,0.07)");
+  atmoOuter.addColorStop(0.45, "rgba(120,165,255,0.022)");
+  atmoOuter.addColorStop(1,    "rgba(0,0,0,0)");
   ctx.beginPath();
   ctx.arc(cx, cy, R * 1.14, 0, Math.PI * 2);
   ctx.fillStyle = atmoOuter;
   ctx.fill();
 
-  // ── 3. Globe sphere + clip ─────────────────────────────────────────────────
   ctx.save();
   ctx.beginPath();
   ctx.arc(cx, cy, R, 0, Math.PI * 2);
   ctx.clip();
 
-  // Ocean base — deep blue-black with subtle radial depth gradient
-  // (center of visible hemisphere slightly lighter = depth perception)
-  const ocean = ctx.createRadialGradient(
-    cx - R * 0.18, cy - R * 0.22, 0,
-    cx, cy, R * 1.05,
-  );
+  // Ocean base — deep blue-black with radial depth gradient
+  const ocean = ctx.createRadialGradient(cx - R * 0.18, cy - R * 0.22, 0, cx, cy, R * 1.05);
   ocean.addColorStop(0.00, "#0d1119");
   ocean.addColorStop(0.35, "#090d14");
   ocean.addColorStop(0.70, "#05070f");
@@ -158,7 +168,7 @@ function drawGlobe(
   ctx.fillStyle = ocean;
   ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
 
-  // ── 4. Graticule — barely perceptible grid ─────────────────────────────────
+  // Graticule — barely perceptible grid
   ctx.strokeStyle = "rgba(255,255,255,0.018)";
   ctx.lineWidth   = 0.35;
   for (let lat = -60; lat <= 60; lat += 30) {
@@ -182,9 +192,7 @@ function drawGlobe(
     ctx.stroke();
   }
 
-  // ── 5. Land polygons — Natural Earth 110m ─────────────────────────────────
-  // Directional gradient: cool light from upper-left, shadow lower-right.
-  // Feels like sunlight coming from the north-west.
+  // Land — directional gradient (lit upper-left, shadowed lower-right)
   const landFill = ctx.createLinearGradient(
     cx - R * 0.55, cy - R * 0.55,
     cx + R * 0.65, cy + R * 0.65,
@@ -199,13 +207,10 @@ function drawGlobe(
 
   for (const ring of landRings) {
     if (ring.length < 3) continue;
-
-    // Project every vertex; detect if any lies on the front hemisphere
     let hasFront = false;
     const pts: Array<{ px: number; py: number; z: number }> = [];
     for (const coord of ring) {
-      const lng = coord[0] as number;
-      const lat = coord[1] as number;
+      const lng = coord[0] as number, lat = coord[1] as number;
       const raw = orthoProject(lat, lng, cLat, cLng, R, cx, cy);
       if (raw.z > -0.1) hasFront = true;
       const c = clampToLimb(raw, R, cx, cy);
@@ -213,7 +218,7 @@ function drawGlobe(
     }
     if (!hasFront) continue;
 
-    // Land fill — clamped points so back-hemisphere sections hug the limb
+    // Fill (clamped, back-hemisphere sections hug the limb)
     ctx.beginPath();
     for (let i = 0; i < pts.length; i++) {
       i === 0 ? ctx.moveTo(pts[i].px, pts[i].py) : ctx.lineTo(pts[i].px, pts[i].py);
@@ -221,7 +226,7 @@ function drawGlobe(
     ctx.closePath();
     ctx.fill();
 
-    // Coastlines — only visible (front-hemisphere) segments; no limb artefacts
+    // Coastlines (front hemisphere only)
     ctx.beginPath();
     let pen = false;
     for (const { px, py, z } of pts) {
@@ -231,7 +236,7 @@ function drawGlobe(
     ctx.stroke();
   }
 
-  // ── 6. Inner atmospheric edge — thin blue-white haze at globe rim ──────────
+  // Inner atmospheric edge — thin blue-white haze at globe rim
   const innerAtmo = ctx.createRadialGradient(cx, cy, R * 0.80, cx, cy, R);
   innerAtmo.addColorStop(0.00, "rgba(0,0,0,0)");
   innerAtmo.addColorStop(0.72, "rgba(130,168,255,0.016)");
@@ -239,7 +244,7 @@ function drawGlobe(
   ctx.fillStyle = innerAtmo;
   ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
 
-  // ── 7. Limb darkening — deep black at globe edge; reads as a sphere ────────
+  // Limb darkening — deep black at globe edge
   const limb = ctx.createRadialGradient(cx, cy, 0, cx, cy, R);
   limb.addColorStop(0.00, "rgba(0,0,0,0)");
   limb.addColorStop(0.58, "rgba(0,0,0,0)");
@@ -249,7 +254,7 @@ function drawGlobe(
   ctx.fillStyle = limb;
   ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
 
-  // ── 8. Specular highlight — single soft reflection, upper-left ─────────────
+  // Specular highlight — upper-left
   const spec = ctx.createRadialGradient(
     cx - R * 0.30, cy - R * 0.28, 0,
     cx - R * 0.30, cy - R * 0.28, R * 0.60,
@@ -262,7 +267,7 @@ function drawGlobe(
 
   ctx.restore();
 
-  // ── 9. Thin edge ring — barely visible white ring at limb ──────────────────
+  // Thin edge ring
   ctx.beginPath();
   ctx.arc(cx, cy, R, 0, Math.PI * 2);
   ctx.strokeStyle = "rgba(255,255,255,0.055)";
@@ -279,11 +284,10 @@ export default function MapVisual() {
   const cityElsRef   = useRef<Map<string, HTMLDivElement>>(new Map());
   const geoElsRef    = useRef<Map<string, HTMLDivElement>>(new Map());
 
-  const tRef         = useRef(0);
-  const targetTRef   = useRef(0);
+  // Animation loop phase: 0→1, wraps every LOOP_MS milliseconds
+  const loopRef = useRef(0);
 
-  // Decoded Natural Earth 110m land polygon rings — [lng, lat][] each.
-  // Populated async from CDN; render loop reads from ref each frame.
+  // Decoded Natural Earth 110m land rings — populated async from CDN
   const landRingsRef = useRef<[number, number][][]>([]);
 
   // ── Fetch Natural Earth 110m land topology (world-atlas, public domain) ────
@@ -298,9 +302,7 @@ export default function MapVisual() {
         function collectGeom(geom: Record<string, unknown> | null) {
           if (!geom) return;
           if (geom.type === "Polygon") {
-            for (const ring of geom.coordinates as [number, number][][]) {
-              rings.push(ring);
-            }
+            for (const ring of geom.coordinates as [number, number][][]) rings.push(ring);
           } else if (geom.type === "MultiPolygon") {
             for (const poly of geom.coordinates as [number, number][][][]) {
               for (const ring of poly) rings.push(ring);
@@ -318,7 +320,7 @@ export default function MapVisual() {
 
         landRingsRef.current = rings;
       })
-      .catch(() => {/* degrade gracefully — globe renders without land */});
+      .catch(() => {/* silent fail — renders water-only globe */});
   }, []);
 
   // ── Main render loop ───────────────────────────────────────────────────────
@@ -338,48 +340,60 @@ export default function MapVisual() {
     const ro = new ResizeObserver(sizeCanvas);
     ro.observe(container);
 
-    // Scroll driver — maps section progress to targetT (0 = close, 1 = globe)
-    function updateScroll() {
-      if (!container) return;
-      const section = container.closest("section") as HTMLElement | null;
-      if (!section) return;
-      const rect     = section.getBoundingClientRect();
-      const vh       = window.innerHeight;
-      const traveled = vh - rect.top;
-      const range    = section.offsetHeight + vh * 0.6;
-      targetTRef.current = Math.max(0, Math.min(1, traveled / range));
-    }
-    updateScroll();
-    window.addEventListener("scroll", updateScroll, { passive: true });
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
-    // Wheel nudge — interactive fine-tune of zoom level
-    function onWheel(e: WheelEvent) {
-      e.preventDefault();
-      targetTRef.current = Math.max(0, Math.min(1,
-        targetTRef.current + e.deltaY * 0.0008,
-      ));
-    }
-    container.addEventListener("wheel", onWheel, { passive: false });
-
-    // Camera helpers
     const lerp = (a: number, b: number, u: number) => a + (b - a) * u;
-    const ease = (u: number) =>
-      u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
 
+    // Smooth ease-in-out (cubic) — applied to zoom-out and zoom-in phases
+    const easeIO = (u: number) =>
+      u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
+
+    // Linear interpolation between CAM_PATH keyframes.
+    // No inner easing here — easing is applied by the caller.
     function getCamera(t: number) {
       let i = 0;
       while (i < CAM_PATH.length - 2 && CAM_PATH[i + 1][0] <= t) i++;
       const [t0, s0, la0, ln0] = CAM_PATH[i];
       const [t1, s1, la1, ln1] = CAM_PATH[i + 1];
-      const e = ease(Math.max(0, Math.min(1, (t - t0) / (t1 - t0))));
+      const u = Math.max(0, Math.min(1, (t - t0) / (t1 - t0)));
       return {
-        zoom: lerp(s0, s1, e),
-        cLat: lerp(la0, la1, e),
-        cLng: lerp(ln0, ln1, e),
+        zoom: lerp(s0,  s1,  u),
+        cLat: lerp(la0, la1, u),
+        cLng: lerp(ln0, ln1, u),
       };
     }
 
-    // Normalised zoom: 0 = closest (zoom=5), 1 = most zoomed out (zoom=0.62)
+    // Returns camera params for the given loop phase (0→1).
+    //
+    //  Phase A  0.00–P_ZOOM_OUT_END : ease-in-out zoom out (t: 0→1)
+    //  Phase B  P_ZOOM_OUT_END–P_ROTATE_END : full-globe linear rotation
+    //  Phase C  P_ROTATE_END–1.00 : ease-in-out zoom in (t: 1→0)
+    //
+    // At all phase boundaries the camera position is continuous:
+    //   A→B: both give getCamera(1.0)
+    //   B→C: rotation completes 360° so cLng mod 360 = starting cLng
+    //   C→A: both give getCamera(0), so the loop wraps seamlessly
+    function getLoopCamera(p: number) {
+      if (p < P_ZOOM_OUT_END) {
+        // Phase A — zoom out
+        const u = p / P_ZOOM_OUT_END;          // 0→1 linear
+        return getCamera(easeIO(u));            // 0→1 eased
+      }
+
+      if (p < P_ROTATE_END) {
+        // Phase B — full-globe rotation (linear, constant angular speed)
+        const u    = (p - P_ZOOM_OUT_END) / (P_ROTATE_END - P_ZOOM_OUT_END); // 0→1
+        const base = getCamera(1.0);
+        return { ...base, cLng: base.cLng + u * 360 };
+      }
+
+      // Phase C — zoom in (reverse of zoom out)
+      const u = (p - P_ROTATE_END) / (1 - P_ROTATE_END); // 0→1
+      return getCamera(1 - easeIO(u));                    // 1→0 eased
+    }
+
+    // Normalised zoom: 0 = closest (zoom MAX), 1 = most zoomed out (zoom MIN)
+    // Used to gate geographic label visibility.
     function normZoom(zoom: number) {
       return Math.max(0, Math.min(1,
         (CAM_MAX_ZOOM - zoom) / (CAM_MAX_ZOOM - CAM_MIN_ZOOM),
@@ -390,14 +404,14 @@ export default function MapVisual() {
 
     function frame(now: number) {
       if (!canvas || !ctx) return;
+
       const dt = last ? Math.min(now - last, 50) : 16;
       last = now;
 
-      // Exponential lerp — frame-rate independent smooth approach
-      const k = 1 - Math.pow(0.92, dt / 16);
-      tRef.current += (targetTRef.current - tRef.current) * k;
+      // Advance the loop clock; wrap at 1.0
+      loopRef.current = (loopRef.current + dt / LOOP_MS) % 1;
 
-      const { zoom, cLat, cLng } = getCamera(tRef.current);
+      const { zoom, cLat, cLng } = getLoopCamera(loopRef.current);
       const w  = canvas.width;
       const h  = canvas.height;
       const R  = Math.min(w, h) * BASE_R * zoom;
@@ -407,13 +421,14 @@ export default function MapVisual() {
 
       const nz = normZoom(zoom);
 
-      // ── City nodes — scale with zoom; always visible on front hemisphere ───
+      // ── City nodes — always rendered, scale with zoom ──────────────────────
       cityElsRef.current.forEach((el, id) => {
         const p = PLACES.find(pl => pl.id === id);
         if (!p) return;
         const { px, py, z } = orthoProject(p.lat, p.lng, cLat, cLng, R, cx, cy);
         const zFade  = Math.min(1, Math.max(0, (z - 0.05) / 0.15));
-        const sScale = Math.max(0.30, Math.min(1.5, zoom / 3.2));
+        // Scale: full-size when zoomed in close (zoom≥3.2), tiny at globe view
+        const sScale = Math.max(0.25, Math.min(1.5, zoom / 3.2));
         el.style.left      = `${px}px`;
         el.style.top       = `${py}px`;
         el.style.opacity   = `${zFade}`;
@@ -446,8 +461,6 @@ export default function MapVisual() {
     return () => {
       cancelAnimationFrame(rafRef.current);
       ro.disconnect();
-      window.removeEventListener("scroll", updateScroll);
-      container.removeEventListener("wheel", onWheel);
     };
   }, []);
 
