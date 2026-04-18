@@ -4,11 +4,11 @@
  * MapVisual — Page 4 globe
  *
  * Renders a full MapLibre GL globe using CartoDB Dark Matter tiles (free, no API
- * key) with a 22-second autonomous animation loop:
+ * key) with a 60-second autonomous animation loop:
  *
- *   Phase A  0.00–0.30 (6.6 s) — ease-in-out zoom out: Menlo Park → full Earth
- *   Phase B  0.30–0.65 (7.7 s) — linear full-globe rotation, 360° westward
- *   Phase C  0.65–1.00 (7.7 s) — ease-in-out zoom in: full Earth → Menlo Park
+ *   Phase A  0.00–0.40 (24 s) — ease-in-out zoom out: Menlo Park → full Earth
+ *   Phase B  0.40–0.65 (15 s) — linear full-globe rotation, 360° westward
+ *   Phase C  0.65–1.00 (21 s) — ease-in-out zoom in: full Earth → Menlo Park
  *
  * All phase boundaries are camera-continuous (no visual jumps at loop wrap-around).
  * MapLibre handles map detail, label hierarchy, and collision detection natively.
@@ -23,10 +23,10 @@ const STYLE_URL =
   "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
 /* ── Animation timing ─────────────────────────────────────────────────────── */
-const LOOP_MS        = 22_000;  // 22 s total loop
-const P_ZOOM_OUT_END = 0.30;    // 0.00–0.30 → zoom out  (6.6 s)
-const P_ROTATE_END   = 0.65;    // 0.30–0.65 → rotation  (7.7 s)
-//                              // 0.65–1.00 → zoom in   (7.7 s)
+const LOOP_MS        = 60_000;  // 60 s total loop — slow, cinematic reveal
+const P_ZOOM_OUT_END = 0.40;    // 0.00–0.40 → zoom out  (24 s)
+const P_ROTATE_END   = 0.65;    // 0.40–0.65 → rotation  (15 s)
+//                              // 0.65–1.00 → zoom in   (21 s)
 
 /* ── Camera keyframes ─────────────────────────────────────────────────────── *
  *  t=0: Menlo Park street level (MapLibre zoom 14)                           *
