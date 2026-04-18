@@ -1979,21 +1979,26 @@ export default function LandingPage() {
         <div className="flex flex-col justify-center py-12 px-12 overflow-hidden"
           style={{ width: "46%", borderLeft: "1px solid rgba(255,255,255,0.05)", alignSelf: "stretch" }}>
 
-          {/* Block 1 — main statement, medium-large */}
-          <p className="text-[36px] md:text-[42px] font-medium leading-[1.12] text-white" style={{ letterSpacing: "-0.01em" }}>
-            The tastes of people you trust<br />
-            take you past what you know to look for.
-          </p>
+          {/* maxWidth constrains line length — prevents stretched lines and orphans */}
+          <div style={{ maxWidth: 540 }}>
 
-          {/* Block 2 — middle line, small gap after block 1, slightly quieter */}
-          <p className="mt-6 text-[20px] md:text-[22px] font-medium leading-snug" style={{ color: "rgba(255,255,255,0.68)" }}>
-            Past what gets recommended to you.
-          </p>
+            {/* Block 1 — primary: strong, tight, full white */}
+            <p className="text-[44px] md:text-[50px] font-semibold leading-[1.07] text-white" style={{ letterSpacing: "-0.02em" }}>
+              The tastes of people you trust
+              take you past what you know to look for.
+            </p>
 
-          {/* Block 3 — CTA, slightly larger gap, brighter and bolder */}
-          <p className="mt-10 text-[22px] md:text-[24px] font-semibold leading-snug" style={{ color: "rgba(255,255,255,0.96)" }}>
-            Start stepping outside your echo chamber.
-          </p>
+            {/* Block 2 — secondary: soft continuation, muted */}
+            <p className="text-[20px] md:text-[22px] font-normal leading-snug" style={{ color: "rgba(255,255,255,0.65)", marginTop: 24 }}>
+              Past what gets recommended to you.
+            </p>
+
+            {/* Block 3 — payoff: bigger than secondary, semibold, full white */}
+            <p className="text-[28px] md:text-[30px] font-semibold leading-[1.15] text-white" style={{ letterSpacing: "-0.01em", marginTop: 36 }}>
+              Start stepping outside your echo chamber.
+            </p>
+
+          </div>
         </div>
 
       </section>
