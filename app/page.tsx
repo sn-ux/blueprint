@@ -357,6 +357,14 @@ export default function LandingPage() {
   // and the left-side rotating line follows — feels deliberate, not abrupt.
   const [discoveryIdx,  setDiscoveryIdx]  = useState(0);
 
+  // ── Page 3 label wipe ────────────────────────────────────────────────────
+  // prevPage3LabelIdx holds the index being covered during the wipe.
+  // page3LabelAnimKey increments each time the platform changes to re-trigger
+  // the CSS clip-path animation on the incoming label layer.
+  const page3PrevIdxRef                    = useRef<number | null>(null);
+  const [prevPage3LabelIdx, setPrevPage3LabelIdx] = useState<number | null>(null);
+  const [page3LabelAnimKey, setPage3LabelAnimKey] = useState(0);
+
   // ── Interaction refs ──────────────────────────────────────────────────────
   const zoomRef          = useRef(1);       // visual zoom — lerped each RAF frame
   const zoomTargetRef    = useRef(1);       // intended zoom — updated immediately by wheel
@@ -435,6 +443,19 @@ export default function LandingPage() {
     }, 5000);
     return () => clearInterval(id);
   }, []);
+
+  // When carouselIdx changes: capture the outgoing label index as "prev" so
+  // it can sit underneath while the new label wipes in left-to-right.
+  // Skips the very first mount (ref starts null) so there's no wipe on load.
+  useEffect(() => {
+    if (page3PrevIdxRef.current === null) {
+      page3PrevIdxRef.current = carouselIdx;
+      return;
+    }
+    setPrevPage3LabelIdx(page3PrevIdxRef.current);
+    setPage3LabelAnimKey(k => k + 1);
+    page3PrevIdxRef.current = carouselIdx;
+  }, [carouselIdx]);
 
   // ── Poll zoomRef → text visibility (reversible) ──────────────────────────
   useEffect(() => {
@@ -1859,14 +1880,37 @@ export default function LandingPage() {
         <div className="relative flex flex-col items-center justify-center py-8 px-6 flex-shrink-0"
           style={{ width: "54%", alignSelf: "stretch" }}>
 
-          {/* Domain label — top-left, colored to match active platform */}
-          <p
-            key={carouselIdx}
-            className="absolute top-10 left-10 text-[13px] font-semibold tracking-[0.18em] uppercase select-none"
-            style={{ color: PAGE3_COLORS[carouselIdx], animation: "fadeSlideUp 0.35s ease-out" }}
-          >
-            {PAGE3_DOMAIN_LABELS[carouselIdx]}
-          </p>
+          {/* Domain label — top-left, wipes in left→right when platform changes.
+              Two layers: prev label sits underneath (absolute), new label
+              clips in over it via clip-path inset wipe.                     */}
+          <div className="absolute top-10 left-10 select-none">
+            {/* Previous label — stays visible underneath until covered */}
+            {prevPage3LabelIdx !== null && (
+              <span style={{
+                position: "absolute", left: 0, top: 0,
+                fontSize: 13, fontWeight: 600, letterSpacing: "0.18em",
+                textTransform: "uppercase", whiteSpace: "nowrap",
+                color: PAGE3_COLORS[prevPage3LabelIdx],
+              }}>
+                {PAGE3_DOMAIN_LABELS[prevPage3LabelIdx]}
+              </span>
+            )}
+            {/* Current label — wipes in from left to right */}
+            <span
+              key={page3LabelAnimKey}
+              style={{
+                display: "block",
+                fontSize: 13, fontWeight: 600, letterSpacing: "0.18em",
+                textTransform: "uppercase", whiteSpace: "nowrap",
+                color: PAGE3_COLORS[carouselIdx],
+                animation: page3LabelAnimKey > 0
+                  ? "labelWipeIn 260ms ease-out forwards"
+                  : "none",
+              }}
+            >
+              {PAGE3_DOMAIN_LABELS[carouselIdx]}
+            </span>
+          </div>
 
           {/* Circular arrangement — Friends in centre, 6 friends orbiting */}
           {(() => {
