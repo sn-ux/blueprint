@@ -281,6 +281,7 @@ export default function MapVisual() {
     if (!ctx) return;
 
     function sizeCanvas() {
+      if (!canvas || !container) return;
       canvas.width  = container.offsetWidth  || 600;
       canvas.height = container.offsetHeight || 800;
     }
@@ -292,6 +293,7 @@ export default function MapVisual() {
     // Maps section scroll progress (0 = just entering view, 1 = scrolled through)
     // to targetT so camera smoothly pans Menlo Park → Globe as user scrolls.
     function updateScroll() {
+      if (!container) return;
       const section = container.closest("section") as HTMLElement | null;
       if (!section) return;
       const rect = section.getBoundingClientRect();
@@ -342,6 +344,7 @@ export default function MapVisual() {
     let last = 0;
 
     function frame(now: number) {
+      if (!canvas || !ctx) return;
       const dt = last ? Math.min(now - last, 50) : 16;
       last = now;
 
