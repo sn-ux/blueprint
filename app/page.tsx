@@ -1979,22 +1979,29 @@ export default function LandingPage() {
         <div className="flex flex-col justify-center py-12 px-12 overflow-hidden"
           style={{ width: "46%", borderLeft: "1px solid rgba(255,255,255,0.05)", alignSelf: "stretch" }}>
 
-          {/* maxWidth constrains line length — prevents stretched lines and orphans */}
           <div style={{ maxWidth: 540 }}>
 
-            {/* Block 1 — primary: strong, tight, full white */}
-            <p className="text-[44px] md:text-[50px] font-semibold leading-[1.07] text-white" style={{ letterSpacing: "-0.02em" }}>
+            {/* Headline — dominant, full white */}
+            <h2 className="text-[44px] md:text-[50px] font-semibold leading-[1.07] text-white" style={{ letterSpacing: "-0.02em" }}>
               The tastes of people you trust
-              take you past what you know to look for.
+            </h2>
+
+            {/* Body line 1 — first continuation, slightly softened */}
+            <p className="text-[20px] md:text-[22px] font-normal leading-snug"
+              style={{ color: "rgba(255,255,255,0.75)", marginTop: 20 }}>
+              take you past what you know to search for.
             </p>
 
-            {/* Block 2 — secondary: soft continuation, muted */}
-            <p className="text-[20px] md:text-[22px] font-normal leading-snug" style={{ color: "rgba(255,255,255,0.65)", marginTop: 24 }}>
-              Past what gets recommended to you.
+            {/* Body line 2 — inverse of Page 2 SEARCH/FEED logic, same size as line 1 */}
+            <p className="text-[20px] md:text-[22px] font-normal leading-snug"
+              style={{ color: "rgba(255,255,255,0.75)", marginTop: 16 }}>
+              take you past what&apos;s recommended to you<br />
+              and what companies pay to promote.
             </p>
 
-            {/* Block 3 — payoff: bigger than secondary, semibold, full white */}
-            <p className="text-[28px] md:text-[30px] font-semibold leading-[1.15] text-white" style={{ letterSpacing: "-0.01em", marginTop: 36 }}>
+            {/* Final line — payoff, between body and headline in size */}
+            <p className="text-[26px] md:text-[28px] font-semibold leading-[1.15] text-white"
+              style={{ letterSpacing: "-0.01em", marginTop: 36 }}>
               Start stepping outside your echo chamber.
             </p>
 
