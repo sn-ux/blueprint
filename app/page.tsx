@@ -1976,32 +1976,34 @@ export default function LandingPage() {
         </div>
 
         {/* ── RIGHT: copy ─────────────────────────────────────────────────────── */}
-        <div className="flex flex-col justify-center py-12 px-12 overflow-hidden"
-          style={{ width: "46%", borderLeft: "1px solid rgba(255,255,255,0.05)", alignSelf: "stretch" }}>
+        {/* justify-start + pt-[10vh] anchors text to top of section (like Page 2) */}
+        <div className="flex flex-col justify-start px-12 overflow-hidden"
+          style={{ width: "46%", paddingTop: "10vh", paddingBottom: "8vh", borderLeft: "1px solid rgba(255,255,255,0.05)", alignSelf: "stretch" }}>
 
-          <div style={{ maxWidth: 540 }}>
+          {/* maxWidth 620 — wider than before so headline fits on one line */}
+          <div style={{ maxWidth: 620 }}>
 
-            {/* Headline — dominant, full white */}
-            <h2 className="text-[44px] md:text-[50px] font-semibold leading-[1.07] text-white" style={{ letterSpacing: "-0.02em" }}>
+            {/* Headline — 40/42px keeps it on one line within the available column width */}
+            <h2 className="text-[38px] md:text-[42px] font-semibold leading-[1.07] text-white" style={{ letterSpacing: "-0.02em" }}>
               The tastes of people you trust
             </h2>
 
-            {/* Body line 1 — first continuation, slightly softened */}
-            <p className="text-[20px] md:text-[22px] font-normal leading-snug"
-              style={{ color: "rgba(255,255,255,0.75)", marginTop: 20 }}>
+            {/* Body line 1 */}
+            <p className="text-[20px] md:text-[22px] font-normal leading-[1.45]"
+              style={{ color: "rgba(255,255,255,0.75)", marginTop: 32 }}>
               take you past what you know to search for.
             </p>
 
-            {/* Body line 2 — inverse of Page 2 SEARCH/FEED logic, same size as line 1 */}
-            <p className="text-[20px] md:text-[22px] font-normal leading-snug"
-              style={{ color: "rgba(255,255,255,0.75)", marginTop: 16 }}>
+            {/* Body line 2 — mirrors Page 2 SEARCH/FEED structure */}
+            <p className="text-[20px] md:text-[22px] font-normal leading-[1.45]"
+              style={{ color: "rgba(255,255,255,0.75)", marginTop: 24 }}>
               take you past what&apos;s recommended to you<br />
               and what companies pay to promote.
             </p>
 
-            {/* Final line — payoff, between body and headline in size */}
+            {/* Final line — payoff: larger than body, slightly below headline */}
             <p className="text-[26px] md:text-[28px] font-semibold leading-[1.15] text-white"
-              style={{ letterSpacing: "-0.01em", marginTop: 36 }}>
+              style={{ letterSpacing: "-0.01em", marginTop: 48 }}>
               Start stepping outside your echo chamber.
             </p>
 
