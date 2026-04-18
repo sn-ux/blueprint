@@ -1976,19 +1976,23 @@ export default function LandingPage() {
         </div>
 
         {/* ── RIGHT: copy ─────────────────────────────────────────────────────── */}
-        <div className="flex flex-col justify-center gap-5 py-12 px-12 overflow-hidden"
+        <div className="flex flex-col justify-center py-12 px-12 overflow-hidden"
           style={{ width: "46%", borderLeft: "1px solid rgba(255,255,255,0.05)", alignSelf: "stretch" }}>
 
-          <h2 className="text-[48px] md:text-[56px] font-semibold leading-[1.08] text-white" style={{ letterSpacing: "-0.02em" }}>
-            The people you trust<br />are the best filter.
-          </h2>
-
-          <p className="text-[20px] md:text-[22px] font-medium leading-snug" style={{ color: "rgba(255,255,255,0.82)" }}>
-            Explore what they actually love &mdash;<br />not what they just interacted with.
+          {/* Block 1 — main statement, medium-large */}
+          <p className="text-[36px] md:text-[42px] font-medium leading-[1.12] text-white" style={{ letterSpacing: "-0.01em" }}>
+            The tastes of people you trust<br />
+            take you past what you know to look for.
           </p>
 
-          <p className="text-[17px] leading-snug" style={{ color: "rgba(255,255,255,0.62)" }}>
-            Find what no search bar<br />or feed would have shown you.
+          {/* Block 2 — middle line, small gap after block 1, slightly quieter */}
+          <p className="mt-6 text-[20px] md:text-[22px] font-medium leading-snug" style={{ color: "rgba(255,255,255,0.68)" }}>
+            Past what gets recommended to you.
+          </p>
+
+          {/* Block 3 — CTA, slightly larger gap, brighter and bolder */}
+          <p className="mt-10 text-[22px] md:text-[24px] font-semibold leading-snug" style={{ color: "rgba(255,255,255,0.96)" }}>
+            Start stepping outside your echo chamber.
           </p>
         </div>
 
