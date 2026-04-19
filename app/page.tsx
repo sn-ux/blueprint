@@ -2002,14 +2002,21 @@ export default function LandingPage() {
             {/* Body line 1 */}
             <p className="text-[20px] md:text-[22px] font-normal leading-[1.45]"
               style={{ color: "rgba(255,255,255,0.75)", marginTop: 32 }}>
-              take you past what you know to search for.
+              show you what you never thought to look for.
             </p>
 
-            {/* Body line 2 — mirrors Page 2 SEARCH/FEED structure */}
+            {/* Body line 2 */}
             <p className="text-[20px] md:text-[22px] font-normal leading-[1.45]"
               style={{ color: "rgba(255,255,255,0.75)", marginTop: 24 }}>
-              take you past what&apos;s recommended to you<br />
-              &amp; what companies pay to promote.
+              show you what isn&apos;t recommended to you<br />
+              &amp; what companies don&apos;t pay to promote.
+            </p>
+
+            {/* Body line 3 */}
+            <p className="text-[20px] md:text-[22px] font-normal leading-[1.45]"
+              style={{ color: "rgba(255,255,255,0.75)", marginTop: 24 }}>
+              You&apos;re not searching anymore.<br />
+              You&apos;re seeing through someone else&apos;s perspective.
             </p>
 
             {/* Final line — payoff: larger than body, slightly below headline */}
@@ -2041,19 +2048,27 @@ export default function LandingPage() {
             {/* Body line 1 */}
             <p className="text-[20px] md:text-[22px] font-normal leading-[1.45]"
               style={{ color: "rgba(255,255,255,0.75)", marginTop: 32 }}>
-              Neighborhoods, Cities, Countries
+              Neighborhoods. Cities. Countries.<br />
+              Each one surfaces something different.
             </p>
 
-            {/* Body line 2 — sits directly below line 1 */}
+            {/* Body line 2 */}
             <p className="text-[20px] md:text-[22px] font-normal leading-[1.45]"
-              style={{ color: "rgba(255,255,255,0.75)", marginTop: 6 }}>
-              Each one sees something different.
+              style={{ color: "rgba(255,255,255,0.75)", marginTop: 24 }}>
+              Each one sees what you don&apos;t.
             </p>
 
-            {/* "Step into them." — slight separation above */}
+            {/* Body line 3 */}
             <p className="text-[20px] md:text-[22px] font-normal leading-[1.45]"
               style={{ color: "rgba(255,255,255,0.75)", marginTop: 24 }}>
               Step into them.
+            </p>
+
+            {/* Body line 4 */}
+            <p className="text-[20px] md:text-[22px] font-normal leading-[1.45]"
+              style={{ color: "rgba(255,255,255,0.75)", marginTop: 24 }}>
+              You&apos;re no longer limited by what you know<br />
+              or what you&apos;re shown.
             </p>
 
             {/* Final CTA — larger, semibold, full white */}
