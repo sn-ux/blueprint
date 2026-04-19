@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link  from "next/link";
 import Image from "next/image";
 
 // ── Navbar ────────────────────────────────────────────────────────────────────
@@ -19,9 +19,9 @@ export default function Navbar() {
         display:              "flex",
         alignItems:           "center",
         justifyContent:       "space-between",
-        // Edge-to-edge feel: small fixed margin, same on both sides
-        paddingLeft:          20,
-        paddingRight:         20,
+        // Small intentional margin on both sides, visually balanced
+        paddingLeft:          28,
+        paddingRight:         28,
         background:           "rgba(0,0,0,0.38)",
         backdropFilter:       "blur(12px)",
         WebkitBackdropFilter: "blur(12px)",
@@ -39,21 +39,14 @@ export default function Navbar() {
           flexShrink:     0,
         }}
       >
-        {/*
-          The logo PNG has a black background.
-          mix-blend-mode: screen makes black fully transparent, keeping the
-          white geometry, so it composites cleanly over the dark nav without
-          requiring a separate transparent-bg export.
-        */}
+        {/* SVG has a transparent background — white circles render cleanly
+            over the dark nav with no blending tricks needed. */}
         <Image
-          src="/logo.png"
+          src="/logo.svg"
           alt="Blueprint logo"
           width={30}
           height={30}
-          style={{
-            mixBlendMode: "screen",
-            display:      "block",
-          }}
+          style={{ display: "block" }}
           priority
         />
         <span

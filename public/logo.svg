@@ -1,0 +1,33 @@
+<svg viewBox="7 7 86 86" xmlns="http://www.w3.org/2000/svg" fill="none">
+  <!--
+    Seed of Life — 7 equal circles.
+    Center at (50,50), radius r=22, outer centres at distance r (= r, the
+    Seed-of-Life condition), rotated 15° clockwise from the top-pointing
+    canonical orientation so the first outer circle sits at 75° (upper-right),
+    matching the tilted logo provided.
+
+    cx = 50 + 22·cos(θ)
+    cy = 50 − 22·sin(θ)   (SVG y-axis flipped)
+  -->
+
+  <!-- centre -->
+  <circle cx="50"    cy="50"    r="22" stroke="white" stroke-width="4.2"/>
+
+  <!-- 75°  — upper-right -->
+  <circle cx="55.69" cy="28.75" r="22" stroke="white" stroke-width="4.2"/>
+
+  <!-- 15°  — right -->
+  <circle cx="71.25" cy="44.31" r="22" stroke="white" stroke-width="4.2"/>
+
+  <!-- −45° — lower-right -->
+  <circle cx="65.56" cy="65.56" r="22" stroke="white" stroke-width="4.2"/>
+
+  <!-- −105° — lower-left -->
+  <circle cx="44.31" cy="71.25" r="22" stroke="white" stroke-width="4.2"/>
+
+  <!-- −165° — left -->
+  <circle cx="28.75" cy="55.69" r="22" stroke="white" stroke-width="4.2"/>
+
+  <!-- 135° — upper-left -->
+  <circle cx="34.44" cy="34.44" r="22" stroke="white" stroke-width="4.2"/>
+</svg>
