@@ -3,16 +3,14 @@
 /**
  * MapVisual — cinematic city tour with icosphere city markers
  *
- * Each city has a small icosphere dot that blooms into a full rotating
- * icosphere as the camera zooms in — echoing the MiniSphere interface.
+ * Every visible map label gets a small amber icosphere dot.
+ * The active tour city's dot blooms into a full rotating icosphere
+ * as the camera zooms in — echoing the MiniSphere interface.
  *
  * Movement phases per city (fully decoupled):
  *   1. ZOOM IN   — camera locked, sphere grows  (~17 s)
  *   2. ZOOM OUT  — camera locked, sphere shrinks (~17 s)
  *   3. LATERAL   — constant wide zoom, sweeps to next city (~4 s)
- *
- * Route: Bay Area → LA → UCLA → Atlanta → New York → London → Paris
- *        → Beirut → Dubai → Chennai → Bangkok → Hong Kong → Tokyo → Bay Area
  */
 
 import { useEffect, useRef } from "react";
@@ -21,9 +19,9 @@ import maplibregl from "maplibre-gl";
 /* ── Constants ────────────────────────────────────────────────────────────── */
 
 const STYLE_URL     = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
-const LOOP_MS       = 480_000;   // 8-min loop
-const ZOOM_DELTA    = 0.035;     // fraction of loop for each zoom phase
-const LATERAL_DELTA = 0.008;     // fraction for lateral transit
+const LOOP_MS       = 480_000;
+const ZOOM_DELTA    = 0.035;
+const LATERAL_DELTA = 0.008;
 const CYCLE         = ZOOM_DELTA * 2 + LATERAL_DELTA;   // 0.078 per city
 
 /* ── City data ────────────────────────────────────────────────────────────── */
@@ -44,15 +42,7 @@ const CITIES = [
   { name: "Tokyo",       lat:  35.6762, lng:  139.6503, cityZoom: 13,  txZ: 2.5 },
 ] as const;
 
-/* ── Tour waypoints (generated from CITIES) ──────────────────────────────── *
- *
- *  Per city i at T = i × CYCLE:
- *    { t: T,              zoom: cityZoom, lat/lng: city[i]   }  ← zoomed in
- *    { t: T + ZOOM_DELTA, zoom: txZ,      lat/lng: city[i]   }  ← pulled back
- *    { t: T + ZOOM_DELTA + LATERAL_DELTA, zoom: txZ, lat/lng: city[i+1] }
- *
- *  Last segment wraps to TOUR[0]: globe zoom → city zoom over Bay Area.
- * ─────────────────────────────────────────────────────────────────────────── */
+/* ── Tour waypoints ───────────────────────────────────────────────────────── */
 
 const TOUR = (() => {
   const pts: { t: number; zoom: number; lat: number; lng: number }[] = [];
@@ -69,7 +59,7 @@ const TOUR = (() => {
   return pts;
 })();
 
-/* ── Icosphere geometry ───────────────────────────────────────────────────── */
+/* ── Icosphere geometry (built once at module load) ───────────────────────── */
 
 type V3  = [number, number, number];
 type Tri = [number, number, number];
@@ -112,10 +102,9 @@ function buildIcosphere(subdivs: number): { verts: V3[]; faces: Tri[] } {
   return { verts, faces };
 }
 
-// Built once at module load — 2 subdivisions: 162 verts, 320 faces
-const ISO = buildIcosphere(2);
+const ISO = buildIcosphere(2);   // 162 verts, 320 faces
 
-/* ── Math helpers ─────────────────────────────────────────────────────────── */
+/* ── Helpers ──────────────────────────────────────────────────────────────── */
 
 function smootherstep(t: number): number {
   return t * t * t * (t * (t * 6 - 15) + 10);
@@ -137,8 +126,7 @@ function getTourCamera(t: number): { zoom: number; lat: number; lng: number } {
   const tStart = TOUR[i].t;
   const tEnd   = i < n - 1 ? TOUR[i + 1].t : 1.0;
   const u      = smootherstep(Math.max(0, Math.min(1, (t - tStart) / (tEnd - tStart))));
-  const a = TOUR[i];
-  const b = TOUR[(i + 1) % n];
+  const a = TOUR[i], b = TOUR[(i + 1) % n];
   return {
     zoom: a.zoom + (b.zoom - a.zoom) * u,
     lat:  a.lat  + (b.lat  - a.lat)  * u,
@@ -146,40 +134,31 @@ function getTourCamera(t: number): { zoom: number; lat: number; lng: number } {
   };
 }
 
-/** Returns 0–1: how "active" (zoomed-in) city i is at the given loop phase. */
 function getCityActivity(cityIdx: number, phase: number): number {
   const cityT = cityIdx * CYCLE;
   let dt = Math.abs(phase - cityT);
-  if (dt > 0.5) dt = 1 - dt;             // wrap around loop boundary
+  if (dt > 0.5) dt = 1 - dt;
   if (dt >= ZOOM_DELTA) return 0;
   return smootherstep(1 - dt / ZOOM_DELTA);
 }
 
-/* ── Icosphere canvas renderer ────────────────────────────────────────────── */
+/* ── Icosphere renderer ───────────────────────────────────────────────────── */
 
 function drawIcosphere(
-  ctx:    CanvasRenderingContext2D,
-  cx:     number,
-  cy:     number,
-  radius: number,
-  rotY:   number,
-  alpha:  number,   // 0–1 overall opacity
+  ctx: CanvasRenderingContext2D,
+  cx: number, cy: number,
+  radius: number, rotY: number, alpha: number,
 ) {
-  const R    = radius;
-  const tilt = 0.42;                             // gentle X tilt
-  const sX   = Math.sin(tilt), cX = Math.cos(tilt);
-  const sY   = Math.sin(rotY),  cY = Math.cos(rotY);
+  const tilt = 0.42;
+  const sX = Math.sin(tilt), cX = Math.cos(tilt);
+  const sY = Math.sin(rotY),  cY = Math.cos(rotY);
 
-  // Project all vertices to screen space
   const pv = ISO.verts.map(([x, y, z]) => {
-    const x1 =  x * cY - z * sY;
-    const z1 =  x * sY + z * cY;
-    const y2 =  y * cX - z1 * sX;
-    const z2 =  y * sX + z1 * cX;
-    return { sx: cx + x1 * R, sy: cy - y2 * R, z: z2 };
+    const x1 =  x * cY - z * sY, z1 =  x * sY + z * cY;
+    const y2 =  y * cX - z1 * sX, z2 =  y * sX + z1 * cX;
+    return { sx: cx + x1 * radius, sy: cy - y2 * radius, z: z2 };
   });
 
-  // Painter's algorithm: sort faces back-to-front
   const sorted = ISO.faces
     .map(f => ({ f, z: (pv[f[0]].z + pv[f[1]].z + pv[f[2]].z) / 3 }))
     .sort((a, b) => a.z - b.z);
@@ -188,20 +167,14 @@ function drawIcosphere(
     const [ia, ib, ic] = f;
     const pa = pv[ia], pb = pv[ib], pc = pv[ic];
     const avgZ = (pa.z + pb.z + pc.z) / 3;
-    if (avgZ < -0.05) continue;                  // skip back-facing
-
-    const lit     = Math.max(0, avgZ);
-    const fillA   = (0.04 + lit * 0.09) * alpha;
-    const strokeA = (0.28 + lit * 0.60) * alpha;
-
+    if (avgZ < -0.05) continue;
+    const lit = Math.max(0, avgZ);
     ctx.beginPath();
-    ctx.moveTo(pa.sx, pa.sy);
-    ctx.lineTo(pb.sx, pb.sy);
-    ctx.lineTo(pc.sx, pc.sy);
-    ctx.closePath();
-    ctx.fillStyle   = `rgba(245,158,11,${fillA.toFixed(3)})`;
+    ctx.moveTo(pa.sx, pa.sy); ctx.lineTo(pb.sx, pb.sy);
+    ctx.lineTo(pc.sx, pc.sy); ctx.closePath();
+    ctx.fillStyle   = `rgba(245,158,11,${((0.04 + lit * 0.09) * alpha).toFixed(3)})`;
     ctx.fill();
-    ctx.strokeStyle = `rgba(245,158,11,${strokeA.toFixed(3)})`;
+    ctx.strokeStyle = `rgba(245,158,11,${((0.28 + lit * 0.60) * alpha).toFixed(3)})`;
     ctx.lineWidth   = radius > 20 ? 0.8 : 0.5;
     ctx.stroke();
   }
@@ -221,6 +194,9 @@ export default function MapVisual() {
     const overlay      = overlayRef.current;
     if (!wrapper || !mapContainer || !overlay) return;
 
+    const wrapperEl = wrapper  as HTMLDivElement;
+    const overlayEl = overlay  as HTMLCanvasElement;
+
     const map = new maplibregl.Map({
       container:          mapContainer,
       style:              STYLE_URL,
@@ -232,102 +208,158 @@ export default function MapVisual() {
       fadeDuration:       0,
     });
 
-    // Capture non-nullable locals so TypeScript can narrow them inside closures
-    const wrapperEl  = wrapper  as HTMLDivElement;
-    const overlayEl  = overlay  as HTMLCanvasElement;
+    let loopPhase  = 0;
+    let last       = 0;
+    let frameCount = 0;
+    const rotY     = CITIES.map((_, i) => i * 0.7);
 
-    let loopPhase = 0;
-    let last      = 0;
+    // Cached query results — updated every 4 frames (~15 Hz) to save CPU
+    // Each entry is a projected screen point {x, y} already validated on-screen
+    let dotCache: { x: number; y: number }[] = [];
 
-    // Per-city rotation state (different starting angles + speeds)
-    const rotY = CITIES.map((_, i) => i * 0.7);
+    // Layer IDs that draw place / country / admin labels — populated on load
+    let placeLayers: string[] = [];
 
     map.on("load", () => {
-      // Globe projection
+      // ── Globe + atmosphere ────────────────────────────────────────────────
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       try { (map as any).setProjection({ type: "globe" }); } catch {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         try { (map as any).setProjection("globe"); } catch { /* unsupported */ }
       }
-
-      // Space atmosphere
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (map as any).setFog?.({
-          range:            [0.8, 12],
-          color:            "#000000",
-          "high-color":     "#000818",
-          "horizon-blend":  0.12,
-          "space-color":    "#000000",
-          "star-intensity": 0.15,
+          range: [0.8, 12], color: "#000000",
+          "high-color": "#000818", "horizon-blend": 0.12,
+          "space-color": "#000000", "star-intensity": 0.15,
         });
       } catch { /* ignore */ }
 
+      // ── Collect place/label layer IDs from the loaded style ───────────────
+      //    CartoDB dark-matter uses OpenMapTiles — place labels live in
+      //    source-layer "place"; country labels in "country_name" / similar.
+      //    We capture every symbol layer whose id or source-layer suggests a
+      //    geographic name rather than a road / water / POI label.
+      placeLayers = map.getStyle().layers
+        .filter(l => l.type === "symbol")
+        .filter(l => {
+          const id = l.id.toLowerCase();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const sl = ((l as any)["source-layer"] ?? "").toLowerCase();
+          return (
+            sl === "place" ||
+            sl.includes("place") ||
+            sl.includes("country") ||
+            id.includes("place") ||
+            id.includes("country") ||
+            id.includes("city") ||
+            id.includes("town") ||
+            id.includes("village") ||
+            id.includes("state") ||
+            id.includes("admin")
+          );
+        })
+        .map(l => l.id);
+
+      // ── Animation loop ────────────────────────────────────────────────────
       function frame(now: number) {
         const dt  = last ? Math.min(now - last, 50) : 16;
         last      = now;
         loopPhase = (loopPhase + dt / LOOP_MS) % 1;
+        frameCount++;
 
-        // ── Map camera ──────────────────────────────────────────────────────
+        // Update camera
         const { zoom, lat, lng } = getTourCamera(loopPhase);
         map.jumpTo({ center: [lng, lat], zoom });
 
-        // ── Sphere rotations (slow, each city its own speed) ────────────────
-        for (let i = 0; i < CITIES.length; i++) {
-          rotY[i] += 0.004 + i * 0.0002;   // slight variation per city
-        }
+        // Spin all city spheres
+        for (let i = 0; i < CITIES.length; i++) rotY[i] += 0.004 + i * 0.0002;
 
-        // ── Overlay canvas ──────────────────────────────────────────────────
-        const dpr      = window.devicePixelRatio || 1;
+        // ── Canvas sizing ─────────────────────────────────────────────────
+        const dpr  = window.devicePixelRatio || 1;
         const { width: W, height: H } = wrapperEl.getBoundingClientRect();
         const pixW = Math.round(W * dpr);
         const pixH = Math.round(H * dpr);
-
         if (overlayEl.width !== pixW || overlayEl.height !== pixH) {
           overlayEl.width  = pixW;
           overlayEl.height = pixH;
         }
-
         const ctx = overlayEl.getContext("2d");
         if (!ctx) { rafRef.current = requestAnimationFrame(frame); return; }
-
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.clearRect(0, 0, W, H);
 
+        // ── Refresh dot cache every 4 frames ─────────────────────────────
+        //    queryRenderedFeatures returns every visible symbol feature whose
+        //    source-layer matches our place layers — all cities, towns,
+        //    countries etc. currently drawn by the map tiles.
+        if (frameCount % 4 === 0 || dotCache.length === 0) {
+          dotCache = [];
+          if (placeLayers.length > 0) {
+            const PAD = 4; // px — only include points cleanly inside the viewport
+            const seen = new Set<string>();
+            try {
+              const features = map.queryRenderedFeatures(undefined, { layers: placeLayers });
+              for (const f of features) {
+                if (f.geometry.type !== "Point") continue;
+                const [fLng, fLat] = f.geometry.coordinates;
+                const key = `${fLng.toFixed(3)},${fLat.toFixed(3)}`;
+                if (seen.has(key)) continue;
+                seen.add(key);
+                const pt = map.project([fLng, fLat]);
+                if (pt.x >= PAD && pt.x <= W - PAD && pt.y >= PAD && pt.y <= H - PAD) {
+                  dotCache.push({ x: pt.x, y: pt.y });
+                }
+              }
+            } catch { /* map may not be ready for a frame or two */ }
+          }
+        }
+
+        // ── Draw a tiny amber dot at every visible place label ────────────
+        ctx.save();
+        ctx.fillStyle = "rgba(245,158,11,0.60)";
+        for (const { x, y } of dotCache) {
+          ctx.beginPath();
+          ctx.arc(x, y, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+
+        // ── Draw bloom icosphere for each tour city ───────────────────────
+        //    Strictly clipped to the viewport so nothing "leaks" off-screen.
         for (let i = 0; i < CITIES.length; i++) {
           const city     = CITIES[i];
           const activity = getCityActivity(i, loopPhase);
+          const pt       = map.project([city.lng, city.lat]);
 
-          // Project geographic coordinate → canvas pixel
-          const pt = map.project([city.lng, city.lat]);
-          if (pt.x < -300 || pt.x > W + 300 || pt.y < -300 || pt.y > H + 300) continue;
+          // Only render if the projected point is actually on-screen
+          if (pt.x < 0 || pt.x > W || pt.y < 0 || pt.y > H) continue;
 
-          const MIN_R  = 4;
-          const MAX_R  = 54;
-          const radius = MIN_R + (MAX_R - MIN_R) * activity;
-          const alpha  = 0.55 + activity * 0.45;
+          const radius = 3 + 51 * activity;
 
           if (activity < 0.04) {
-            // Inactive: render as a small glowing dot
+            // Inactive: the dot cache already covers it; draw a slightly
+            // brighter dot so tour cities always stay legible
             ctx.beginPath();
-            ctx.arc(pt.x, pt.y, MIN_R, 0, Math.PI * 2);
-            ctx.fillStyle = "rgba(245,158,11,0.65)";
+            ctx.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
+            ctx.fillStyle = "rgba(245,158,11,0.85)";
             ctx.fill();
           } else {
-            // Active: full rotating icosphere, centered on the projected point
-            drawIcosphere(ctx, pt.x, pt.y, radius, rotY[i], alpha);
+            // Active: full icosphere, blooms from the dot in-place
+            drawIcosphere(ctx, pt.x, pt.y, radius, rotY[i], 0.55 + activity * 0.45);
+
+            // Show city name below the sphere only when substantially active
+            if (activity > 0.25) {
+              const labelY    = pt.y + radius + 12;
+              const textAlpha = (activity - 0.25) / 0.75;
+              ctx.font         = `500 ${(10 + activity * 3).toFixed(1)}px system-ui,sans-serif`;
+              ctx.textAlign    = "center";
+              ctx.textBaseline = "top";
+              ctx.fillStyle    = `rgba(255,255,255,${textAlpha.toFixed(2)})`;
+              ctx.fillText(city.name, pt.x, labelY);
+            }
           }
-
-          // ── Label below sphere ────────────────────────────────────────────
-          const labelY   = pt.y + radius + 15;
-          const fontSize = 10 + activity * 3;
-          const textAlpha = 0.45 + activity * 0.5;
-
-          ctx.font         = `${activity > 0.4 ? "500 " : ""}${fontSize.toFixed(1)}px system-ui, sans-serif`;
-          ctx.textAlign    = "center";
-          ctx.textBaseline = "top";
-          ctx.fillStyle    = `rgba(255,255,255,${textAlpha.toFixed(2)})`;
-          ctx.fillText(city.name, pt.x, labelY);
         }
 
         rafRef.current = requestAnimationFrame(frame);
@@ -347,10 +379,7 @@ export default function MapVisual() {
       ref={wrapperRef}
       style={{ position: "relative", width: "100%", height: "100%", background: "#000000" }}
     >
-      {/* Map lives in its own div so MapLibre can control it */}
       <div ref={mapContainerRef} style={{ position: "absolute", inset: 0 }} />
-
-      {/* Icosphere overlay — pointer-events: none so map interactions pass through */}
       <canvas
         ref={overlayRef}
         style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
