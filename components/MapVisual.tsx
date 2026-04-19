@@ -236,9 +236,12 @@ export default function MapVisual() {
         type:   "circle",
         source: "place-dots",
         paint: {
-          "circle-radius":  4,
-          "circle-color":   "#f59e0b",
-          "circle-opacity": 0.72,
+          "circle-radius":    4,
+          "circle-color":     "#f59e0b",
+          "circle-opacity":   0.72,
+          // Shift every dot 14 px upward so it sits above the label text
+          // rather than overlapping the lettering.
+          "circle-translate": [0, -14],
         },
       });
 
@@ -317,7 +320,12 @@ export default function MapVisual() {
 
           const city = CITIES[i];
           const pt   = map.project([city.lng, city.lat]);
-          if (pt.x < 0 || pt.x > W || pt.y < 0 || pt.y > H) continue;
+
+          // Only render the bloom when the city is near the screen centre.
+          // This kills the ghost sphere that appears in the corner while the
+          // camera is still in transit toward the city.
+          const distFromCenter = Math.hypot(pt.x - W / 2, pt.y - H / 2);
+          if (distFromCenter > Math.min(W, H) * 0.35) continue;
 
           const radius = 3 + 51 * activity;
           drawIcosphere(ctx, pt.x, pt.y, radius, rotY[i], 0.55 + activity * 0.45);
