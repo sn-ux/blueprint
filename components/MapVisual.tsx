@@ -4,24 +4,28 @@
  * MapVisual — Page 4 globe
  *
  * Renders a full MapLibre GL map in globe projection using CartoDB Dark Matter
- * tiles (free, no API key) with a 120-second cinematic American city tour:
+ * tiles (free, no API key) with a 200-second cinematic world tour:
  *
- *   San Francisco → Los Angeles → UCLA → Chicago → New York
- *   → Atlanta → Miami → Dallas → San Francisco  (seamless loop)
+ *   Bay Area → Tokyo → Hong Kong → Dubai → Rome → London → New York → Bay Area
  *
- * Every transition follows the Google-Earth / Apple-Maps pattern:
- *   1. Zoom out while hovering over the current city (pullback waypoint)
- *   2. Travel to the next city at altitude (transit waypoint)
- *   3. Descend back into the next city (arrival waypoint)
- *   4. Zoom in to street / neighbourhood level (city waypoint)
+ * The route is a continuous westward circumnavigation.  It crosses the
+ * International Date Line (Bay Area → Tokyo) and the North Atlantic
+ * (London → New York).
  *
- * "Pullback" waypoints share the same lat/lng as their city but carry a lower
- * zoom.  Because they flank each city symmetrically in zoom space, Catmull-
- * Rom's tangent rule makes the zoom velocity near-zero at each city peak —
- * producing a natural dwell without any extra code.
+ * ── Interpolation ────────────────────────────────────────────────────────────
+ * Segment-wise smootherstep lerp (Ken Perlin, 6t⁵ − 15t⁴ + 10t³):
+ *   • Zero velocity at every waypoint → natural dwell / smooth landing
+ *   • No overshoot, no oscillation
+ *   • Seamless loop: velocity at t=0/1 seam matches on both sides
  *
- * Camera path uses a periodic Catmull-Rom spline (C1-continuous), so the loop
- * seam at t = 0/1 is invisible.
+ * Longitude uses a short-path lerp that always takes the ≤180° arc, so the
+ * Pacific crossing routes correctly westward through the date line.
+ *
+ * ── Waypoint design ──────────────────────────────────────────────────────────
+ * Every city follows: arrival (altitude) → city (street level) → pullback
+ * (altitude) → transit (ocean / continent).  Arrival and pullback share the
+ * city's exact lat/lng so the camera zooms in-place before and after each
+ * stop — never sliding sideways at street level.
  */
 
 import { useEffect, useRef } from "react";
@@ -33,100 +37,107 @@ const STYLE_URL =
   "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
 /* ── Timing ───────────────────────────────────────────────────────────────── */
-const LOOP_MS = 120_000;   // 120 s per full city tour — cinematic, unhurried
+const LOOP_MS = 200_000;   // 200 s — slow, cinematic, premium
 
-/* ── City tour waypoints ──────────────────────────────────────────────────── *
- *  Structure per city stop:                                                   *
- *    arrival  — same lat/lng as city, pulled back (zoom 7–8)                  *
- *    city     — full zoom-in (zoom 11–13.5), labels readable                  *
- *    pullback — same lat/lng as city, pulled back (zoom 7–8)                  *
- *    transit  — geographic midpoint, deep altitude (zoom 4.5–7)               *
- *    (next arrival)                                                            *
+/* ── World-tour waypoints ─────────────────────────────────────────────────── *
+ *  Route: Bay Area →(Pacific)→ Tokyo → Hong Kong →(Indian Ocean)→ Dubai      *
+ *         →(Med)→ Rome →(Channel)→ London →(Atlantic)→ New York → Bay Area   *
  *                                                                             *
- *  t values space out so each city dwell ≈ 5 s, each transition ≈ 10 s       *
- *  at 120 s total.  Segment time = (t_next – t_this) × 120 s.               */
+ *  Segment time = (t_next – t_this) × 200 s.  Ocean crossings: ~10–13 s.    *
+ *  City dwells: ~7 s.  Transit hops: ~7–8 s.                                 */
 
 const TOUR = [
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  SAN FRANCISCO / BAY AREA  ━━━━
-  //   — no explicit arrival; wrap-around from Dallas transit lands here
-  { t: 0.000, zoom: 11.0, lat:  37.770, lng: -122.420 },   // SF city
-  { t: 0.038, zoom:  7.5, lat:  37.770, lng: -122.420 },   // SF pullback
-  { t: 0.078, zoom:  6.0, lat:  36.200, lng: -120.400 },   // transit: Central Valley
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  BAY AREA / SAN FRANCISCO  ━━━━
+  { t: 0.000, zoom: 11.0, lat:  37.770, lng: -122.420 },   // city
+  { t: 0.033, zoom:  7.5, lat:  37.770, lng: -122.420 },   // pullback
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  LOS ANGELES  ━━━━━━━
-  { t: 0.118, zoom:  8.0, lat:  34.052, lng: -118.244 },   // LA arrival
-  { t: 0.158, zoom: 11.0, lat:  34.052, lng: -118.244 },   // LA city
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  PACIFIC CROSSING  ━━━━━
+  //   Short-path lerpLng routes this westward through the date line.
+  { t: 0.095, zoom:  3.0, lat:  42.000, lng: -168.000 },   // mid-Pacific
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  UCLA / WESTWOOD  ━━━━━━
-  //   Close to LA — direct zoom-in, no deep pullback needed
-  { t: 0.205, zoom: 13.5, lat:  34.068, lng: -118.445 },   // UCLA city (labels visible)
-  { t: 0.247, zoom:  6.5, lat:  34.068, lng: -118.445 },   // UCLA pullback (launch for jump)
-  { t: 0.310, zoom:  4.5, lat:  37.500, lng: -108.000 },   // transit: Arizona / Colorado plateau
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  TOKYO  ━━━━━━
+  { t: 0.148, zoom:  7.5, lat:  35.689, lng:  139.692 },   // arrival
+  { t: 0.185, zoom: 11.0, lat:  35.689, lng:  139.692 },   // city (Shinjuku)
+  { t: 0.220, zoom:  7.5, lat:  35.689, lng:  139.692 },   // pullback
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  CHICAGO  ━━━━━
-  { t: 0.365, zoom:  7.5, lat:  41.878, lng:  -87.630 },   // Chicago arrival
-  { t: 0.405, zoom: 11.0, lat:  41.878, lng:  -87.630 },   // Chicago city
-  { t: 0.440, zoom:  7.5, lat:  41.878, lng:  -87.630 },   // Chicago pullback
-  { t: 0.478, zoom:  6.5, lat:  41.200, lng:  -80.500 },   // transit: northern Ohio
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  HONG KONG  ━━━━━━
+  { t: 0.258, zoom:  6.0, lat:  28.000, lng:  122.000 },   // transit: East China Sea
+  { t: 0.295, zoom:  8.0, lat:  22.319, lng:  114.169 },   // arrival
+  { t: 0.330, zoom: 11.5, lat:  22.319, lng:  114.169 },   // city (Victoria Harbour)
+  { t: 0.362, zoom:  7.0, lat:  22.319, lng:  114.169 },   // pullback
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  NEW YORK CITY  ━━━
-  { t: 0.517, zoom:  8.0, lat:  40.712, lng:  -74.006 },   // NYC arrival
-  { t: 0.555, zoom: 11.0, lat:  40.712, lng:  -74.006 },   // NYC city
-  { t: 0.588, zoom:  7.5, lat:  40.712, lng:  -74.006 },   // NYC pullback
-  { t: 0.623, zoom:  7.0, lat:  37.000, lng:  -80.000 },   // transit: Virginia / Carolinas
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  DUBAI  ━━━━━━━
+  { t: 0.422, zoom:  3.5, lat:  18.000, lng:   75.000 },   // transit: Indian Ocean
+  { t: 0.463, zoom:  7.5, lat:  25.204, lng:   55.270 },   // arrival
+  { t: 0.498, zoom: 11.0, lat:  25.204, lng:   55.270 },   // city (Dubai Marina)
+  { t: 0.532, zoom:  7.5, lat:  25.204, lng:   55.270 },   // pullback
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  ATLANTA  ━━━━━
-  { t: 0.658, zoom:  8.0, lat:  33.749, lng:  -84.388 },   // Atlanta arrival
-  { t: 0.695, zoom: 11.0, lat:  33.749, lng:  -84.388 },   // Atlanta city
-  { t: 0.728, zoom:  8.5, lat:  29.000, lng:  -82.000 },   // transit: central Florida coast
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  ROME  ━━━━━━
+  { t: 0.573, zoom:  5.5, lat:  36.000, lng:   25.000 },   // transit: Aegean Sea
+  { t: 0.610, zoom:  8.0, lat:  41.902, lng:   12.496 },   // arrival
+  { t: 0.645, zoom: 11.0, lat:  41.902, lng:   12.496 },   // city (Colosseum area)
+  { t: 0.675, zoom:  7.5, lat:  41.902, lng:   12.496 },   // pullback
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  MIAMI  ━━━━━
-  { t: 0.768, zoom: 11.5, lat:  25.774, lng:  -80.194 },   // Miami city
-  { t: 0.803, zoom:  7.0, lat:  25.774, lng:  -80.194 },   // Miami pullback
-  { t: 0.843, zoom:  5.5, lat:  28.500, lng:  -88.500 },   // transit: Gulf of Mexico
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  LONDON  ━━━━━━
+  { t: 0.706, zoom:  7.0, lat:  50.500, lng:    2.500 },   // transit: N. France / Channel
+  { t: 0.745, zoom: 11.0, lat:  51.508, lng:   -0.128 },   // city (Central London)
+  { t: 0.778, zoom:  7.5, lat:  51.508, lng:   -0.128 },   // pullback
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  DALLAS  ━━━━━
-  { t: 0.882, zoom:  7.5, lat:  32.776, lng:  -96.797 },   // Dallas arrival
-  { t: 0.920, zoom: 11.0, lat:  32.776, lng:  -96.797 },   // Dallas city
-  { t: 0.962, zoom:  5.5, lat:  35.500, lng: -110.000 },   // transit: Southwest desert → SF
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  NORTH ATLANTIC CROSSING  ━━━
+  { t: 0.832, zoom:  3.0, lat:  55.000, lng:  -35.000 },   // mid-Atlantic
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  NEW YORK CITY  ━━━━━━
+  { t: 0.880, zoom:  7.5, lat:  40.712, lng:  -74.006 },   // arrival
+  { t: 0.915, zoom: 11.0, lat:  40.712, lng:  -74.006 },   // city (Manhattan)
+  { t: 0.947, zoom:  7.0, lat:  40.712, lng:  -74.006 },   // pullback
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  RETURN  ━━━━━━
+  { t: 0.968, zoom:  5.0, lat:  38.500, lng: -105.000 },   // transit: Rockies
+  { t: 0.983, zoom:  7.5, lat:  37.770, lng: -122.420 },   // Bay Area arrival
 
 ];
 
 /* ── Helpers ──────────────────────────────────────────────────────────────── */
 
 /**
- * Catmull-Rom cubic spline for a single scalar channel.
- * Interpolates between p1 and p2; p0 and p3 set the entry/exit tangents.
- * C1-continuous at every knot: tangent = (next – prev) × 0.5.
+ * Ken Perlin's "smootherstep" (6t⁵ − 15t⁴ + 10t³).
+ * Both first and second derivatives are zero at t=0 and t=1, giving a very
+ * soft ease-in / ease-out with no perceptible jerk at either end.
  */
-function catmullRom(
-  p0: number, p1: number, p2: number, p3: number, t: number
-): number {
-  const t2 = t * t, t3 = t2 * t;
-  return 0.5 * (
-      2 * p1
-    + (-p0 + p2)                   * t
-    + ( 2*p0 - 5*p1 + 4*p2 - p3)  * t2
-    + (-p0   + 3*p1 - 3*p2 + p3)  * t3
-  );
+function smootherstep(t: number): number {
+  return t * t * t * (t * (t * 6 - 15) + 10);
 }
 
 /**
- * Periodic Catmull-Rom interpolation through TOUR waypoints.
+ * Short-path longitude interpolation.
+ * Normalises the difference to [−180, 180] so the camera always takes the
+ * ≤180° arc — this is what makes the Pacific crossing go westward through
+ * the date line instead of eastward the long way around the globe.
+ */
+function lerpLng(a: number, b: number, u: number): number {
+  let diff = b - a;
+  while (diff >  180) diff -= 360;
+  while (diff < -180) diff += 360;
+  return a + diff * u;
+}
+
+/**
+ * Segment-wise smootherstep interpolation through TOUR waypoints.
  *
- * t ∈ [0, 1) maps to the full city-tour loop.  Control points wrap with
- * modulo so the seam at t = 0/1 is C1-continuous: the loop returns to San
- * Francisco with matching velocity — no snap, no stutter.
+ * Within each segment the camera travels on a straight line in
+ * (zoom, lat, lng) space, eased by smootherstep so velocity is zero at both
+ * endpoints.  The last segment wraps from TOUR[n-1] back to TOUR[0].
  *
- * Zoom is clamped to [1.5, 16] to absorb any spline overshoot between
- * waypoints with large zoom differences (e.g. UCLA 13.5 → transit 4.5).
+ * Because velocity is always zero at waypoint boundaries:
+ *   • Each city naturally dwells at peak zoom with no extra dwell logic
+ *   • No overshoot, no oscillation, no jitter
+ *   • The loop seam at t = 0/1 has matching zero velocity on both sides
  */
 function getTourCamera(t: number): { zoom: number; lat: number; lng: number } {
   const n = TOUR.length;
 
   // Find the segment [TOUR[i].t, nextT) that contains t.
-  // The last segment [TOUR[n-1].t, 1.0) wraps back to TOUR[0].
   let i = n - 1;
   for (let j = 0; j < n - 1; j++) {
     if (t < TOUR[j + 1].t) { i = j; break; }
@@ -134,18 +145,15 @@ function getTourCamera(t: number): { zoom: number; lat: number; lng: number } {
 
   const tStart = TOUR[i].t;
   const tEnd   = i < n - 1 ? TOUR[i + 1].t : 1.0;
-  const u      = Math.max(0, Math.min(1, (t - tStart) / (tEnd - tStart)));
+  const u      = smootherstep(Math.max(0, Math.min(1, (t - tStart) / (tEnd - tStart))));
 
-  // Periodic control points — wrap with modulo for seamless loop
-  const p0 = TOUR[(i - 1 + n) % n];
-  const p1 = TOUR[i];
-  const p2 = TOUR[(i + 1) % n];
-  const p3 = TOUR[(i + 2) % n];
+  const a = TOUR[i];
+  const b = TOUR[(i + 1) % n];   // wraps to TOUR[0] on the last segment
 
   return {
-    zoom: Math.max(1.5, Math.min(16, catmullRom(p0.zoom, p1.zoom, p2.zoom, p3.zoom, u))),
-    lat:  catmullRom(p0.lat,  p1.lat,  p2.lat,  p3.lat,  u),
-    lng:  catmullRom(p0.lng,  p1.lng,  p2.lng,  p3.lng,  u),
+    zoom: a.zoom + (b.zoom - a.zoom) * u,
+    lat:  a.lat  + (b.lat  - a.lat)  * u,
+    lng:  lerpLng(a.lng, b.lng, u),
   };
 }
 
@@ -173,7 +181,7 @@ export default function MapVisual() {
       zoom:               11,
       interactive:        false,
       attributionControl: false,
-      renderWorldCopies:  false,
+      renderWorldCopies:  true,    // required: camera crosses the date line
     });
 
     let loopPhase = 0;
@@ -205,8 +213,8 @@ export default function MapVisual() {
         loopPhase = (loopPhase + dt / LOOP_MS) % 1;
 
         const { center, zoom } = getLoopCamera(loopPhase);
-        // jumpTo() applies the camera instantly each frame; combined with
-        // per-frame Catmull-Rom positions this produces smooth animation.
+        // jumpTo() applies the camera instantly each frame; the per-frame
+        // smootherstep positions produce a perfectly smooth animation.
         map.jumpTo({ center, zoom });
 
         rafRef.current = requestAnimationFrame(frame);
