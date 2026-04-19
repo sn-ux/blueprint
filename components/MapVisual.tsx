@@ -1,35 +1,24 @@
 "use client";
 
 /**
- * MapVisual — Page 4 globe
+ * MapVisual — cinematic city tour
  *
- * 300-second cinematic world tour travelling eastward, starting and ending
- * in the Bay Area:
+ * Movement pattern per city:
+ *   1. Zoomed-in street view — no lateral movement
+ *   2. Slow zoom OUT  (camera stays fixed over city)
+ *   3. Fast lateral SNAP to next city  (at constant wide zoom)
+ *   4. Slow zoom IN  (camera stays fixed over next city)
+ *   → repeat
  *
- *   SF → Chicago → NYC → London → Paris → Rome → Istanbul
- *     → Dubai → Nairobi → Mumbai → Singapore → Tokyo → SF
+ * Route:
+ *   Bay Area → LA → UCLA → Atlanta → New York → London → Paris
+ *   → Beirut → Dubai → Chennai → Bangkok → Hong Kong → Tokyo → Bay Area
  *
- * ── Zoom range ────────────────────────────────────────────────────────────────
- *   City stops      zoom 13.5   street-level detail
- *   Short arrivals  zoom 6      city in regional context
- *   Pullbacks       zoom 5.5    altitude, city identifiable
- *   Transits        zoom 3–5    continent / hemisphere view
- *   Ocean arcs      zoom 2.5–3  globe, always land-centred
- *
- * ── Land-only rule ───────────────────────────────────────────────────────────
- *   Every wide-view waypoint is centred on a named landmass:
- *     US interior    → Colorado Rockies      (41 N, 105 W)
- *     Appalachians   → Catskills / PA        (42 N,  78 W)
- *     N. Atlantic    → Labrador, Canada      (56 N,  60 W)
- *     C. Europe      → Swiss Alps            (46 N,   9 E)
- *     SE Europe      → Greece                (40 N,  22 E)
- *     Mesopotamia    → Iraq                  (34 N,  43 E)
- *     Horn / Arabia  → Ethiopia / Yemen      (12 N,  42 E)
- *     Bay of Bengal  → Myanmar / Bangladesh  (20 N,  92 E)
- *     S. China Sea   → S. China coast        (22 N, 114 E)
- *     N. Pacific     → Kamchatka Peninsula   (53 N, 159 E)
- *     Aleutians      → Aleutian Islands      (53 N, 175 W) ← land chain
- *     Pacific NW     → Oregon coast          (48 N, 124 W)
+ * Timing (240 s loop):
+ *   Zoom out / zoom in : 0.035 × 240 s ≈ 8.4 s each   (slow)
+ *   Lateral transit    : 0.006 × 240 s ≈ 1.4 s         (fast)
+ *   Cycle per city     : 0.076 × 240 s ≈ 18 s
+ *   Pacific return     : remaining ~11 s zoom-in to close loop
  */
 
 import { useEffect, useRef } from "react";
@@ -40,77 +29,99 @@ const STYLE_URL =
   "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
 /* ── Timing ───────────────────────────────────────────────────────────────── */
-const LOOP_MS = 300_000;   // 5 min — dynamic, city-to-city pace
+const LOOP_MS = 240_000;   // 4 min
 
-/* ── World-tour waypoints ─────────────────────────────────────────────────── */
+/* ── Tour waypoints ───────────────────────────────────────────────────────── *
+ *
+ *  Three-point pattern per city transition A → B:
+ *
+ *    { t,         zoom: cityZoom,    lat/lng: A }   ← zoomed in at A
+ *    { t + 0.035, zoom: transitZoom, lat/lng: A }   ← pulled back, no lateral
+ *    { t + 0.041, zoom: transitZoom, lat/lng: B }   ← fast lateral to B, same zoom
+ *    (next entry) { t + 0.076, zoom: cityZoom, lat/lng: B }   ← zoomed in at B
+ *
+ *  Transit zoom by leg:
+ *    Bay Area → LA          z 7   (see California)
+ *    LA → UCLA              z 9   (see LA metro — short hop)
+ *    UCLA → Atlanta         z 5   (see SE United States)
+ *    Atlanta → NYC          z 5   (see East Coast)
+ *    NYC → London           z 3   (globe — Atlantic crossing)
+ *    London → Paris         z 7   (see NW Europe)
+ *    Paris → Beirut         z 4   (see Mediterranean basin)
+ *    Beirut → Dubai         z 5   (see Middle East)
+ *    Dubai → Chennai        z 4   (see Indian subcontinent)
+ *    Chennai → Bangkok      z 5   (see SE Asia)
+ *    Bangkok → Hong Kong    z 6   (see S China / SE Asia)
+ *    Hong Kong → Tokyo      z 5   (see East Asia)
+ *    Tokyo → Bay Area       z 2.5 (globe — Pacific crossing)
+ * ─────────────────────────────────────────────────────────────────────────── */
 
 const TOUR = [
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  BAY AREA  ━━━━━━━━━━━━━━━━━━
+  { t: 0.000, zoom: 14,   lat:  37.7955, lng: -122.3934 },   // city (Embarcadero)
+  { t: 0.035, zoom:  7,   lat:  37.7955, lng: -122.3934 },   // pulled back
+  { t: 0.041, zoom:  7,   lat:  34.0522, lng: -118.2437 },   // → LA
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  SAN FRANCISCO  ━━━━━━━━━━━━━━━━
-  { t: 0.000, zoom: 13.5, lat:  37.779, lng: -122.419 },   // city
-  { t: 0.033, zoom:  5.5, lat:  37.779, lng: -122.419 },   // pullback
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  LOS ANGELES  ━━━━━━━━━━━━━━━━━
+  { t: 0.076, zoom: 14,   lat:  34.0522, lng: -118.2437 },   // city (Downtown)
+  { t: 0.111, zoom:  9,   lat:  34.0522, lng: -118.2437 },   // pulled back
+  { t: 0.117, zoom:  9,   lat:  34.0731, lng: -118.4441 },   // → UCLA
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  CHICAGO  ━━━━━━━
-  { t: 0.053, zoom:  4.5, lat:  41.000, lng: -105.000 },   // Rockies transit
-  { t: 0.080, zoom: 13.5, lat:  41.878, lng:  -87.629 },   // city (Loop)
-  { t: 0.113, zoom:  5.5, lat:  41.878, lng:  -87.629 },   // pullback
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  UCLA  ━━━━━━━━━━━━━━━━━
+  { t: 0.152, zoom: 15,   lat:  34.0731, lng: -118.4441 },   // city (Royce Hall)
+  { t: 0.187, zoom:  5,   lat:  34.0731, lng: -118.4441 },   // pulled back
+  { t: 0.193, zoom:  5,   lat:  33.7490, lng:  -84.3880 },   // → Atlanta
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  NEW YORK CITY  ━━━━━
-  { t: 0.130, zoom:  5.0, lat:  42.500, lng:  -78.000 },   // Appalachians
-  { t: 0.157, zoom: 13.5, lat:  40.712, lng:  -74.006 },   // city (Manhattan)
-  { t: 0.190, zoom:  5.5, lat:  40.712, lng:  -74.006 },   // pullback
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  ATLANTA  ━━━━━━━━━━━━━━━━
+  { t: 0.228, zoom: 14,   lat:  33.7490, lng:  -84.3880 },   // city (Midtown)
+  { t: 0.263, zoom:  5,   lat:  33.7490, lng:  -84.3880 },   // pulled back
+  { t: 0.269, zoom:  5,   lat:  40.7580, lng:  -73.9855 },   // → New York
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  LONDON  ━━━━━━━
-  { t: 0.220, zoom:  3.0, lat:  56.000, lng:  -60.000 },   // Labrador (globe)
-  { t: 0.273, zoom: 13.5, lat:  51.509, lng:   -0.118 },   // city (Central)
-  { t: 0.307, zoom:  5.5, lat:  51.509, lng:   -0.118 },   // pullback
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  NEW YORK  ━━━━━━━━━━━━━━━
+  { t: 0.304, zoom: 14,   lat:  40.7580, lng:  -73.9855 },   // city (Midtown)
+  { t: 0.339, zoom:  3,   lat:  40.7580, lng:  -73.9855 },   // pulled back (globe)
+  { t: 0.345, zoom:  3,   lat:  51.5074, lng:   -0.1278 },   // → London
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  PARIS  ━━━━━━
-  { t: 0.323, zoom: 13.5, lat:  48.857, lng:    2.352 },   // city (Marais)
-  { t: 0.357, zoom:  5.5, lat:  48.857, lng:    2.352 },   // pullback
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  LONDON  ━━━━━━━━━━━━━━━
+  { t: 0.380, zoom: 14,   lat:  51.5074, lng:   -0.1278 },   // city (Westminster)
+  { t: 0.415, zoom:  7,   lat:  51.5074, lng:   -0.1278 },   // pulled back
+  { t: 0.421, zoom:  7,   lat:  48.8584, lng:    2.2945 },   // → Paris
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  ROME  ━━━━━━
-  { t: 0.373, zoom:  5.0, lat:  46.000, lng:    9.000 },   // Alps transit
-  { t: 0.393, zoom: 13.5, lat:  41.902, lng:   12.496 },   // city (Colosseum)
-  { t: 0.423, zoom:  5.5, lat:  41.902, lng:   12.496 },   // pullback
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  PARIS  ━━━━━━━━━━━━━━
+  { t: 0.456, zoom: 14,   lat:  48.8584, lng:    2.2945 },   // city (Eiffel Tower)
+  { t: 0.491, zoom:  4,   lat:  48.8584, lng:    2.2945 },   // pulled back
+  { t: 0.497, zoom:  4,   lat:  33.8886, lng:   35.4955 },   // → Beirut
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  ISTANBUL  ━━━━━━
-  { t: 0.440, zoom:  5.0, lat:  40.000, lng:   22.000 },   // Greece transit
-  { t: 0.460, zoom: 13.5, lat:  41.013, lng:   28.978 },   // city (Bosphorus)
-  { t: 0.490, zoom:  5.5, lat:  41.013, lng:   28.978 },   // pullback
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  BEIRUT  ━━━━━━━━━━━━━━
+  { t: 0.532, zoom: 14,   lat:  33.8886, lng:   35.4955 },   // city (Downtown)
+  { t: 0.567, zoom:  5,   lat:  33.8886, lng:   35.4955 },   // pulled back
+  { t: 0.573, zoom:  5,   lat:  25.2048, lng:   55.2708 },   // → Dubai
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  DUBAI  ━━━━━━
-  { t: 0.507, zoom:  4.5, lat:  34.000, lng:   43.000 },   // Mesopotamia
-  { t: 0.530, zoom: 13.5, lat:  25.204, lng:   55.270 },   // city (Downtown)
-  { t: 0.560, zoom:  5.5, lat:  25.204, lng:   55.270 },   // pullback
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  DUBAI  ━━━━━━━━━━━━━
+  { t: 0.608, zoom: 14,   lat:  25.2048, lng:   55.2708 },   // city (Burj Khalifa)
+  { t: 0.643, zoom:  4,   lat:  25.2048, lng:   55.2708 },   // pulled back
+  { t: 0.649, zoom:  4,   lat:  13.0827, lng:   80.2707 },   // → Chennai
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  NAIROBI  ━━━━━━━
-  { t: 0.577, zoom:  4.5, lat:  12.000, lng:   42.000 },   // Ethiopia
-  { t: 0.600, zoom: 13.5, lat:  -1.286, lng:   36.817 },   // city (CBD)
-  { t: 0.630, zoom:  5.5, lat:  -1.286, lng:   36.817 },   // pullback
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  CHENNAI  ━━━━━━━━━━━━━
+  { t: 0.684, zoom: 14,   lat:  13.0827, lng:   80.2707 },   // city (Marina Beach)
+  { t: 0.719, zoom:  5,   lat:  13.0827, lng:   80.2707 },   // pulled back
+  { t: 0.725, zoom:  5,   lat:  13.7563, lng:  100.5018 },   // → Bangkok
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  MUMBAI  ━━━━━━━
-  { t: 0.647, zoom:  4.0, lat:  15.000, lng:   51.000 },   // Yemen / Horn
-  { t: 0.673, zoom: 13.5, lat:  19.076, lng:   72.877 },   // city (Marine Dr)
-  { t: 0.703, zoom:  5.5, lat:  19.076, lng:   72.877 },   // pullback
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  BANGKOK  ━━━━━━━━━━━━━
+  { t: 0.760, zoom: 14,   lat:  13.7563, lng:  100.5018 },   // city (Grand Palace)
+  { t: 0.795, zoom:  6,   lat:  13.7563, lng:  100.5018 },   // pulled back
+  { t: 0.801, zoom:  6,   lat:  22.2857, lng:  114.1577 },   // → Hong Kong
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  SINGAPORE  ━━━━━━
-  { t: 0.720, zoom:  4.5, lat:  20.000, lng:   92.000 },   // Myanmar coast
-  { t: 0.747, zoom: 13.5, lat:   1.290, lng:  103.850 },   // city (Marina Bay)
-  { t: 0.777, zoom:  5.5, lat:   1.290, lng:  103.850 },   // pullback
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  HONG KONG  ━━━━━━━━━━━━
+  { t: 0.836, zoom: 14,   lat:  22.2857, lng:  114.1577 },   // city (Victoria Harbour)
+  { t: 0.871, zoom:  5,   lat:  22.2857, lng:  114.1577 },   // pulled back
+  { t: 0.877, zoom:  5,   lat:  35.6762, lng:  139.6503 },   // → Tokyo
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  TOKYO  ━━━━━━━
-  { t: 0.793, zoom:  4.5, lat:  22.000, lng:  114.000 },   // S. China coast
-  { t: 0.820, zoom: 13.5, lat:  35.689, lng:  139.692 },   // city (Shinjuku)
-  { t: 0.850, zoom:  5.5, lat:  35.689, lng:  139.692 },   // pullback
-
-  // ━━━━━━━━━━━━━━━━━━━━━━━  PACIFIC RETURN (fast arc)  ━━━━━━━━━━━━━━━━━━━━━
-  { t: 0.873, zoom:  3.5, lat:  53.000, lng:  159.000 },   // Kamchatka
-  { t: 0.910, zoom:  2.5, lat:  53.000, lng: -175.000 },   // Aleutians (globe)
-  { t: 0.953, zoom:  5.0, lat:  48.000, lng: -124.000 },   // Oregon coast
-
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  SAN FRANCISCO (return)  ━━━━━━━━━
-  { t: 1.000, zoom: 13.5, lat:  37.779, lng: -122.419 },   // arrival
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  TOKYO  ━━━━━━━━━━━━━
+  { t: 0.912, zoom: 14,   lat:  35.6762, lng:  139.6503 },   // city (Shinjuku)
+  { t: 0.947, zoom:  2.5, lat:  35.6762, lng:  139.6503 },   // pulled back (globe)
+  { t: 0.953, zoom:  2.5, lat:  37.7955, lng: -122.3934 },   // → Bay Area (Pacific arc)
+  // Last segment wraps to TOUR[0]: zoom 2.5 → 14 over Bay Area  (~11 s zoom-in)
 ];
 
 /* ── Helpers ──────────────────────────────────────────────────────────────── */
@@ -122,8 +133,8 @@ function smootherstep(t: number): number {
 
 /**
  * Short-path longitude lerp.
- * Always takes the ≤180° route so Pacific crossings go westward through the
- * date line instead of all the way eastward.
+ * Always takes the ≤180° route, so the Pacific return sweeps eastward
+ * through the Aleutians rather than westward the long way around.
  */
 function lerpLng(a: number, b: number, u: number): number {
   let diff = b - a;
@@ -136,6 +147,7 @@ function lerpLng(a: number, b: number, u: number): number {
 function getTourCamera(t: number): { zoom: number; lat: number; lng: number } {
   const n = TOUR.length;
 
+  // Find the current segment
   let i = n - 1;
   for (let j = 0; j < n - 1; j++) {
     if (t < TOUR[j + 1].t) { i = j; break; }
@@ -146,7 +158,7 @@ function getTourCamera(t: number): { zoom: number; lat: number; lng: number } {
   const u      = smootherstep(Math.max(0, Math.min(1, (t - tStart) / (tEnd - tStart))));
 
   const a = TOUR[i];
-  const b = TOUR[(i + 1) % n];
+  const b = TOUR[(i + 1) % n];   // wraps last → first
 
   return {
     zoom: a.zoom + (b.zoom - a.zoom) * u,
@@ -168,12 +180,12 @@ export default function MapVisual() {
     const map = new maplibregl.Map({
       container,
       style:              STYLE_URL,
-      center:             [-122.419, 37.779],
-      zoom:               13.5,
+      center:             [-122.3934, 37.7955],
+      zoom:               14,
       interactive:        false,
       attributionControl: false,
-      renderWorldCopies:  false,  // single globe, no tile-copy overhead
-      fadeDuration:       0,      // tiles appear instantly — no pop-in flash
+      renderWorldCopies:  false,   // single globe, halves tile load overhead
+      fadeDuration:       0,       // tiles render instantly — no pop-in flicker
     });
 
     let loopPhase = 0;
@@ -187,7 +199,7 @@ export default function MapVisual() {
         try { (map as any).setProjection("globe"); } catch { /* unsupported build */ }
       }
 
-      // ── Space atmosphere: black void + subtle horizon glow ────────────────
+      // ── Space atmosphere ──────────────────────────────────────────────────
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (map as any).setFog?.({
