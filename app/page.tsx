@@ -1951,7 +1951,7 @@ export default function LandingPage() {
                   transform: "translate(-50%, -50%)",
                   display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
                 }}>
-                  <MiniSphere size={210} seed={99}
+                  <MiniSphere size={240} seed={99}
                     platformColor={PAGE3_COLORS[carouselIdx]}
                     transitionDelay={xToDelay(CX)} />
                   <span style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(255,255,255,0.30)" }}>
@@ -1971,7 +1971,7 @@ export default function LandingPage() {
                       transform: "translate(-50%, -50%)",
                       display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
                     }}>
-                      <MiniSphere size={132} seed={f.seed}
+                      <MiniSphere size={152} seed={f.seed}
                         platformColor={PAGE3_COLORS[carouselIdx]}
                         transitionDelay={xToDelay(x)} />
                       <span style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", whiteSpace: "nowrap" }}>
@@ -2065,9 +2065,29 @@ export default function LandingPage() {
 
         {/* ── RIGHT: animated map visual ──────────────────────────────────────── */}
         <div className="relative overflow-hidden" style={{ width: "46%", alignSelf: "stretch" }}>
-          <p className="absolute top-8 left-7 text-[11px] tracking-widest uppercase select-none pointer-events-none" style={{ zIndex: 10, color: "rgba(255,255,255,0.35)" }}>
-            The Universal Intellect
-          </p>
+          {/* Rotating domain label — same gradient-wipe animation as the sphere section */}
+          <div className="absolute top-8 left-7 select-none pointer-events-none" style={{ zIndex: 10 }}>
+            <span
+              key={page3LabelAnimKey}
+              style={{
+                display: "block",
+                fontSize: 11, fontWeight: 600, letterSpacing: "0.18em",
+                textTransform: "uppercase", whiteSpace: "nowrap",
+                ...(page3LabelAnimKey > 0 && prevPage3LabelIdx !== null ? {
+                  background: `linear-gradient(to right, ${PAGE3_COLORS[carouselIdx]} 50%, ${PAGE3_COLORS[prevPage3LabelIdx]} 50%)`,
+                  backgroundSize: "200% 100%",
+                  WebkitBackgroundClip: "text",
+                  backgroundClip: "text",
+                  color: "transparent",
+                  animation: "labelColorWipe 260ms ease-out forwards",
+                } : {
+                  color: PAGE3_COLORS[carouselIdx],
+                }),
+              }}
+            >
+              {PAGE3_DOMAIN_LABELS[carouselIdx]}
+            </span>
+          </div>
           <MapVisual platformColor={PAGE3_COLORS[carouselIdx]} />
         </div>
 
