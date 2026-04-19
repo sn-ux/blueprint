@@ -2068,7 +2068,7 @@ export default function LandingPage() {
           <p className="absolute top-8 left-7 text-[11px] tracking-widest uppercase select-none pointer-events-none" style={{ zIndex: 10, color: "rgba(255,255,255,0.35)" }}>
             The Universal Intellect
           </p>
-          <MapVisual />
+          <MapVisual platformColor={PAGE3_COLORS[carouselIdx]} />
         </div>
 
       </section>

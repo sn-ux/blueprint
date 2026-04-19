@@ -9,6 +9,12 @@ const ZOOM_DELTA    = 0.035;
 const LATERAL_DELTA = 0.008;
 const CYCLE         = ZOOM_DELTA * 2 + LATERAL_DELTA;
 
+// Default dot color when no platform color is supplied
+const DEFAULT_COLOR = "#f59e0b";
+
+// Transition duration in ms — matches MiniSphere / carousel
+const COLOR_TRANSITION_MS = 250;
+
 const CITIES = [
   { lat:  37.7879, lng: -122.4074, cityZoom: 13,  txZ: 7   },
   { lat:  34.0522, lng: -118.2437, cityZoom: 13,  txZ: 9   },
@@ -68,16 +74,158 @@ function getTourCamera(t: number): { zoom: number; lat: number; lng: number } {
   };
 }
 
-export default function MapVisual() {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const rafRef       = useRef(0);
+// ── Color helpers ─────────────────────────────────────────────────────────────
+
+/** Parse a 6-digit hex color into [r, g, b] 0-255. */
+function hexToRgb(hex: string): [number, number, number] {
+  const h = hex.replace("#", "");
+  return [
+    parseInt(h.slice(0, 2), 16),
+    parseInt(h.slice(2, 4), 16),
+    parseInt(h.slice(4, 6), 16),
+  ];
+}
+
+/** Ease-in-out quadratic, matching MiniSphere transition curve. */
+function easeInOut(t: number): number {
+  return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+}
+
+// ── Icosphere geometry ────────────────────────────────────────────────────────
+
+type V3  = [number, number, number];
+type Tri = [number, number, number];
+
+function norm3([x, y, z]: V3): V3 {
+  const l = Math.sqrt(x * x + y * y + z * z);
+  return [x / l, y / l, z / l];
+}
+
+function buildIcosphere(subdivs: number): { verts: V3[]; faces: Tri[] } {
+  const φ = (1 + Math.sqrt(5)) / 2;
+  let verts: V3[] = ([
+    [-1, φ, 0], [1, φ, 0], [-1, -φ, 0], [1, -φ, 0],
+    [0, -1, φ], [0, 1, φ], [0, -1, -φ], [0, 1, -φ],
+    [φ, 0, -1], [φ, 0, 1], [-φ, 0, -1], [-φ, 0, 1],
+  ] as V3[]).map(norm3);
+  let faces: Tri[] = [
+    [0,11,5],[0,5,1],[0,1,7],[0,7,10],[0,10,11],
+    [1,5,9],[5,11,4],[11,10,2],[10,7,6],[7,1,8],
+    [3,9,4],[3,4,2],[3,2,6],[3,6,8],[3,8,9],
+    [4,9,5],[2,4,11],[6,2,10],[8,6,7],[9,8,1],
+  ];
+  for (let s = 0; s < subdivs; s++) {
+    const cache = new Map<string, number>();
+    const mid = (a: number, b: number): number => {
+      const k = a < b ? `${a}:${b}` : `${b}:${a}`;
+      if (cache.has(k)) return cache.get(k)!;
+      const [ax, ay, az] = verts[a], [bx, by, bz] = verts[b];
+      verts.push(norm3([(ax+bx)/2, (ay+by)/2, (az+bz)/2]));
+      cache.set(k, verts.length - 1);
+      return verts.length - 1;
+    };
+    const next: Tri[] = [];
+    for (const [a, b, c] of faces) {
+      const ab = mid(a,b), bc = mid(b,c), ca = mid(c,a);
+      next.push([a,ab,ca],[b,bc,ab],[c,ca,bc],[ab,bc,ca]);
+    }
+    faces = next;
+  }
+  return { verts, faces };
+}
+
+// Pre-build once at module load (2 subdivisions = 320 faces)
+const ISO = buildIcosphere(2);
+
+/**
+ * Draw a single icosphere centred at (cx, cy) using the given RGB color.
+ * Lighting uses the same face-depth opacity model as MiniSphere.
+ */
+function drawIcosphere(
+  ctx:  CanvasRenderingContext2D,
+  cx:   number,
+  cy:   number,
+  R:    number,
+  rx:   number,
+  ry:   number,
+  cr:   number,
+  cg:   number,
+  cb:   number,
+) {
+  const { verts, faces } = ISO;
+  const sX = Math.sin(rx), cX = Math.cos(rx);
+  const sY = Math.sin(ry), cY = Math.cos(ry);
+
+  const pv = verts.map(([x, y, z]) => {
+    const x1 = x * cY - z * sY;
+    const z1 = x * sY + z * cY;
+    const y2 = y * cX - z1 * sX;
+    const z2 = y * sX + z1 * cX;
+    return { sx: cx + x1 * R, sy: cy - y2 * R, z: z2 };
+  });
+
+  // Painter's algorithm — back-to-front
+  const sorted = faces
+    .map((f, i) => ({ f, i, z: (pv[f[0]].z + pv[f[1]].z + pv[f[2]].z) / 3 }))
+    .sort((a, b) => a.z - b.z);
+
+  for (const { f, z } of sorted) {
+    const [ia, ib, ic] = f;
+    const fillA   = (0.05 + Math.max(0, z) * 0.13).toFixed(3);
+    const strokeA = (0.28 + Math.max(0, z) * 0.55).toFixed(3);
+    ctx.beginPath();
+    ctx.moveTo(pv[ia].sx, pv[ia].sy);
+    ctx.lineTo(pv[ib].sx, pv[ib].sy);
+    ctx.lineTo(pv[ic].sx, pv[ic].sy);
+    ctx.closePath();
+    ctx.fillStyle   = `rgba(${cr},${cg},${cb},${fillA})`;
+    ctx.fill();
+    ctx.strokeStyle = `rgba(${cr},${cg},${cb},${strokeA})`;
+    ctx.lineWidth   = 0.5;
+    ctx.stroke();
+  }
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
+export default function MapVisual({
+  platformColor,
+}: {
+  /** Hex color that all dots should show. Transitions smoothly when it changes. */
+  platformColor?: string;
+}) {
+  const wrapperRef  = useRef<HTMLDivElement>(null);
+  const mapDivRef   = useRef<HTMLDivElement>(null);
+  const overlayRef  = useRef<HTMLCanvasElement>(null);
+  const rafRef      = useRef(0);
+
+  // Color transition state — mirrors MiniSphere pattern
+  const toColorRef         = useRef<string>(platformColor ?? DEFAULT_COLOR);
+  const fromColorRef       = useRef<string | null>(null);
+  const transitionStartRef = useRef<number>(-1);
+
+  // Sync prop changes into refs so the rAF loop picks them up without re-running useEffect
+  useEffect(() => {
+    const next = platformColor ?? DEFAULT_COLOR;
+    if (next !== toColorRef.current) {
+      fromColorRef.current       = toColorRef.current;
+      toColorRef.current         = next;
+      transitionStartRef.current = performance.now();
+    }
+  }, [platformColor]);
 
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
+    const wrapper = wrapperRef.current;
+    const mapDiv  = mapDivRef.current;
+    const overlay = overlayRef.current;
+    if (!wrapper || !mapDiv || !overlay) return;
+
+    const ctx2d = overlay.getContext("2d");
+    if (!ctx2d) return;
+    const ctx: CanvasRenderingContext2D = ctx2d;
 
     const map = new maplibregl.Map({
-      container,
+      container:          mapDiv,
       style:              STYLE_URL,
       center:             [CITIES[0].lng, CITIES[0].lat],
       zoom:               CITIES[0].cityZoom,
@@ -87,17 +235,53 @@ export default function MapVisual() {
       fadeDuration:       0,
     });
 
+    // Resize canvas to match wrapper
+    const resizeCanvas = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const w   = wrapper.clientWidth;
+      const h   = wrapper.clientHeight;
+      overlay.width  = w * dpr;
+      overlay.height = h * dpr;
+      overlay.style.width  = `${w}px`;
+      overlay.style.height = `${h}px`;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    resizeCanvas();
+    const ro = new ResizeObserver(resizeCanvas);
+    ro.observe(wrapper);
+
     let loopPhase  = 0;
     let last       = 0;
     let frameCount = 0;
     let placeLayers: string[] = [];
 
+    // Cached dot positions (in lng/lat) — updated every 4 frames
+    let dotCoords: [number, number][] = [];
+
+    // Per-dot rotation state — independent spin per label
+    const dotRotations = new Map<string, { rx: number; ry: number; speedX: number; speedY: number }>();
+
+    function getDotRot(key: string, idx: number) {
+      if (!dotRotations.has(key)) {
+        const h = idx * 1234567 + 98765;
+        dotRotations.set(key, {
+          rx:     ((h * 3) % 628) / 100,
+          ry:     ((h * 7) % 628) / 100,
+          speedX: 0.003 + (((h * 13) % 100) / 100) * 0.004,
+          speedY: 0.004 + (((h * 17) % 100) / 100) * 0.005,
+        });
+      }
+      return dotRotations.get(key)!;
+    }
+
     map.on("load", () => {
+      // Globe projection
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       try { (map as any).setProjection({ type: "globe" }); } catch {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         try { (map as any).setProjection("globe"); } catch { /* unsupported */ }
       }
+      // Space atmosphere
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (map as any).setFog?.({
@@ -107,23 +291,7 @@ export default function MapVisual() {
         });
       } catch { /* ignore */ }
 
-      // Native circle layer — flat on the map surface, same Z as labels
-      map.addSource("place-dots", {
-        type: "geojson",
-        data: { type: "FeatureCollection", features: [] },
-      });
-      map.addLayer({
-        id:     "place-dots-layer",
-        type:   "circle",
-        source: "place-dots",
-        paint: {
-          "circle-radius":    4,
-          "circle-color":     "#f59e0b",
-          "circle-opacity":   0.72,
-          "circle-translate": [0, -14],
-        },
-      });
-
+      // Collect place label layer IDs
       placeLayers = map.getStyle().layers
         .filter(l => {
           if (l.type !== "symbol") return false;
@@ -141,9 +309,10 @@ export default function MapVisual() {
         const { zoom, lat, lng } = getTourCamera(loopPhase);
         map.jumpTo({ center: [lng, lat], zoom });
 
+        // Refresh dot positions every 4 frames
         if (frameCount % 4 === 0 && placeLayers.length > 0) {
           try {
-            const seen = new Set<string>();
+            const seen   = new Set<string>();
             const coords: [number, number][] = [];
             for (const f of map.queryRenderedFeatures(undefined, { layers: placeLayers })) {
               if (f.geometry.type !== "Point") continue;
@@ -153,16 +322,55 @@ export default function MapVisual() {
               seen.add(key);
               coords.push([fLng, fLat]);
             }
-            (map.getSource("place-dots") as maplibregl.GeoJSONSource).setData({
-              type: "FeatureCollection",
-              features: coords.map(([dLng, dLat]) => ({
-                type:       "Feature" as const,
-                geometry:   { type: "Point" as const, coordinates: [dLng, dLat] },
-                properties: {},
-              })),
-            });
+            dotCoords = coords;
           } catch { /* map briefly not ready */ }
         }
+
+        // ── Compute current dot RGB (shared by all dots this frame) ────────────
+        let cr: number, cg: number, cb: number;
+
+        const toHex   = toColorRef.current;
+        const fromHex = fromColorRef.current;
+
+        if (fromHex && transitionStartRef.current >= 0) {
+          const elapsed = now - transitionStartRef.current;
+          if (elapsed >= COLOR_TRANSITION_MS) {
+            // Transition complete — snap and clear
+            fromColorRef.current       = null;
+            transitionStartRef.current = -1;
+            [cr, cg, cb] = hexToRgb(toHex);
+          } else {
+            const t = easeInOut(elapsed / COLOR_TRANSITION_MS);
+            const [fr, fg, fb] = hexToRgb(fromHex);
+            const [tr, tg, tb] = hexToRgb(toHex);
+            cr = Math.round(fr + (tr - fr) * t);
+            cg = Math.round(fg + (tg - fg) * t);
+            cb = Math.round(fb + (tb - fb) * t);
+          }
+        } else {
+          [cr, cg, cb] = hexToRgb(toHex);
+        }
+
+        // ── Draw icospheres on canvas overlay ──────────────────────────────────
+        const W = overlay.width  / (window.devicePixelRatio || 1);
+        const H = overlay.height / (window.devicePixelRatio || 1);
+        ctx.clearRect(0, 0, W, H);
+
+        const R = 5; // radius in CSS px
+
+        dotCoords.forEach((coord, idx) => {
+          const [dLng, dLat] = coord;
+          const key = `${dLng.toFixed(3)},${dLat.toFixed(3)}`;
+
+          const pt = map.project([dLng, dLat]);
+          if (pt.x < -R || pt.x > W + R || pt.y < -R || pt.y > H + R) return;
+
+          const rot = getDotRot(key, idx);
+          rot.rx += rot.speedX;
+          rot.ry += rot.speedY;
+
+          drawIcosphere(ctx, pt.x, pt.y - 14, R, rot.rx, rot.ry, cr, cg, cb);
+        });
 
         rafRef.current = requestAnimationFrame(frame);
       }
@@ -172,14 +380,28 @@ export default function MapVisual() {
 
     return () => {
       cancelAnimationFrame(rafRef.current);
+      ro.disconnect();
       map.remove();
     };
   }, []);
 
   return (
     <div
-      ref={containerRef}
+      ref={wrapperRef}
       style={{ position: "relative", width: "100%", height: "100%", background: "#000000" }}
-    />
+    >
+      <div
+        ref={mapDivRef}
+        style={{ position: "absolute", inset: 0 }}
+      />
+      <canvas
+        ref={overlayRef}
+        style={{
+          position:      "absolute",
+          inset:         0,
+          pointerEvents: "none",
+        }}
+      />
+    </div>
   );
 }
