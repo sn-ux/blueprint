@@ -2,6 +2,46 @@
 
 import Link from "next/link";
 
+// ── Inline Seed-of-Life logo ──────────────────────────────────────────────────
+// Using an inline SVG with overflow="visible" is the only way to guarantee the
+// strokes never get clipped: <img> always clips to its own box, but an inline
+// SVG can bleed slightly past its layout dimensions without any parent cutting
+// it off. The geometry occupies ~36×36 px of layout space and `overflow="visible"`
+// lets the outer stroke edges render into the surrounding padding unobstructed.
+
+function SeedOfLife({ size = 36 }: { size?: number }) {
+  const r  = 21;    // circle radius (in 0-100 viewBox space)
+  const sw = 3.8;   // stroke width
+  const cx = 50, cy = 50;
+
+  // 6 outer circles — Seed-of-Life condition: centre distance = r
+  // Rotated 15° clockwise from the canonical top-pointing orientation
+  // so the first outer circle sits at 75° (upper-right), matching the logo.
+  const outerCentres = [75, 15, -45, -105, -165, 135].map(deg => {
+    const rad = (deg * Math.PI) / 180;
+    return { x: cx + r * Math.cos(rad), y: cy - r * Math.sin(rad) };
+  });
+
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 100 100"
+      fill="none"
+      // overflow="visible" lets strokes that approach the viewBox edge render
+      // fully instead of being clipped to the SVG's bounding box.
+      overflow="visible"
+      style={{ display: "block", flexShrink: 0 }}
+      aria-hidden="true"
+    >
+      <circle cx={cx} cy={cy} r={r} stroke="white" strokeWidth={sw} />
+      {outerCentres.map((c, i) => (
+        <circle key={i} cx={c.x} cy={c.y} r={r} stroke="white" strokeWidth={sw} />
+      ))}
+    </svg>
+  );
+}
+
 // ── Navbar ────────────────────────────────────────────────────────────────────
 
 export default function Navbar() {
@@ -18,8 +58,10 @@ export default function Navbar() {
         display:              "flex",
         alignItems:           "center",
         justifyContent:       "space-between",
-        paddingLeft:          52,
-        paddingRight:         52,
+        // Left padding places the logo well clear of the viewport edge.
+        // Right padding pulls Philosophy / Connect noticeably inward.
+        paddingLeft:          56,
+        paddingRight:         64,
         background:           "rgba(0,0,0,0.38)",
         backdropFilter:       "blur(12px)",
         WebkitBackdropFilter: "blur(12px)",
@@ -37,18 +79,7 @@ export default function Navbar() {
           flexShrink:     0,
         }}
       >
-        {/* Wrapper div adds a small cushion so the SVG strokes never touch
-            the img box edge — eliminates sub-pixel clipping at any DPR.   */}
-        <div style={{ width: 36, height: 36, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/logo.svg"
-            alt="Blueprint logo"
-            width={32}
-            height={32}
-            style={{ display: "block", width: 32, height: 32, objectFit: "contain" }}
-          />
-        </div>
+        <SeedOfLife size={36} />
         <span
           style={{
             color:         "#ffffff",
