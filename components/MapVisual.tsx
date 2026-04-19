@@ -32,48 +32,81 @@ const P_ROTATE_END   = 0.65;    // 0.40–0.65 → rotation  (15 s)
  *  t=0: Menlo Park street level (MapLibre zoom 14)                           *
  *  t=1: Full Earth (MapLibre zoom 1.8)                                       *
  *                                                                            *
- *  Keyframes are distributed so every segment covers ~1.5 MapLibre zoom      *
- *  units, giving a constant rate of scale change throughout the animation.   *
- *  Combined with linear interpolation this eliminates speed variation.       *
- *  Total zoom span: 14.0 → 1.8 = 12.2 units across 8 equal steps.          */
+ *  Design goals:                                                              *
+ *   • California stays the visual anchor throughout the pull-back            *
+ *   • Longitude drifts only gently eastward (−122 → −108) so California      *
+ *     never leaves the frame until the true global view                      *
+ *   • Latitude holds near 37 °N until the final keyframe, giving a straight  *
+ *     southward tilt as the full globe fills the screen                      *
+ *   • Equal ~1.5-zoom-unit segments → constant perceived zoom rate           */
 
 const CAM_PATH = [
-  { t: 0.000, zoom: 14.0, lat:  37.453, lng: -122.182 },  // Menlo Park street
-  { t: 0.125, zoom: 12.5, lat:  37.65,  lng: -122.35  },  // SF Bay close
-  { t: 0.250, zoom: 11.0, lat:  37.75,  lng: -122.25  },  // Bay Area
-  { t: 0.375, zoom:  9.5, lat:  37.70,  lng: -121.50  },  // N. California
-  { t: 0.500, zoom:  8.0, lat:  37.50,  lng: -120.50  },  // Central California
-  { t: 0.625, zoom:  6.5, lat:  37.00,  lng: -119.00  },  // California wide
-  { t: 0.750, zoom:  5.0, lat:  36.00,  lng: -112.00  },  // Southwest USA
-  { t: 0.875, zoom:  3.5, lat:  39.00,  lng:  -97.00  },  // Continental USA
-  { t: 1.000, zoom:  1.8, lat:  25.00,  lng:  -30.00  },  // Full Earth
+  { t: 0.000, zoom: 14.0, lat: 37.45, lng: -122.18 },  // Menlo Park street
+  { t: 0.125, zoom: 12.5, lat: 37.48, lng: -121.80 },  // Bay Area close
+  { t: 0.250, zoom: 11.0, lat: 37.40, lng: -121.20 },  // Bay Area wide
+  { t: 0.375, zoom:  9.5, lat: 37.20, lng: -120.40 },  // Central California
+  { t: 0.500, zoom:  8.0, lat: 36.90, lng: -119.70 },  // Southern California
+  { t: 0.625, zoom:  6.5, lat: 36.50, lng: -118.80 },  // California full
+  { t: 0.750, zoom:  5.0, lat: 36.00, lng: -116.50 },  // California + Nevada
+  { t: 0.875, zoom:  3.5, lat: 34.50, lng: -113.00 },  // Western USA
+  { t: 1.000, zoom:  1.8, lat: 30.00, lng: -108.00 },  // Full Earth, CA centred
 ];
 
 /* ── Helpers ──────────────────────────────────────────────────────────────── */
 
-/** Linear interpolation between CAM_PATH keyframes. */
+/**
+ * Catmull-Rom cubic spline for a single scalar channel.
+ * p0..p3 are the four surrounding control points; t ∈ [0, 1] interpolates
+ * between p1 and p2.  The spline is C1-continuous: velocity at each knot
+ * equals the chord from the previous to the next point (×0.5), so there are
+ * no velocity jumps at keyframe boundaries.
+ */
+function catmullRom(p0: number, p1: number, p2: number, p3: number, t: number): number {
+  const t2 = t * t, t3 = t2 * t;
+  return 0.5 * (
+      2 * p1
+    + (-p0 + p2)                    * t
+    + ( 2*p0 - 5*p1 + 4*p2 - p3)   * t2
+    + (-p0   + 3*p1 - 3*p2 + p3)   * t3
+  );
+}
+
+/**
+ * Catmull-Rom interpolation through CAM_PATH.
+ *
+ * Clamped boundary control points (repeat the first / last keyframe) prevent
+ * overshoot at t=0 and t=1, while interior segments stay fully smooth.
+ */
 function getCamFromPath(t: number): { zoom: number; lat: number; lng: number } {
+  const n = CAM_PATH.length;
   let i = 0;
-  while (i < CAM_PATH.length - 2 && CAM_PATH[i + 1].t <= t) i++;
-  const a = CAM_PATH[i], b = CAM_PATH[i + 1];
-  const u = Math.max(0, Math.min(1, (t - a.t) / (b.t - a.t)));
+  while (i < n - 2 && CAM_PATH[i + 1].t <= t) i++;
+
+  const u  = Math.max(0, Math.min(1, (t - CAM_PATH[i].t) / (CAM_PATH[i + 1].t - CAM_PATH[i].t)));
+  const p0 = CAM_PATH[Math.max(0,     i - 1)];
+  const p1 = CAM_PATH[i];
+  const p2 = CAM_PATH[Math.min(n - 1, i + 1)];
+  const p3 = CAM_PATH[Math.min(n - 1, i + 2)];
+
   return {
-    zoom: a.zoom + (b.zoom - a.zoom) * u,
-    lat:  a.lat  + (b.lat  - a.lat)  * u,
-    lng:  a.lng  + (b.lng  - a.lng)  * u,
+    zoom: catmullRom(p0.zoom, p1.zoom, p2.zoom, p3.zoom, u),
+    lat:  catmullRom(p0.lat,  p1.lat,  p2.lat,  p3.lat,  u),
+    lng:  catmullRom(p0.lng,  p1.lng,  p2.lng,  p3.lng,  u),
   };
 }
 
 /**
  * Returns the MapLibre camera state for a given animation loop phase (0→1).
  *
- * Phase A (zoom out): linear t 0→1 through camera path.
+ * Phase A (zoom out): Catmull-Rom spline t 0→1 through camera path.
+ *   California stays centred; camera pulls back from Menlo Park to full Earth.
  * Phase B (rotate):   globe held at t=1, longitude advances linearly −360°.
- * Phase C (zoom in):  linear t 1→0 through camera path.
+ * Phase C (zoom in):  Catmull-Rom spline t 1→0 (reverse of Phase A).
  *
- * Using linear interpolation (no easing) combined with equal-velocity
- * keyframes (each segment ≈ 1.5 zoom units) means every second of animation
- * covers the same change in map scale — no slow-start, no mid-zoom rush.
+ * Equal-velocity keyframes (each segment ≈ 1.5 zoom units) combined with
+ * Catmull-Rom C1-continuous interpolation means the zoom rate is both
+ * perceptually constant and physically smooth — no slow start, no mid-rush,
+ * no velocity kicks at keyframe boundaries.
  *
  * Camera is continuous at all phase boundaries:
  *   A→B: both yield getCamFromPath(1)
