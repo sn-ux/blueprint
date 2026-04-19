@@ -5,15 +5,15 @@ import { useEffect, useRef } from "react";
 // ── Palette ───────────────────────────────────────────────────────────────────
 
 export const MINI_COLORS: Record<string, string> = {
-  "Rap / Hip-Hop":                  "#a78bfa",
-  "R&B / Soul / Funk":              "#fb923c",
-  "Rock / Indie / Alternative":     "#f87171",
-  "Pop / Dance":                    "#f472b6",
-  "Jazz / Blues":                   "#60a5fa",
-  "Electronic / Ambient":           "#22d3ee",
-  "Classical / Score / Soundtrack": "#fbbf24",
-  "World / Folk / Regional":        "#4ade80",
-  "Other":                          "#71717a",
+  "Rap / Hip-Hop":                  "#8B5CF6", // distinct purple
+  "R&B / Soul / Funk":              "#F59E0B", // amber gold  — warm, soulful, distinct from orange
+  "Rock / Indie / Alternative":     "#FF3008", // DoorDash red
+  "Pop / Dance":                    "#FE2C55", // TikTok pink
+  "Jazz / Blues":                   "#4285F4", // Google blue
+  "Electronic / Ambient":           "#10A37F", // ChatGPT teal
+  "Classical / Score / Soundtrack": "#1DB954", // Spotify green
+  "World / Folk / Regional":        "#FF9900", // Amazon orange
+  "Other":                          "#71717a", // neutral grey
 };
 
 // ── Geometry helpers ──────────────────────────────────────────────────────────
