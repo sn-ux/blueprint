@@ -3,117 +3,124 @@
 /**
  * MapVisual — Page 4 globe
  *
- * Renders a full MapLibre GL map in globe projection using CartoDB Dark Matter
- * tiles (free, no API key) with a 200-second cinematic world tour:
+ * 480-second cinematic world tour, starting and ending in the Bay Area:
  *
  *   Bay Area → Tokyo → Hong Kong → Dubai → Rome → London → New York → Bay Area
  *
- * The route is a continuous westward circumnavigation.  It crosses the
- * International Date Line (Bay Area → Tokyo) and the North Atlantic
- * (London → New York).
+ * The route travels westward the whole way, crossing the International Date
+ * Line (Bay Area → Tokyo) and the North Atlantic (London → New York).
+ *
+ * ── Zoom range ────────────────────────────────────────────────────────────────
+ *   City stops  zoom 13–13.5  street-level detail, labels readable
+ *   Arrivals    zoom 7–8      city visible as a whole
+ *   Pullbacks   zoom 6        altitude, city still identifiable
+ *   Transits    zoom 2.5–5.5  globe / hemisphere / continent view
+ *
+ * ── Land-only rule ───────────────────────────────────────────────────────────
+ *   Every transit waypoint is centred on a named landmass, never open ocean:
+ *     Pacific → Alaska (60 N, 155 W)
+ *     Asia    → Eastern China (32 N, 120 E)
+ *     Indian  → Central India (20 N, 80 E)
+ *     Med     → Western Turkey (39 N, 28 E)
+ *     Channel → Central France (49 N, 4 E)
+ *     Atlantic→ Greenland ice sheet (70 N, 40 W)
+ *     Return  → Colorado Rockies (40 N, 105 W)
  *
  * ── Interpolation ────────────────────────────────────────────────────────────
- * Segment-wise smootherstep lerp (Ken Perlin, 6t⁵ − 15t⁴ + 10t³):
- *   • Zero velocity at every waypoint → natural dwell / smooth landing
- *   • No overshoot, no oscillation
- *   • Seamless loop: velocity at t=0/1 seam matches on both sides
- *
- * Longitude uses a short-path lerp that always takes the ≤180° arc, so the
- * Pacific crossing routes correctly westward through the date line.
- *
- * ── Waypoint design ──────────────────────────────────────────────────────────
- * Every city follows: arrival (altitude) → city (street level) → pullback
- * (altitude) → transit (ocean / continent).  Arrival and pullback share the
- * city's exact lat/lng so the camera zooms in-place before and after each
- * stop — never sliding sideways at street level.
+ *   Segment-wise smootherstep lerp (6t⁵ − 15t⁴ + 10t³) with short-path
+ *   longitude lerp to handle the date-line crossing cleanly.
  */
 
 import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 
-/* ── Map style ────────────────────────────────────────────────────────────── *
- *  CartoDB Dark Matter — free, no API key, close to Apple Maps dark mode.   */
+/* ── Map style ────────────────────────────────────────────────────────────── */
 const STYLE_URL =
   "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
 /* ── Timing ───────────────────────────────────────────────────────────────── */
-const LOOP_MS = 200_000;   // 200 s — slow, cinematic, premium
+const LOOP_MS = 480_000;   // 8 min — slow, meditative, globe-scale
 
 /* ── World-tour waypoints ─────────────────────────────────────────────────── *
- *  Route: Bay Area →(Pacific)→ Tokyo → Hong Kong →(Indian Ocean)→ Dubai      *
- *         →(Med)→ Rome →(Channel)→ London →(Atlantic)→ New York → Bay Area   *
- *                                                                             *
- *  Segment time = (t_next – t_this) × 200 s.  Ocean crossings: ~10–13 s.    *
- *  City dwells: ~7 s.  Transit hops: ~7–8 s.                                 */
+ *  Segment duration = (t_next – t_this) × 480 s                              *
+ *  City pairs:   city (20 s) + pullback (15 s)                               *
+ *  Ocean arcs:   pullback → transit → arrival (15 + 40–45 + 15 s)            *
+ *  Short hops:   pullback → transit → city   (15 + 15–20 + 0 s)             */
 
 const TOUR = [
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  BAY AREA / SAN FRANCISCO  ━━━━
-  { t: 0.000, zoom: 11.0, lat:  37.770, lng: -122.420 },   // city
-  { t: 0.033, zoom:  7.5, lat:  37.770, lng: -122.420 },   // pullback
+  { t: 0.000, zoom: 13.0, lat:  37.770, lng: -122.420 },   // city
+  { t: 0.042, zoom:  6.0, lat:  37.770, lng: -122.420 },   // pullback
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  PACIFIC CROSSING  ━━━━━
-  //   Short-path lerpLng routes this westward through the date line.
-  { t: 0.095, zoom:  3.0, lat:  42.000, lng: -168.000 },   // mid-Pacific
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  PACIFIC CROSSING  (45 s arc)  ━━━━━━━━
+  //   Centred over Alaska — globe view shows N. Pacific with land on both sides
+  { t: 0.073, zoom:  2.5, lat:  60.000, lng: -155.000 },   // Alaska (globe)
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  TOKYO  ━━━━━━
-  { t: 0.148, zoom:  7.5, lat:  35.689, lng:  139.692 },   // arrival
-  { t: 0.185, zoom: 11.0, lat:  35.689, lng:  139.692 },   // city (Shinjuku)
-  { t: 0.220, zoom:  7.5, lat:  35.689, lng:  139.692 },   // pullback
+  { t: 0.167, zoom:  7.5, lat:  35.689, lng:  139.692 },   // arrival
+  { t: 0.198, zoom: 13.0, lat:  35.689, lng:  139.692 },   // city (Shinjuku)
+  { t: 0.240, zoom:  6.0, lat:  35.689, lng:  139.692 },   // pullback
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  HONG KONG  ━━━━━━
-  { t: 0.258, zoom:  6.0, lat:  28.000, lng:  122.000 },   // transit: East China Sea
-  { t: 0.295, zoom:  8.0, lat:  22.319, lng:  114.169 },   // arrival
-  { t: 0.330, zoom: 11.5, lat:  22.319, lng:  114.169 },   // city (Victoria Harbour)
-  { t: 0.362, zoom:  7.0, lat:  22.319, lng:  114.169 },   // pullback
+  //   Short hop south via Eastern China coastline — never over water
+  { t: 0.271, zoom:  5.0, lat:  32.000, lng:  120.000 },   // E. China (land)
+  { t: 0.302, zoom: 13.5, lat:  22.319, lng:  114.169 },   // city (Kowloon)
+  { t: 0.344, zoom:  6.0, lat:  22.319, lng:  114.169 },   // pullback
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  INDIAN ARC  (20 s)  ━━━━━━━━━━━
+  //   Centred over Central India — hemisphere shows Asia continent
+  { t: 0.375, zoom:  3.5, lat:  20.000, lng:   80.000 },   // India (globe)
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  DUBAI  ━━━━━━━
-  { t: 0.422, zoom:  3.5, lat:  18.000, lng:   75.000 },   // transit: Indian Ocean
-  { t: 0.463, zoom:  7.5, lat:  25.204, lng:   55.270 },   // arrival
-  { t: 0.498, zoom: 11.0, lat:  25.204, lng:   55.270 },   // city (Dubai Marina)
-  { t: 0.532, zoom:  7.5, lat:  25.204, lng:   55.270 },   // pullback
+  { t: 0.417, zoom:  7.5, lat:  25.204, lng:   55.270 },   // arrival
+  { t: 0.448, zoom: 13.0, lat:  25.204, lng:   55.270 },   // city (Downtown)
+  { t: 0.490, zoom:  6.0, lat:  25.204, lng:   55.270 },   // pullback
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  ROME  ━━━━━━
-  { t: 0.573, zoom:  5.5, lat:  36.000, lng:   25.000 },   // transit: Aegean Sea
-  { t: 0.610, zoom:  8.0, lat:  41.902, lng:   12.496 },   // arrival
-  { t: 0.645, zoom: 11.0, lat:  41.902, lng:   12.496 },   // city (Colosseum area)
-  { t: 0.675, zoom:  7.5, lat:  41.902, lng:   12.496 },   // pullback
+  //   Via W. Turkey — Mediterranean visible but camera centred on land
+  { t: 0.521, zoom:  5.5, lat:  39.000, lng:   28.000 },   // W. Turkey (land)
+  { t: 0.563, zoom: 13.0, lat:  41.902, lng:   12.496 },   // city (Colosseum)
+  { t: 0.604, zoom:  6.0, lat:  41.902, lng:   12.496 },   // pullback
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  LONDON  ━━━━━━
-  { t: 0.706, zoom:  7.0, lat:  50.500, lng:    2.500 },   // transit: N. France / Channel
-  { t: 0.745, zoom: 11.0, lat:  51.508, lng:   -0.128 },   // city (Central London)
-  { t: 0.778, zoom:  7.5, lat:  51.508, lng:   -0.128 },   // pullback
+  //   Via Central France — completely over land
+  { t: 0.635, zoom:  6.5, lat:  49.000, lng:    4.000 },   // C. France (land)
+  { t: 0.667, zoom: 13.0, lat:  51.508, lng:   -0.128 },   // city (Central London)
+  { t: 0.708, zoom:  6.0, lat:  51.508, lng:   -0.128 },   // pullback
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  NORTH ATLANTIC CROSSING  ━━━
-  { t: 0.832, zoom:  3.0, lat:  55.000, lng:  -35.000 },   // mid-Atlantic
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  NORTH ATLANTIC  (40 s arc)  ━━━━━━━━━
+  //   Centred over Greenland ice sheet — globe view with land anchor
+  { t: 0.740, zoom:  2.5, lat:  70.000, lng:  -40.000 },   // Greenland (globe)
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  NEW YORK CITY  ━━━━━━
-  { t: 0.880, zoom:  7.5, lat:  40.712, lng:  -74.006 },   // arrival
-  { t: 0.915, zoom: 11.0, lat:  40.712, lng:  -74.006 },   // city (Manhattan)
-  { t: 0.947, zoom:  7.0, lat:  40.712, lng:  -74.006 },   // pullback
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  NEW YORK CITY  ━━━━
+  { t: 0.823, zoom:  7.5, lat:  40.712, lng:  -74.006 },   // arrival
+  { t: 0.854, zoom: 13.0, lat:  40.712, lng:  -74.006 },   // city (Manhattan)
+  { t: 0.896, zoom:  6.0, lat:  40.712, lng:  -74.006 },   // pullback
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  RETURN  ━━━━━━
-  { t: 0.968, zoom:  5.0, lat:  38.500, lng: -105.000 },   // transit: Rockies
-  { t: 0.983, zoom:  7.5, lat:  37.770, lng: -122.420 },   // Bay Area arrival
+  //   Via Colorado Rockies — scenic continental cross-section over land
+  { t: 0.927, zoom:  4.0, lat:  40.000, lng: -105.000 },   // Rockies (land)
+  { t: 0.969, zoom:  7.5, lat:  37.770, lng: -122.420 },   // Bay Area arrival
 
 ];
 
 /* ── Helpers ──────────────────────────────────────────────────────────────── */
 
 /**
- * Ken Perlin's "smootherstep" (6t⁵ − 15t⁴ + 10t³).
- * Both first and second derivatives are zero at t=0 and t=1, giving a very
- * soft ease-in / ease-out with no perceptible jerk at either end.
+ * Ken Perlin's smootherstep (6t⁵ − 15t⁴ + 10t³).
+ * Zero first and second derivatives at t=0 and t=1 — the softest possible
+ * ease-in / ease-out with no jerk at either end.
  */
 function smootherstep(t: number): number {
   return t * t * t * (t * (t * 6 - 15) + 10);
 }
 
 /**
- * Short-path longitude interpolation.
- * Normalises the difference to [−180, 180] so the camera always takes the
- * ≤180° arc — this is what makes the Pacific crossing go westward through
- * the date line instead of eastward the long way around the globe.
+ * Short-path longitude lerp.
+ * Normalises the arc to [−180, 180] so the camera always takes the ≤180°
+ * route — this makes the Pacific crossing travel westward through the date
+ * line instead of eastward the long way around.
  */
 function lerpLng(a: number, b: number, u: number): number {
   let diff = b - a;
@@ -124,20 +131,12 @@ function lerpLng(a: number, b: number, u: number): number {
 
 /**
  * Segment-wise smootherstep interpolation through TOUR waypoints.
- *
- * Within each segment the camera travels on a straight line in
- * (zoom, lat, lng) space, eased by smootherstep so velocity is zero at both
- * endpoints.  The last segment wraps from TOUR[n-1] back to TOUR[0].
- *
- * Because velocity is always zero at waypoint boundaries:
- *   • Each city naturally dwells at peak zoom with no extra dwell logic
- *   • No overshoot, no oscillation, no jitter
- *   • The loop seam at t = 0/1 has matching zero velocity on both sides
+ * Velocity is always zero at waypoint boundaries, giving natural dwells and
+ * no overshoot.  The last segment wraps from TOUR[n-1] back to TOUR[0].
  */
 function getTourCamera(t: number): { zoom: number; lat: number; lng: number } {
   const n = TOUR.length;
 
-  // Find the segment [TOUR[i].t, nextT) that contains t.
   let i = n - 1;
   for (let j = 0; j < n - 1; j++) {
     if (t < TOUR[j + 1].t) { i = j; break; }
@@ -148,19 +147,13 @@ function getTourCamera(t: number): { zoom: number; lat: number; lng: number } {
   const u      = smootherstep(Math.max(0, Math.min(1, (t - tStart) / (tEnd - tStart))));
 
   const a = TOUR[i];
-  const b = TOUR[(i + 1) % n];   // wraps to TOUR[0] on the last segment
+  const b = TOUR[(i + 1) % n];
 
   return {
     zoom: a.zoom + (b.zoom - a.zoom) * u,
     lat:  a.lat  + (b.lat  - a.lat)  * u,
     lng:  lerpLng(a.lng, b.lng, u),
   };
-}
-
-/** Returns the MapLibre camera state for a given loop phase t ∈ [0, 1). */
-function getLoopCamera(p: number): { center: [number, number]; zoom: number } {
-  const { zoom, lat, lng } = getTourCamera(p);
-  return { center: [lng, lat], zoom };
 }
 
 /* ── Component ────────────────────────────────────────────────────────────── */
@@ -173,49 +166,49 @@ export default function MapVisual() {
     const container = containerRef.current;
     if (!container) return;
 
-    // Initialise MapLibre map — non-interactive (cinematic mode)
     const map = new maplibregl.Map({
       container,
       style:              STYLE_URL,
       center:             [-122.420, 37.770],
-      zoom:               11,
+      zoom:               13,
       interactive:        false,
       attributionControl: false,
-      renderWorldCopies:  true,    // required: camera crosses the date line
+      renderWorldCopies:  true,   // needed for date-line crossing
     });
 
     let loopPhase = 0;
     let last      = 0;
 
     map.on("load", () => {
-      // ── Globe projection (MapLibre v3+) ───────────────────────────────────
-      // Falls back to Mercator in older builds — map still works.
+      // ── Globe projection ──────────────────────────────────────────────────
+      // At zoom ≤ ~5 MapLibre renders a 3-D globe floating in space.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      try { (map as any).setProjection?.("globe"); } catch { /* ignore */ }
+      try { (map as any).setProjection({ type: "globe" }); } catch {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        try { (map as any).setProjection("globe"); } catch { /* unsupported build */ }
+      }
 
-      // ── Atmospheric fog — black space around the globe ────────────────────
+      // ── Space atmosphere: black void + subtle horizon glow ────────────────
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (map as any).setFog?.({
-          range:            [0.5, 10],
+          range:            [0.8, 12],
           color:            "#000000",
-          "high-color":     "#000010",
-          "horizon-blend":  0.10,
+          "high-color":     "#000818",   // faint blue atmosphere at horizon
+          "horizon-blend":  0.12,
           "space-color":    "#000000",
-          "star-intensity": 0.0,
+          "star-intensity": 0.15,        // stars visible on globe view
         });
       } catch { /* ignore */ }
 
-      // ── RAF animation loop ────────────────────────────────────────────────
+      // ── Animation loop ────────────────────────────────────────────────────
       function frame(now: number) {
         const dt  = last ? Math.min(now - last, 50) : 16;
         last      = now;
         loopPhase = (loopPhase + dt / LOOP_MS) % 1;
 
-        const { center, zoom } = getLoopCamera(loopPhase);
-        // jumpTo() applies the camera instantly each frame; the per-frame
-        // smootherstep positions produce a perfectly smooth animation.
-        map.jumpTo({ center, zoom });
+        const { zoom, lat, lng } = getTourCamera(loopPhase);
+        map.jumpTo({ center: [lng, lat], zoom });
 
         rafRef.current = requestAnimationFrame(frame);
       }
