@@ -134,25 +134,57 @@ function buildIcosphere(subdivs: number): { verts: V3[]; faces: Tri[] } {
   return { verts, faces };
 }
 
-// Pre-build once at module load (2 subdivisions = 320 faces)
-const ISO = buildIcosphere(2);
+// 1 subdivision = 80 faces / 42 verts.
+// At marker radius ~7 px each triangular edge is ≈4 px — clearly readable as
+// a wireframe facet.  2 subdivisions (320 faces) collapse to an indistinct
+// blob at that scale, so we use the coarser mesh here.
+const ISO_MARKER = buildIcosphere(1);
+
+// Marker radius in CSS px — large enough to show geometry, small enough to
+// sit next to a label without dominating it.
+const MARKER_R = 7;
 
 /**
- * Draw a single icosphere centred at (cx, cy) using the given RGB color.
- * Lighting uses the same face-depth opacity model as MiniSphere.
+ * Soft radial glow drawn behind each icosphere.
+ * Mimics the bloom that makes the Page-3 spheres feel lit and premium.
+ */
+function drawGlow(
+  ctx: CanvasRenderingContext2D,
+  cx: number, cy: number,
+  R:  number,
+  cr: number, cg: number, cb: number,
+) {
+  const glowR = R * 2.6;
+  const grad  = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowR);
+  grad.addColorStop(0,    `rgba(${cr},${cg},${cb},0.22)`);
+  grad.addColorStop(0.45, `rgba(${cr},${cg},${cb},0.07)`);
+  grad.addColorStop(1,    `rgba(${cr},${cg},${cb},0)`);
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, glowR, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/**
+ * Draw a single marker icosphere centred at (cx, cy).
+ *
+ * Opacity model mirrors MiniSphere exactly:
+ *   fill   0.08 → ~0.30  (z-depth lit hemisphere)
+ *   stroke 0.40 → ~0.95  (bright edge on front-facing edges)
+ *   lineWidth 0.7         (matches MiniSphere)
  */
 function drawIcosphere(
-  ctx:  CanvasRenderingContext2D,
-  cx:   number,
-  cy:   number,
-  R:    number,
-  rx:   number,
-  ry:   number,
-  cr:   number,
-  cg:   number,
-  cb:   number,
+  ctx: CanvasRenderingContext2D,
+  cx:  number,
+  cy:  number,
+  R:   number,
+  rx:  number,
+  ry:  number,
+  cr:  number,
+  cg:  number,
+  cb:  number,
 ) {
-  const { verts, faces } = ISO;
+  const { verts, faces } = ISO_MARKER;
   const sX = Math.sin(rx), cX = Math.cos(rx);
   const sY = Math.sin(ry), cY = Math.cos(ry);
 
@@ -171,8 +203,10 @@ function drawIcosphere(
 
   for (const { f, z } of sorted) {
     const [ia, ib, ic] = f;
-    const fillA   = (0.05 + Math.max(0, z) * 0.13).toFixed(3);
-    const strokeA = (0.28 + Math.max(0, z) * 0.55).toFixed(3);
+    // Depth-based opacity: back faces nearly invisible, front faces solid —
+    // same formula as MiniSphere, tuned for a 7 px marker.
+    const fillA   = (0.08 + Math.max(0, z) * 0.22).toFixed(3);
+    const strokeA = (0.40 + Math.max(0, z) * 0.55).toFixed(3);
     ctx.beginPath();
     ctx.moveTo(pv[ia].sx, pv[ia].sy);
     ctx.lineTo(pv[ib].sx, pv[ib].sy);
@@ -181,7 +215,7 @@ function drawIcosphere(
     ctx.fillStyle   = `rgba(${cr},${cg},${cb},${fillA})`;
     ctx.fill();
     ctx.strokeStyle = `rgba(${cr},${cg},${cb},${strokeA})`;
-    ctx.lineWidth   = 0.5;
+    ctx.lineWidth   = 0.7;
     ctx.stroke();
   }
 }
@@ -360,20 +394,26 @@ export default function MapVisual({
         const H = overlayEl.height / (window.devicePixelRatio || 1);
         ctx.clearRect(0, 0, W, H);
 
-        const R = 5; // radius in CSS px
+        // Cull margin: glow extends to MARKER_R * 2.6 beyond the centre
+        const cullR = MARKER_R * 3;
 
         dotCoords.forEach((coord, idx) => {
           const [dLng, dLat] = coord;
           const key = `${dLng.toFixed(3)},${dLat.toFixed(3)}`;
 
           const pt = map.project([dLng, dLat]);
-          if (pt.x < -R || pt.x > W + R || pt.y < -R || pt.y > H + R) return;
+          if (pt.x < -cullR || pt.x > W + cullR || pt.y < -cullR || pt.y > H + cullR) return;
 
           const rot = getDotRot(key, idx);
           rot.rx += rot.speedX;
           rot.ry += rot.speedY;
 
-          drawIcosphere(ctx, pt.x, pt.y - 14, R, rot.rx, rot.ry, cr, cg, cb);
+          // Centre the sphere above its label anchor (16 px clears the text)
+          const sx = pt.x;
+          const sy = pt.y - 16;
+
+          drawGlow(ctx, sx, sy, MARKER_R, cr, cg, cb);
+          drawIcosphere(ctx, sx, sy, MARKER_R, rot.rx, rot.ry, cr, cg, cb);
         });
 
         rafRef.current = requestAnimationFrame(frame);
