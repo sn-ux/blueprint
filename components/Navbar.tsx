@@ -18,9 +18,8 @@ export default function Navbar() {
         display:              "flex",
         alignItems:           "center",
         justifyContent:       "space-between",
-        // Left is slightly larger to give the logo room; right pulls links in
-        paddingLeft:          40,
-        paddingRight:         16,
+        paddingLeft:          52,
+        paddingRight:         52,
         background:           "rgba(0,0,0,0.38)",
         backdropFilter:       "blur(12px)",
         WebkitBackdropFilter: "blur(12px)",
@@ -38,17 +37,18 @@ export default function Navbar() {
           flexShrink:     0,
         }}
       >
-        {/* Plain <img> avoids the next/image wrapper-span that can collapse
-            and clip the logo. object-fit:contain + explicit dimensions
-            guarantee no cropping regardless of parent size.               */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/logo.svg"
-          alt="Blueprint logo"
-          width={30}
-          height={30}
-          style={{ display: "block", width: 30, height: 30, objectFit: "contain", flexShrink: 0 }}
-        />
+        {/* Wrapper div adds a small cushion so the SVG strokes never touch
+            the img box edge — eliminates sub-pixel clipping at any DPR.   */}
+        <div style={{ width: 36, height: 36, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo.svg"
+            alt="Blueprint logo"
+            width={32}
+            height={32}
+            style={{ display: "block", width: 32, height: 32, objectFit: "contain" }}
+          />
+        </div>
         <span
           style={{
             color:         "#ffffff",
