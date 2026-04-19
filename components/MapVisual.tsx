@@ -232,6 +232,10 @@ export default function MapVisual() {
       fadeDuration:       0,
     });
 
+    // Capture non-nullable locals so TypeScript can narrow them inside closures
+    const wrapperEl  = wrapper  as HTMLDivElement;
+    const overlayEl  = overlay  as HTMLCanvasElement;
+
     let loopPhase = 0;
     let last      = 0;
 
@@ -275,16 +279,16 @@ export default function MapVisual() {
 
         // ── Overlay canvas ──────────────────────────────────────────────────
         const dpr      = window.devicePixelRatio || 1;
-        const { width: W, height: H } = wrapper.getBoundingClientRect();
+        const { width: W, height: H } = wrapperEl.getBoundingClientRect();
         const pixW = Math.round(W * dpr);
         const pixH = Math.round(H * dpr);
 
-        if (overlay.width !== pixW || overlay.height !== pixH) {
-          overlay.width  = pixW;
-          overlay.height = pixH;
+        if (overlayEl.width !== pixW || overlayEl.height !== pixH) {
+          overlayEl.width  = pixW;
+          overlayEl.height = pixH;
         }
 
-        const ctx = overlay.getContext("2d");
+        const ctx = overlayEl.getContext("2d");
         if (!ctx) { rafRef.current = requestAnimationFrame(frame); return; }
 
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
