@@ -1151,17 +1151,17 @@ export default function LandingPage() {
             }}
           >
             <h1 className="text-[44px] md:text-[52px] lg:text-[56px] font-semibold leading-[1.06] text-white mb-3" style={{ letterSpacing: "-0.02em" }}>
-              This is what a <span style={{ color: "#1DB954", textShadow: "0 0 8px rgba(29,185,84,0.28)" }}>music</span> taste looks like.
+              This is what a music taste looks like.
             </h1>
             <p className="text-xs tracking-[0.22em] uppercase" style={{ color: "rgba(255,255,255,0.62)" }}>
-              Zoom. Scroll. Explore.
+              Zoom In. Discover.
             </p>
           </div>
 
           {/* Stats row — bottom-right, clear of the sphere */}
           {totalTrackCount > 0 && (
             <div
-              className="absolute bottom-[7vh] right-[11%] z-10 flex flex-row gap-8 pointer-events-none"
+              className="absolute bottom-[11vh] right-[8%] z-10 flex flex-row gap-8 pointer-events-none"
               style={{
                 opacity: textVisible ? 1 : 0,
                 transition: "opacity 0.4s ease-in-out",
