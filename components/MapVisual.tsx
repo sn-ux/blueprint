@@ -4,10 +4,15 @@ import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 
 const STYLE_URL     = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
-const LOOP_MS       = 480_000;
-const ZOOM_DELTA    = 0.035;
-const LATERAL_DELTA = 0.008;
-const CYCLE         = ZOOM_DELTA * 2 + LATERAL_DELTA;
+// LOOP_MS / ZOOM_DELTA / LATERAL_DELTA are co-scaled so that every city still
+// gets the same ~37 s of screen time as the original 13-city route:
+//   zoom phase  ≈ ZOOM_DELTA    × LOOP_MS ≈ 16 800 ms  (unchanged feel)
+//   travel phase ≈ LATERAL_DELTA × LOOP_MS ≈  3 820 ms  (unchanged feel)
+// CYCLE × 20 cities = 0.049 × 20 = 0.98 — fits comfortably inside [0, 1].
+const LOOP_MS       = 764_000;
+const ZOOM_DELTA    = 0.022;
+const LATERAL_DELTA = 0.005;
+const CYCLE         = ZOOM_DELTA * 2 + LATERAL_DELTA; // 0.049
 
 // Default dot color when no platform color is supplied
 const DEFAULT_COLOR = "#f59e0b";
@@ -15,20 +20,29 @@ const DEFAULT_COLOR = "#f59e0b";
 // Transition duration in ms — matches MiniSphere / carousel
 const COLOR_TRANSITION_MS = 250;
 
+// txZ = zoom level while pulling back AND traveling to the NEXT city.
+// Calibrated to leg distance: longer leg → lower txZ (more zoomed out).
 const CITIES = [
-  { lat:  37.7879, lng: -122.4074, cityZoom: 13,  txZ: 7   },
-  { lat:  34.0522, lng: -118.2437, cityZoom: 13,  txZ: 9   },
-  { lat:  34.0689, lng: -118.4452, cityZoom: 14,  txZ: 5   },
-  { lat:  33.7490, lng:  -84.3880, cityZoom: 13,  txZ: 5   },
-  { lat:  40.7580, lng:  -73.9855, cityZoom: 13,  txZ: 3   },
-  { lat:  51.5074, lng:   -0.1278, cityZoom: 13,  txZ: 7   },
-  { lat:  48.8584, lng:    2.2945, cityZoom: 13,  txZ: 4   },
-  { lat:  33.8886, lng:   35.4955, cityZoom: 13,  txZ: 5   },
-  { lat:  25.2048, lng:   55.2708, cityZoom: 13,  txZ: 4   },
-  { lat:  13.0827, lng:   80.2707, cityZoom: 13,  txZ: 5   },
-  { lat:  13.7563, lng:  100.4970, cityZoom: 13,  txZ: 6   },
-  { lat:  22.2857, lng:  114.1577, cityZoom: 13,  txZ: 5   },
-  { lat:  35.6762, lng:  139.6503, cityZoom: 13,  txZ: 2.5 },
+  { lat:  37.7879, lng: -122.4074, cityZoom: 13, txZ: 7 }, // San Francisco  → LA          (~550 km)
+  { lat:  34.0522, lng: -118.2437, cityZoom: 13, txZ: 5 }, // Los Angeles    → Mexico City (~2500 km)
+  { lat:  19.4326, lng:  -99.1332, cityZoom: 13, txZ: 5 }, // Mexico City    → Atlanta     (~3050 km)
+  { lat:  33.7490, lng:  -84.3880, cityZoom: 13, txZ: 6 }, // Atlanta        → New York    (~1370 km)
+  { lat:  40.7580, lng:  -73.9855, cityZoom: 13, txZ: 4 }, // New York       → Caracas     (~3450 km)
+  { lat:  10.4806, lng:  -66.9036, cityZoom: 13, txZ: 3 }, // Caracas        → Buenos Aires(~5200 km)
+  { lat: -34.6037, lng:  -58.3816, cityZoom: 13, txZ: 3 }, // Buenos Aires   → Paris       (~11050 km)
+  { lat:  48.8584, lng:    2.2945, cityZoom: 13, txZ: 4 }, // Paris          → Lagos       (~5100 km)
+  { lat:   6.5244, lng:    3.3792, cityZoom: 13, txZ: 4 }, // Lagos          → Cape Town   (~5050 km)
+  { lat: -33.9249, lng:   18.4241, cityZoom: 13, txZ: 3 }, // Cape Town      → Beirut      (~7700 km)
+  { lat:  33.8886, lng:   35.4955, cityZoom: 13, txZ: 5 }, // Beirut         → Moscow      (~2900 km)
+  { lat:  55.7558, lng:   37.6173, cityZoom: 13, txZ: 4 }, // Moscow         → Delhi       (~5800 km)
+  { lat:  28.7041, lng:   77.1025, cityZoom: 13, txZ: 6 }, // Delhi          → Chennai     (~1750 km)
+  { lat:  13.0827, lng:   80.2707, cityZoom: 13, txZ: 5 }, // Chennai        → Hong Kong   (~2900 km)
+  { lat:  22.2857, lng:  114.1577, cityZoom: 13, txZ: 6 }, // Hong Kong      → Shanghai    (~1200 km)
+  { lat:  31.2304, lng:  121.4737, cityZoom: 13, txZ: 7 }, // Shanghai       → Seoul       (~880 km)
+  { lat:  37.5665, lng:  126.9780, cityZoom: 13, txZ: 7 }, // Seoul          → Tokyo       (~1160 km)
+  { lat:  35.6762, lng:  139.6503, cityZoom: 13, txZ: 3 }, // Tokyo          → Sydney      (~7800 km)
+  { lat: -33.8688, lng:  151.2093, cityZoom: 13, txZ: 3 }, // Sydney         → Honolulu    (~8200 km)
+  { lat:  21.3069, lng: -157.8583, cityZoom: 13, txZ: 4 }, // Honolulu       → SF (loop)   (~3850 km)
 ] as const;
 
 const TOUR = (() => {
