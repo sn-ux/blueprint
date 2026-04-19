@@ -3,15 +3,16 @@
 /**
  * MapVisual — Page 4 globe
  *
- * Renders a full MapLibre GL globe using CartoDB Dark Matter tiles (free, no API
- * key) with a 60-second autonomous animation loop:
+ * Renders a full MapLibre GL map in globe projection using CartoDB Dark Matter
+ * tiles (free, no API key) with a 60-second cinematic American city tour:
  *
- *   Phase A  0.00–0.40 (24 s) — linear zoom out: Menlo Park → full Earth
- *   Phase B  0.40–0.65 (15 s) — linear full-globe rotation, 360° westward
- *   Phase C  0.65–1.00 (21 s) — linear zoom in: full Earth → Menlo Park
+ *   San Francisco → Los Angeles → UCLA → Chicago → New York
+ *   → Atlanta → Miami → Dallas → San Francisco  (seamless loop)
  *
- * All phase boundaries are camera-continuous (no visual jumps at loop wrap-around).
- * MapLibre handles map detail, label hierarchy, and collision detection natively.
+ * Camera path uses a periodic Catmull-Rom spline for C1-continuous motion:
+ * no velocity jumps at waypoints, no snapping, seamless loop.
+ * Transit waypoints between distant city pairs zoom the camera out for a
+ * natural "fly-over" arc before diving back into each destination.
  */
 
 import { useEffect, useRef } from "react";
@@ -22,116 +23,112 @@ import maplibregl from "maplibre-gl";
 const STYLE_URL =
   "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
-/* ── Animation timing ─────────────────────────────────────────────────────── */
-const LOOP_MS        = 60_000;  // 60 s total loop — slow, cinematic reveal
-const P_ZOOM_OUT_END = 0.40;    // 0.00–0.40 → zoom out  (24 s)
-const P_ROTATE_END   = 0.65;    // 0.40–0.65 → rotation  (15 s)
-//                              // 0.65–1.00 → zoom in   (21 s)
+/* ── Timing ───────────────────────────────────────────────────────────────── */
+const LOOP_MS = 60_000;   // 60 s per full city tour
 
-/* ── Camera keyframes ─────────────────────────────────────────────────────── *
- *  t=0: Menlo Park street level (MapLibre zoom 14)                           *
- *  t=1: Full Earth (MapLibre zoom 1.8)                                       *
- *                                                                            *
- *  Design goals:                                                              *
- *   • California stays the visual anchor throughout the pull-back            *
- *   • Longitude drifts only gently eastward (−122 → −108) so California      *
- *     never leaves the frame until the true global view                      *
- *   • Latitude holds near 37 °N until the final keyframe, giving a straight  *
- *     southward tilt as the full globe fills the screen                      *
- *   • Equal ~1.5-zoom-unit segments → constant perceived zoom rate           */
+/* ── City tour waypoints ──────────────────────────────────────────────────── *
+ *  City stops have zoom 11–13.5 so neighbourhood labels are readable.        *
+ *  Transit waypoints (lower zoom) create natural "fly-over" arcs between     *
+ *  distant cities: the camera lifts out, travels, then descends again.       *
+ *                                                                             *
+ *  t values are chosen so city dwell ≈ 4–5 s, long transits ≈ 6 s @ 60 s.  *
+ *  The spline is periodic: after the last entry it flows back to [0] with    *
+ *  matching velocity — the loop seam at t = 0/1 is invisible.               */
 
-const CAM_PATH = [
-  { t: 0.000, zoom: 14.0, lat: 37.45, lng: -122.18 },  // Menlo Park street
-  { t: 0.125, zoom: 12.5, lat: 37.48, lng: -121.80 },  // Bay Area close
-  { t: 0.250, zoom: 11.0, lat: 37.40, lng: -121.20 },  // Bay Area wide
-  { t: 0.375, zoom:  9.5, lat: 37.20, lng: -120.40 },  // Central California
-  { t: 0.500, zoom:  8.0, lat: 36.90, lng: -119.70 },  // Southern California
-  { t: 0.625, zoom:  6.5, lat: 36.50, lng: -118.80 },  // California full
-  { t: 0.750, zoom:  5.0, lat: 36.00, lng: -116.50 },  // California + Nevada
-  { t: 0.875, zoom:  3.5, lat: 34.50, lng: -113.00 },  // Western USA
-  { t: 1.000, zoom:  1.8, lat: 30.00, lng: -108.00 },  // Full Earth, CA centred
+const TOUR = [
+  // ── San Francisco / Bay Area ──────────────────────────────────────────────
+  { t: 0.000, zoom: 11.0, lat:  37.770, lng: -122.420 },
+  // SF → LA transit (Central Valley, coast range visible)
+  { t: 0.065, zoom:  7.5, lat:  36.200, lng: -120.400 },
+  // ── Los Angeles — downtown ────────────────────────────────────────────────
+  { t: 0.135, zoom: 11.0, lat:  34.052, lng: -118.244 },
+  // ── UCLA — Westwood (zoomed in so campus labels are clearly visible) ──────
+  { t: 0.205, zoom: 13.5, lat:  34.068, lng: -118.445 },
+  // Transcontinental flyover (Arizona / Colorado plateau)
+  { t: 0.285, zoom:  5.5, lat:  37.500, lng: -108.000 },
+  // ── Chicago — The Loop ────────────────────────────────────────────────────
+  { t: 0.385, zoom: 11.0, lat:  41.878, lng:  -87.630 },
+  // Chicago → NYC transit (northern Ohio)
+  { t: 0.450, zoom:  8.0, lat:  41.200, lng:  -80.500 },
+  // ── New York City — Manhattan ─────────────────────────────────────────────
+  { t: 0.520, zoom: 11.0, lat:  40.712, lng:  -74.006 },
+  // NYC → Atlanta transit (Virginia / Carolinas)
+  { t: 0.583, zoom:  8.5, lat:  37.000, lng:  -80.000 },
+  // ── Atlanta ───────────────────────────────────────────────────────────────
+  { t: 0.645, zoom: 11.0, lat:  33.749, lng:  -84.388 },
+  // Atlanta → Miami (central Florida coast)
+  { t: 0.710, zoom:  9.0, lat:  29.000, lng:  -82.000 },
+  // ── Miami ─────────────────────────────────────────────────────────────────
+  { t: 0.770, zoom: 11.5, lat:  25.774, lng:  -80.194 },
+  // Miami → Dallas flyover (Gulf of Mexico)
+  { t: 0.825, zoom:  7.0, lat:  28.500, lng:  -88.500 },
+  // ── Dallas ────────────────────────────────────────────────────────────────
+  { t: 0.890, zoom: 11.0, lat:  32.776, lng:  -96.797 },
+  // Dallas → SF transit (Southwest desert — loops back to Bay Area)
+  { t: 0.950, zoom:  6.0, lat:  35.500, lng: -110.000 },
 ];
 
 /* ── Helpers ──────────────────────────────────────────────────────────────── */
 
 /**
  * Catmull-Rom cubic spline for a single scalar channel.
- * p0..p3 are the four surrounding control points; t ∈ [0, 1] interpolates
- * between p1 and p2.  The spline is C1-continuous: velocity at each knot
- * equals the chord from the previous to the next point (×0.5), so there are
- * no velocity jumps at keyframe boundaries.
+ * Interpolates between p1 and p2 using p0 and p3 as outer tangent guides.
+ * C1-continuous: velocity at each knot = chord(prev → next) × 0.5, so
+ * there are no velocity jumps where segments meet.
  */
-function catmullRom(p0: number, p1: number, p2: number, p3: number, t: number): number {
+function catmullRom(
+  p0: number, p1: number, p2: number, p3: number, t: number
+): number {
   const t2 = t * t, t3 = t2 * t;
   return 0.5 * (
       2 * p1
-    + (-p0 + p2)                    * t
-    + ( 2*p0 - 5*p1 + 4*p2 - p3)   * t2
-    + (-p0   + 3*p1 - 3*p2 + p3)   * t3
+    + (-p0 + p2)                   * t
+    + ( 2*p0 - 5*p1 + 4*p2 - p3)  * t2
+    + (-p0   + 3*p1 - 3*p2 + p3)  * t3
   );
 }
 
 /**
- * Catmull-Rom interpolation through CAM_PATH.
+ * Periodic Catmull-Rom interpolation through TOUR waypoints.
  *
- * Clamped boundary control points (repeat the first / last keyframe) prevent
- * overshoot at t=0 and t=1, while interior segments stay fully smooth.
+ * t ∈ [0, 1) maps to the full city-tour loop.  Control points wrap with
+ * modulo so the seam at t = 0/1 is C1-continuous — the loop flows back
+ * into San Francisco with matching velocity, no snap or stutter.
+ *
+ * Zoom is clamped to [1.5, 16] to prevent spline overshoot from producing
+ * nonsensical values between keyframes with very different zoom levels.
  */
-function getCamFromPath(t: number): { zoom: number; lat: number; lng: number } {
-  const n = CAM_PATH.length;
-  let i = 0;
-  while (i < n - 2 && CAM_PATH[i + 1].t <= t) i++;
+function getTourCamera(t: number): { zoom: number; lat: number; lng: number } {
+  const n = TOUR.length;
 
-  const u  = Math.max(0, Math.min(1, (t - CAM_PATH[i].t) / (CAM_PATH[i + 1].t - CAM_PATH[i].t)));
-  const p0 = CAM_PATH[Math.max(0,     i - 1)];
-  const p1 = CAM_PATH[i];
-  const p2 = CAM_PATH[Math.min(n - 1, i + 1)];
-  const p3 = CAM_PATH[Math.min(n - 1, i + 2)];
+  // Find the segment [TOUR[i].t, nextT) that contains t.
+  // The last segment [TOUR[n-1].t, 1.0) wraps back to TOUR[0].
+  let i = n - 1;
+  for (let j = 0; j < n - 1; j++) {
+    if (t < TOUR[j + 1].t) { i = j; break; }
+  }
+
+  const tStart = TOUR[i].t;
+  const tEnd   = i < n - 1 ? TOUR[i + 1].t : 1.0;
+  const u      = Math.max(0, Math.min(1, (t - tStart) / (tEnd - tStart)));
+
+  // Periodic control points — wrap with modulo for seamless loop
+  const p0 = TOUR[(i - 1 + n) % n];
+  const p1 = TOUR[i];
+  const p2 = TOUR[(i + 1) % n];
+  const p3 = TOUR[(i + 2) % n];
 
   return {
-    zoom: catmullRom(p0.zoom, p1.zoom, p2.zoom, p3.zoom, u),
+    zoom: Math.max(1.5, Math.min(16, catmullRom(p0.zoom, p1.zoom, p2.zoom, p3.zoom, u))),
     lat:  catmullRom(p0.lat,  p1.lat,  p2.lat,  p3.lat,  u),
     lng:  catmullRom(p0.lng,  p1.lng,  p2.lng,  p3.lng,  u),
   };
 }
 
-/**
- * Returns the MapLibre camera state for a given animation loop phase (0→1).
- *
- * Phase A (zoom out): Catmull-Rom spline t 0→1 through camera path.
- *   California stays centred; camera pulls back from Menlo Park to full Earth.
- * Phase B (rotate):   globe held at t=1, longitude advances linearly −360°.
- * Phase C (zoom in):  Catmull-Rom spline t 1→0 (reverse of Phase A).
- *
- * Equal-velocity keyframes (each segment ≈ 1.5 zoom units) combined with
- * Catmull-Rom C1-continuous interpolation means the zoom rate is both
- * perceptually constant and physically smooth — no slow start, no mid-rush,
- * no velocity kicks at keyframe boundaries.
- *
- * Camera is continuous at all phase boundaries:
- *   A→B: both yield getCamFromPath(1)
- *   B→C: longitude wrapped 360° ≡ same screen position in globe projection
- *   C→A: both yield getCamFromPath(0) = Menlo Park
- */
+/** Returns the MapLibre camera state for a given loop phase t ∈ [0, 1). */
 function getLoopCamera(p: number): { center: [number, number]; zoom: number } {
-  // Phase A — zoom out (linear, constant zoom rate)
-  if (p < P_ZOOM_OUT_END) {
-    const cam = getCamFromPath(p / P_ZOOM_OUT_END);
-    return { center: [cam.lng, cam.lat], zoom: cam.zoom };
-  }
-
-  // Phase B — rotation (constant angular speed = uniform visual motion)
-  if (p < P_ROTATE_END) {
-    const u    = (p - P_ZOOM_OUT_END) / (P_ROTATE_END - P_ZOOM_OUT_END);
-    const base = getCamFromPath(1.0);
-    // Advance longitude westward; 360° completes a full Earth rotation
-    return { center: [base.lng - u * 360, base.lat], zoom: base.zoom };
-  }
-
-  // Phase C — zoom in (linear reverse, same constant rate as zoom out)
-  const u   = (p - P_ROTATE_END) / (1 - P_ROTATE_END);
-  const cam = getCamFromPath(1 - u);
-  return { center: [cam.lng, cam.lat], zoom: cam.zoom };
+  const { zoom, lat, lng } = getTourCamera(p);
+  return { center: [lng, lat], zoom };
 }
 
 /* ── Component ────────────────────────────────────────────────────────────── */
@@ -148,8 +145,8 @@ export default function MapVisual() {
     const map = new maplibregl.Map({
       container,
       style:              STYLE_URL,
-      center:             [-122.182, 37.453],
-      zoom:               14,
+      center:             [-122.420, 37.770],
+      zoom:               11,
       interactive:        false,
       attributionControl: false,
       renderWorldCopies:  false,
@@ -165,16 +162,15 @@ export default function MapVisual() {
       try { (map as any).setProjection?.("globe"); } catch { /* ignore */ }
 
       // ── Atmospheric fog — black space around the globe ────────────────────
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (map as any).setFog?.({
-          range:             [0.5, 10],
-          color:             "#000000",
-          "high-color":      "#000010",
-          "horizon-blend":   0.10,
-          "space-color":     "#000000",
-          "star-intensity":  0.0,
+          range:            [0.5, 10],
+          color:            "#000000",
+          "high-color":     "#000010",
+          "horizon-blend":  0.10,
+          "space-color":    "#000000",
+          "star-intensity": 0.0,
         });
       } catch { /* ignore */ }
 
@@ -185,8 +181,8 @@ export default function MapVisual() {
         loopPhase = (loopPhase + dt / LOOP_MS) % 1;
 
         const { center, zoom } = getLoopCamera(loopPhase);
-        // jumpTo() sets the camera instantly each frame — with per-frame
-        // computed positions this is identical to a smooth animation.
+        // jumpTo() applies the camera instantly each frame; combined with
+        // per-frame Catmull-Rom positions this produces smooth animation.
         map.jumpTo({ center, zoom });
 
         rafRef.current = requestAnimationFrame(frame);
@@ -205,9 +201,9 @@ export default function MapVisual() {
     <div
       ref={containerRef}
       style={{
-        position: "relative",
-        width:    "100%",
-        height:   "100%",
+        position:   "relative",
+        width:      "100%",
+        height:     "100%",
         background: "#000000",
       }}
     />
