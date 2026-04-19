@@ -1,7 +1,6 @@
 "use client";
 
-import Link  from "next/link";
-import Image from "next/image";
+import Link from "next/link";
 
 // ── Navbar ────────────────────────────────────────────────────────────────────
 
@@ -19,9 +18,9 @@ export default function Navbar() {
         display:              "flex",
         alignItems:           "center",
         justifyContent:       "space-between",
-        // Small intentional margin on both sides, visually balanced
-        paddingLeft:          28,
-        paddingRight:         28,
+        // Left is slightly larger to give the logo room; right pulls links in
+        paddingLeft:          40,
+        paddingRight:         16,
         background:           "rgba(0,0,0,0.38)",
         backdropFilter:       "blur(12px)",
         WebkitBackdropFilter: "blur(12px)",
@@ -39,15 +38,16 @@ export default function Navbar() {
           flexShrink:     0,
         }}
       >
-        {/* SVG has a transparent background — white circles render cleanly
-            over the dark nav with no blending tricks needed. */}
-        <Image
+        {/* Plain <img> avoids the next/image wrapper-span that can collapse
+            and clip the logo. object-fit:contain + explicit dimensions
+            guarantee no cropping regardless of parent size.               */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
           src="/logo.svg"
           alt="Blueprint logo"
           width={30}
           height={30}
-          style={{ display: "block" }}
-          priority
+          style={{ display: "block", width: 30, height: 30, objectFit: "contain", flexShrink: 0 }}
         />
         <span
           style={{
