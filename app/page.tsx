@@ -1331,21 +1331,23 @@ export default function LandingPage() {
               not secondary footnotes.                                       */}
           <div className="mt-[6vh]" style={{ maxWidth: 600 }}>
             <div className="flex flex-col gap-2">
+              {/* CSS grid: col1 = fixed-width label, col2 = arrow, col3 = description.
+                  Guarantees → sits on exactly the same vertical axis for both rows. */}
               <p
-                className="text-[19px] md:text-[21px] leading-snug font-mono"
-                style={{ paddingLeft: "9ch", textIndent: "-9ch" }}
+                className="text-[20px] md:text-[22px] font-normal leading-[1.45]"
+                style={{ display: "grid", gridTemplateColumns: "5em 2em 1fr", alignItems: "baseline" }}
               >
-                <strong style={{ color: "rgba(255,255,255,0.97)", letterSpacing: "0.08em" }}>SEARCH</strong>
-                <span style={{ color: "rgba(255,255,255,0.35)" }}> → </span>
-                <span style={{ color: "rgba(255,255,255,0.68)" }}>shows what you know to look for</span>
+                <strong style={{ color: "rgba(255,255,255,0.97)", letterSpacing: "0.08em", fontFamily: "ui-monospace, monospace" }}>SEARCH</strong>
+                <span style={{ color: "rgba(255,255,255,0.35)" }}>→</span>
+                <span style={{ color: "rgba(255,255,255,0.75)" }}>shows what you know to look for</span>
               </p>
               <p
-                className="text-[19px] md:text-[21px] leading-snug font-mono"
-                style={{ paddingLeft: "9ch", textIndent: "-9ch" }}
+                className="text-[20px] md:text-[22px] font-normal leading-[1.45]"
+                style={{ display: "grid", gridTemplateColumns: "5em 2em 1fr", alignItems: "baseline" }}
               >
-                <strong style={{ color: "rgba(255,255,255,0.97)", letterSpacing: "0.08em" }}>FEED</strong>
-                <span style={{ color: "rgba(255,255,255,0.35)" }}>&nbsp;&nbsp;→ </span>
-                <span style={{ color: "rgba(255,255,255,0.68)" }}>shows things similar to what you&apos;ve engaged with &amp; what companies pay to promote</span>
+                <strong style={{ color: "rgba(255,255,255,0.97)", letterSpacing: "0.08em", fontFamily: "ui-monospace, monospace" }}>FEED</strong>
+                <span style={{ color: "rgba(255,255,255,0.35)" }}>→</span>
+                <span style={{ color: "rgba(255,255,255,0.75)" }}>shows things similar to what you&apos;ve engaged with &amp; what companies pay to promote</span>
               </p>
             </div>
           </div>
@@ -2007,7 +2009,7 @@ export default function LandingPage() {
             <p className="text-[20px] md:text-[22px] font-normal leading-[1.45]"
               style={{ color: "rgba(255,255,255,0.75)", marginTop: 24 }}>
               take you past what&apos;s recommended to you<br />
-              and what companies pay to promote.
+              &amp; what companies pay to promote.
             </p>
 
             {/* Final line — payoff: larger than body, slightly below headline */}
