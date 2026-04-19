@@ -31,7 +31,7 @@ function SeedOfLife({ size = 36 }: { size?: number }) {
       // overflow="visible" lets strokes that approach the viewBox edge render
       // fully instead of being clipped to the SVG's bounding box.
       overflow="visible"
-      style={{ display: "block", flexShrink: 0 }}
+      style={{ display: "block", flexShrink: 0, transform: "scaleX(-1)" }}
       aria-hidden="true"
     >
       <circle cx={cx} cy={cy} r={r} stroke="white" strokeWidth={sw} />
