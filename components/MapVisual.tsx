@@ -314,21 +314,16 @@ export default function MapVisual() {
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.clearRect(0, 0, W, H);
 
+        // The active city is always the camera centre during its bloom phase,
+        // so we draw at (W/2, H/2) — no map.project() needed, no corner ghosts.
         for (let i = 0; i < CITIES.length; i++) {
           const activity = getCityActivity(i, loopPhase);
           if (activity < 0.04) continue;   // circle layer already shows the dot
 
-          const city = CITIES[i];
-          const pt   = map.project([city.lng, city.lat]);
-
-          // Only render the bloom when the city is near the screen centre.
-          // This kills the ghost sphere that appears in the corner while the
-          // camera is still in transit toward the city.
-          const distFromCenter = Math.hypot(pt.x - W / 2, pt.y - H / 2);
-          if (distFromCenter > Math.min(W, H) * 0.35) continue;
-
+          const cx     = W / 2;
+          const cy     = H / 2;
           const radius = 3 + 51 * activity;
-          drawIcosphere(ctx, pt.x, pt.y, radius, rotY[i], 0.55 + activity * 0.45);
+          drawIcosphere(ctx, cx, cy, radius, rotY[i], 0.55 + activity * 0.45);
 
           // City name fades in below the sphere once noticeably active
           if (activity > 0.25) {
@@ -337,7 +332,7 @@ export default function MapVisual() {
             ctx.textAlign    = "center";
             ctx.textBaseline = "top";
             ctx.fillStyle    = `rgba(255,255,255,${textAlpha.toFixed(2)})`;
-            ctx.fillText(city.name, pt.x, pt.y + radius + 10);
+            ctx.fillText(CITIES[i].name, cx, cy + radius + 10);
           }
         }
 
