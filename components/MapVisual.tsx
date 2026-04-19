@@ -156,7 +156,7 @@ const ISO_MARKER = buildIcosphere(1);
 
 // Marker radius in CSS px — large enough to show geometry, small enough to
 // sit next to a label without dominating it.
-const MARKER_R = 7;
+const MARKER_R = 11;
 
 /**
  * Soft radial glow drawn behind each icosphere.
@@ -170,7 +170,7 @@ function drawGlow(
 ) {
   const glowR = R * 2.6;
   const grad  = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowR);
-  grad.addColorStop(0,    `rgba(${cr},${cg},${cb},0.22)`);
+  grad.addColorStop(0,    `rgba(${cr},${cg},${cb},0.28)`);
   grad.addColorStop(0.45, `rgba(${cr},${cg},${cb},0.07)`);
   grad.addColorStop(1,    `rgba(${cr},${cg},${cb},0)`);
   ctx.fillStyle = grad;
@@ -422,9 +422,9 @@ export default function MapVisual({
           rot.rx += rot.speedX;
           rot.ry += rot.speedY;
 
-          // Centre the sphere above its label anchor (16 px clears the text)
+          // Centre the sphere above its label anchor (22 px clears the text)
           const sx = pt.x;
-          const sy = pt.y - 16;
+          const sy = pt.y - 22;
 
           drawGlow(ctx, sx, sy, MARKER_R, cr, cg, cb);
           drawIcosphere(ctx, sx, sy, MARKER_R, rot.rx, rot.ry, cr, cg, cb);
