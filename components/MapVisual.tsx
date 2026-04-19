@@ -220,7 +220,11 @@ export default function MapVisual({
     const overlay = overlayRef.current;
     if (!wrapper || !mapDiv || !overlay) return;
 
-    const ctx2d = overlay.getContext("2d");
+    // Capture non-nullable aliases after the guard so TypeScript retains
+    // the narrowed types inside nested closures (e.g. the rAF frame callback).
+    const overlayEl: HTMLCanvasElement = overlay;
+
+    const ctx2d = overlayEl.getContext("2d");
     if (!ctx2d) return;
     const ctx: CanvasRenderingContext2D = ctx2d;
 
@@ -240,10 +244,10 @@ export default function MapVisual({
       const dpr = window.devicePixelRatio || 1;
       const w   = wrapper.clientWidth;
       const h   = wrapper.clientHeight;
-      overlay.width  = w * dpr;
-      overlay.height = h * dpr;
-      overlay.style.width  = `${w}px`;
-      overlay.style.height = `${h}px`;
+      overlayEl.width  = w * dpr;
+      overlayEl.height = h * dpr;
+      overlayEl.style.width  = `${w}px`;
+      overlayEl.style.height = `${h}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
     resizeCanvas();
@@ -352,8 +356,8 @@ export default function MapVisual({
         }
 
         // ── Draw icospheres on canvas overlay ──────────────────────────────────
-        const W = overlay.width  / (window.devicePixelRatio || 1);
-        const H = overlay.height / (window.devicePixelRatio || 1);
+        const W = overlayEl.width  / (window.devicePixelRatio || 1);
+        const H = overlayEl.height / (window.devicePixelRatio || 1);
         ctx.clearRect(0, 0, W, H);
 
         const R = 5; // radius in CSS px
