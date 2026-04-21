@@ -98,7 +98,7 @@ export default function Navbar() {
       {/* ── RIGHT: nav links ─────────────────────────────────────────────── */}
       <div style={{ display: "flex", alignItems: "center", gap: 36 }}>
         {[
-          { label: "Philosophy", href: "#" },
+          { label: "Philosophy", href: "/philosophy" },
           { label: "Connect",    href: "#" },
         ].map(({ label, href }) => (
           <Link
