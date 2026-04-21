@@ -71,6 +71,7 @@ export default function Navbar() {
       {/* ── LEFT: logo + wordmark ────────────────────────────────────────── */}
       <Link
         href="/"
+        onClick={() => window.dispatchEvent(new Event("blueprint-reset"))}
         style={{
           display:        "flex",
           alignItems:     "center",

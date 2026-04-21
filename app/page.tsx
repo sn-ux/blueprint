@@ -404,6 +404,20 @@ export default function LandingPage() {
     ).then(arrays => setAllTracksData(arrays.flat()));
   }, [worlds]);
 
+  // ── Blueprint logo reset — scroll to top + clear all selection state ────────
+  useEffect(() => {
+    const onReset = () => {
+      setSelected(null);
+      setSelectedSubgenre(null); selectedSubgenreRef.current = null;
+      setZoomSubgenre(null);     zoomSubgenreRef.current     = null;
+      autoSelectedRef.current = false;
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    };
+    window.addEventListener("blueprint-reset", onReset);
+    return () => window.removeEventListener("blueprint-reset", onReset);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ── Fetch tracks + subgenres when genre selected ──────────────────────────
   useEffect(() => {
     hoveredSubgRef.current = null;
@@ -1154,17 +1168,18 @@ export default function LandingPage() {
               This is what a music taste looks like.
             </h1>
             <p className="text-xs tracking-[0.22em] uppercase" style={{ color: "rgba(255,255,255,0.62)" }}>
-              Zoom In. Discover.
+              Click. Zoom. Discover.
             </p>
           </div>
 
           {/* Stats row — bottom-right, clear of the sphere */}
           {totalTrackCount > 0 && (
             <div
-              className="absolute bottom-[11vh] right-[8%] z-10 flex flex-row gap-8 pointer-events-none"
+              className="absolute bottom-[11vh] z-10 flex flex-row gap-8 pointer-events-none"
               style={{
-                opacity: textVisible ? 1 : 0,
-                transition: "opacity 0.4s ease-in-out",
+                right:      selected ? "calc(420px + 3%)" : "8%",
+                opacity:    textVisible ? 1 : 0,
+                transition: "opacity 0.4s ease-in-out, right 0.35s ease",
               }}
             >
               {[
