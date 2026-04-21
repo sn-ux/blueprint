@@ -2009,10 +2009,16 @@ export default function LandingPage() {
           {/* maxWidth 620 — wider than before so headline fits on one line */}
           <div style={{ maxWidth: 620 }}>
 
-            {/* Headline — 40/42px keeps it on one line within the available column width */}
+            {/* Headline */}
             <h2 className="text-[38px] md:text-[42px] font-semibold leading-[1.07] text-white" style={{ letterSpacing: "-0.02em" }}>
-              The tastes of people you trust
+              Turn your network into your algorithm
             </h2>
+
+            {/* Sub-head */}
+            <p className="text-[22px] md:text-[24px] font-medium leading-[1.3]"
+              style={{ color: "rgba(255,255,255,0.55)", marginTop: 20, letterSpacing: "-0.01em" }}>
+              The tastes of people you trust
+            </p>
 
             {/* Body line 1 */}
             <p className="text-[20px] md:text-[22px] font-normal leading-[1.45]"
@@ -2023,21 +2029,15 @@ export default function LandingPage() {
             {/* Body line 2 */}
             <p className="text-[20px] md:text-[22px] font-normal leading-[1.45]"
               style={{ color: "rgba(255,255,255,0.75)", marginTop: 24 }}>
-              show you what isn&apos;t recommended to you<br />
+              show you what you don&apos;t engage with<br />
               &amp; what companies don&apos;t pay to promote.
             </p>
 
-            {/* Body line 3 */}
-            <p className="text-[20px] md:text-[22px] font-normal leading-[1.45]"
-              style={{ color: "rgba(255,255,255,0.75)", marginTop: 24 }}>
-              You&apos;re not searching anymore.<br />
-              You&apos;re seeing through someone else&apos;s perspective.
-            </p>
-
-            {/* Final line — payoff: larger than body, slightly below headline */}
+            {/* Final lines — payoff */}
             <p className="text-[26px] md:text-[28px] font-semibold leading-[1.15] text-white"
               style={{ letterSpacing: "-0.01em", marginTop: 48 }}>
-              Start stepping outside your echo chamber.
+              Trusted recommendations give you better starting points<br />
+              to explore the unknown.
             </p>
 
           </div>
