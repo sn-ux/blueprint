@@ -1177,9 +1177,9 @@ export default function LandingPage() {
             <div
               className="absolute bottom-[11vh] z-10 flex flex-row gap-8 pointer-events-none"
               style={{
-                right:      selected ? "calc(420px + 3%)" : "8%",
+                right:      selected ? "-3%" : "8%",
                 opacity:    textVisible ? 1 : 0,
-                transition: "opacity 0.4s ease-in-out, right 0.35s ease",
+                transition: "opacity 0.4s ease-in-out, right 0.38s cubic-bezier(0.4,0,0.2,1)",
               }}
             >
               {[
