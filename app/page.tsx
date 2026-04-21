@@ -2014,9 +2014,9 @@ export default function LandingPage() {
               Turn your network into your algorithm
             </h2>
 
-            {/* Sub-head */}
-            <p className="text-[22px] md:text-[24px] font-medium leading-[1.3]"
-              style={{ color: "rgba(255,255,255,0.55)", marginTop: 20, letterSpacing: "-0.01em" }}>
+            {/* Sub-head — matches body copy exactly */}
+            <p className="text-[20px] md:text-[22px] font-normal leading-[1.45]"
+              style={{ color: "rgba(255,255,255,0.75)", marginTop: 40 }}>
               The tastes of people you trust
             </p>
 
