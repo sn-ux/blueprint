@@ -28,7 +28,7 @@ function FadeIn({
   className?: string;
   style?:   React.CSSProperties;
 }) {
-  const { ref, inView } = useInView(0.1);
+  const { ref, inView } = useInView(0.08);
   return (
     <div
       ref={ref}
@@ -50,6 +50,170 @@ const FB: React.CSSProperties = {
   width:      "100vw",
   marginLeft: "calc(50% - 50vw)",
 };
+
+// ── Shared SVG stroke props ────────────────────────────────────────────────
+// Typed as a plain object (no ref) so it spreads cleanly onto any SVG element.
+const SK = {
+  stroke:         "rgba(255,255,255,0.55)",
+  strokeWidth:    1.3,
+  fill:           "none",
+  strokeLinecap:  "round"  as const,
+  strokeLinejoin: "round"  as const,
+};
+
+// ── Philosopher illustrations ──────────────────────────────────────────────
+// Each is a minimal line-art face drawn on a 0 0 48 48 viewBox.
+// All share: head circle + shoulder curve. Distinctive feature marks each one.
+
+function PhilosopherIllustration({ id }: { id: string }) {
+  // Common base elements
+  const Head      = () => <circle cx="24" cy="16" r="9" {...SK} />;
+  const Shoulders = () => (
+    <path d="M 10 48 C 15 37 20 33 24 32 C 28 33 33 37 38 48" {...SK} />
+  );
+
+  const illustrations: Record<string, React.ReactNode> = {
+
+    "socrates-meno": (
+      // Large curly beard, snub nose bump — Socrates' signature look
+      <>
+        <Head /><Shoulders />
+        <path d="M 16 22 Q 10 30 13 38 Q 18 44 24 44 Q 30 44 35 38 Q 38 30 32 22" {...SK} />
+        <path d="M 21 18 Q 20 21 22 22" {...SK} />
+      </>
+    ),
+
+    "plato": (
+      // Broader forehead (ellipse), wide full beard
+      <>
+        <ellipse cx="24" cy="16" rx="11" ry="9" {...SK} />
+        <path d="M 10 48 C 15 37 20 33 24 32 C 28 33 33 37 38 48" {...SK} />
+        <path d="M 14 23 Q 8 33 13 41 Q 18 46 24 46 Q 30 46 35 41 Q 40 33 34 23" {...SK} />
+      </>
+    ),
+
+    "aristotle": (
+      // Short trimmed beard, neat hair — more refined than Plato
+      <>
+        <Head /><Shoulders />
+        <path d="M 17 9 Q 24 6 31 9" {...SK} />
+        <path d="M 18 23 Q 17 29 20 32 Q 24 34 28 32 Q 31 29 30 23" {...SK} />
+      </>
+    ),
+
+    "al-farabi-avicenna": (
+      // Domed turban above head, full beard
+      <>
+        <circle cx="24" cy="21" r="9" {...SK} />
+        <path d="M 10 48 C 15 39 20 35 24 34 C 28 35 33 39 38 48" {...SK} />
+        <path d="M 13 21 Q 15 6 24 5 Q 33 6 35 21" {...SK} />
+        <line x1="12" y1="22" x2="36" y2="22" {...SK} />
+        <path d="M 16 28 Q 13 36 17 41 Q 22 46 28 41 Q 33 36 32 28" {...SK} />
+      </>
+    ),
+
+    "averroes": (
+      // Horizontally wrapped turban (two arc bands), medium beard
+      <>
+        <circle cx="24" cy="21" r="9" {...SK} />
+        <path d="M 10 48 C 15 39 20 35 24 34 C 28 35 33 39 38 48" {...SK} />
+        <path d="M 14 16 Q 24 10 34 16" {...SK} />
+        <path d="M 13 20 Q 24 14 35 20" {...SK} />
+        <path d="M 17 28 Q 15 34 19 38 Q 24 41 29 38 Q 33 34 31 28" {...SK} />
+      </>
+    ),
+
+    "kant": (
+      // Powdered wig side curls, high cravat — 18th century formal
+      <>
+        <Head /><Shoulders />
+        <path d="M 15 13 Q 8 18 10 27" {...SK} />
+        <path d="M 33 13 Q 40 18 38 27" {...SK} />
+        <path d="M 19 27 Q 24 30 29 27" {...SK} />
+        <path d="M 22 27 L 24 31 L 26 27" {...SK} />
+      </>
+    ),
+
+    "wittgenstein": (
+      // Clean, minimal — no beard, just neat hair, modern collar
+      <>
+        <Head /><Shoulders />
+        <path d="M 17 9 Q 24 6 31 9" {...SK} />
+        <line x1="20" y1="27" x2="20" y2="34" {...SK} />
+        <line x1="28" y1="27" x2="28" y2="34" {...SK} />
+      </>
+    ),
+
+    "gadamer": (
+      // Round glasses, soft features — 20th century academic
+      <>
+        <Head /><Shoulders />
+        <circle cx="20" cy="16" r="3.5" {...SK} />
+        <circle cx="28" cy="16" r="3.5" {...SK} />
+        <path d="M 23.5 16 H 24.5" {...SK} />
+        <line x1="14" y1="16" x2="16.5" y2="16" {...SK} />
+        <line x1="31.5" y1="16" x2="34" y2="16" {...SK} />
+      </>
+    ),
+
+    "foucault": (
+      // Bald (no hair lines), round glasses — Foucault's iconic look
+      <>
+        <circle cx="24" cy="15" r="11" {...SK} />
+        <path d="M 10 48 C 15 37 20 33 24 32 C 28 33 33 37 38 48" {...SK} />
+        <circle cx="20" cy="15" r="3" {...SK} />
+        <circle cx="28" cy="15" r="3" {...SK} />
+        <path d="M 23 15 H 25" {...SK} />
+      </>
+    ),
+  };
+
+  return (
+    <svg
+      width={44}
+      height={44}
+      viewBox="0 0 48 48"
+      fill="none"
+      overflow="visible"
+      style={{ display: "block", flexShrink: 0 }}
+      aria-hidden="true"
+    >
+      {illustrations[id] ?? null}
+    </svg>
+  );
+}
+
+// ── Blueprint mark — placed beside the internet paragraph ─────────────────
+// Mirrors the Seed-of-Life logo from the Navbar, dimmed for subtle use.
+
+function BlueprintMark() {
+  const r  = 21;
+  const sw = 3.8;
+  const cx = 50, cy = 50;
+  const angles = [75, 15, -45, -105, -165, 135];
+  const centres = angles.map(deg => {
+    const rad = (deg * Math.PI) / 180;
+    return { x: cx + r * Math.cos(rad), y: cy - r * Math.sin(rad) };
+  });
+  return (
+    <svg
+      width={18}
+      height={18}
+      viewBox="0 0 100 100"
+      fill="none"
+      overflow="visible"
+      style={{ display: "block", flexShrink: 0, marginTop: 2 }}
+      aria-hidden="true"
+    >
+      <circle cx={cx} cy={cy} r={r}
+        stroke="rgba(255,255,255,0.28)" strokeWidth={sw} />
+      {centres.map((c, i) => (
+        <circle key={i} cx={c.x} cy={c.y} r={r}
+          stroke="rgba(255,255,255,0.28)" strokeWidth={sw} />
+      ))}
+    </svg>
+  );
+}
 
 // ── Philosopher data ───────────────────────────────────────────────────────
 
@@ -128,48 +292,11 @@ const PHILOSOPHERS = [
   },
 ] as const;
 
-// ── Shared typography constants ────────────────────────────────────────────
-
-const NAME_STYLE: React.CSSProperties = {
-  fontSize:      10,
-  fontWeight:    600,
-  letterSpacing: "0.22em",
-  textTransform: "uppercase",
-  color:         "rgba(255,255,255,0.28)",
-  marginBottom:  24,
-};
-
-const QUOTE_STYLE: React.CSSProperties = {
-  fontSize:   "clamp(18px, 2vw, 24px)",
-  fontWeight: 400,
-  lineHeight: 1.55,
-  fontStyle:  "italic",
-  color:      "rgba(255,255,255,0.82)",
-  marginBottom: 40,
-};
-
-const LABEL_STYLE: React.CSSProperties = {
-  fontSize:      9,
-  fontWeight:    700,
-  letterSpacing: "0.22em",
-  textTransform: "uppercase",
-  color:         "rgba(255,255,255,0.22)",
-  marginBottom:  10,
-};
-
-const BODY_STYLE: React.CSSProperties = {
-  fontSize:   "clamp(14px, 1.4vw, 16px)",
-  fontWeight: 400,
-  lineHeight: 1.75,
-  color:      "rgba(255,255,255,0.60)",
-  marginBottom: 32,
-};
-
 // ── Page ──────────────────────────────────────────────────────────────────
 
 export default function PhilosophyPage() {
 
-  // Equation animation: phase 0 = hidden, 1 = first eq, 2 = transformed
+  // Equation animation: 0 = hidden, 1 = first eq, 2 = transformed
   const { ref: eqRef, inView: eqInView } = useInView(0.25);
   const [eqPhase, setEqPhase] = useState(0);
 
@@ -189,40 +316,105 @@ export default function PhilosophyPage() {
   return (
     <div className="bg-black text-white" style={{ overflowX: "hidden" }}>
 
-      {/* ══ PHILOSOPHER SECTIONS ═════════════════════════════════════════════
-          One section per philosopher. First section has extra top padding to
-          clear the fixed 56 px navbar.                                       */}
+      {/* ══ PHILOSOPHER SECTIONS ═════════════════════════════════════════════ */}
       {PHILOSOPHERS.map((p, idx) => (
         <section
           key={p.id}
           style={{
             ...FB,
             borderTop: "1px solid rgba(255,255,255,0.05)",
-            padding:   idx === 0 ? "120px 24px 80px" : "80px 24px",
+            padding:   idx === 0 ? "120px 24px 88px" : "80px 24px 88px",
           }}
         >
-          <FadeIn
-            style={{
-              maxWidth: 760,
-              margin:   "0 auto",
-            }}
-          >
-            {/* Name */}
-            <p style={NAME_STYLE}>{p.name}</p>
+          <FadeIn style={{ maxWidth: 760, margin: "0 auto" }}>
 
-            {/* Quote */}
-            <p style={QUOTE_STYLE}>&ldquo;{p.quote}&rdquo;</p>
+            {/* ── Name header: illustration + name side-by-side ──────────── */}
+            <div
+              style={{
+                display:     "flex",
+                alignItems:  "center",
+                gap:         16,
+                marginBottom: 28,
+              }}
+            >
+              <PhilosopherIllustration id={p.id} />
+              <h2
+                style={{
+                  fontSize:      "clamp(18px, 1.8vw, 22px)",
+                  fontWeight:    600,
+                  lineHeight:    1.2,
+                  letterSpacing: "-0.01em",
+                  color:         "rgba(255,255,255,0.92)",
+                  margin:        0,
+                }}
+              >
+                {p.name}
+              </h2>
+            </div>
 
-            {/* Labeled sections */}
-            <div>
-              <p style={LABEL_STYLE}>What they&apos;re saying</p>
-              <p style={BODY_STYLE}>{p.saying}</p>
+            {/* ── Quote ──────────────────────────────────────────────────── */}
+            <p
+              style={{
+                fontSize:     "clamp(17px, 1.8vw, 22px)",
+                fontWeight:   400,
+                lineHeight:   1.55,
+                fontStyle:    "italic",
+                color:        "rgba(255,255,255,0.80)",
+                marginBottom: 36,
+                paddingLeft:  60, // aligns with name text above
+              }}
+            >
+              &ldquo;{p.quote}&rdquo;
+            </p>
 
-              <p style={LABEL_STYLE}>What this adds to the problem of discovery</p>
-              <p style={BODY_STYLE}>{p.adds}</p>
+            {/* ── Three content paragraphs ────────────────────────────────
+                Labels removed — presented as spaced paragraphs.
+                The internet paragraph sits in a flex row with the Blueprint mark.
+            ──────────────────────────────────────────────────────────────── */}
+            <div style={{ paddingLeft: 60 }}>
 
-              <p style={LABEL_STYLE}>What this means for the internet</p>
-              <p style={{ ...BODY_STYLE, marginBottom: 0 }}>{p.internet}</p>
+              {/* Saying */}
+              <p
+                style={{
+                  fontSize:     "clamp(14px, 1.35vw, 16px)",
+                  fontWeight:   400,
+                  lineHeight:   1.8,
+                  color:        "rgba(255,255,255,0.60)",
+                  marginBottom: 28,
+                }}
+              >
+                {p.saying}
+              </p>
+
+              {/* Adds */}
+              <p
+                style={{
+                  fontSize:     "clamp(14px, 1.35vw, 16px)",
+                  fontWeight:   400,
+                  lineHeight:   1.8,
+                  color:        "rgba(255,255,255,0.60)",
+                  marginBottom: 28,
+                }}
+              >
+                {p.adds}
+              </p>
+
+              {/* Internet — Blueprint mark to the left */}
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                <BlueprintMark />
+                <p
+                  style={{
+                    fontSize:   "clamp(14px, 1.35vw, 16px)",
+                    fontWeight: 400,
+                    lineHeight: 1.8,
+                    color:      "rgba(255,255,255,0.60)",
+                    margin:     0,
+                  }}
+                >
+                  {p.internet}
+                </p>
+              </div>
+
             </div>
           </FadeIn>
         </section>
@@ -273,8 +465,8 @@ export default function PhilosophyPage() {
             }}
           >
             {[
-              { text: "everything everyone knows",  delay:   0 },
-              { text: "− everything you know",       delay: 260 },
+              { text: "everything everyone knows",       delay:   0 },
+              { text: "− everything you know",            delay: 260 },
               { text: "= everything you don\u2019t know", delay: 520 },
             ].map(({ text, delay }) => (
               <p
@@ -293,7 +485,7 @@ export default function PhilosophyPage() {
             ))}
           </div>
 
-          {/* Equation 2 — transformed version */}
+          {/* Equation 2 — transformed */}
           <div
             style={{
               gridArea:      "1 / 1",
@@ -303,9 +495,9 @@ export default function PhilosophyPage() {
             }}
           >
             {[
-              { text: "everything everyone searches + saves", delay: 350 },
-              { text: "− everything you search + save",        delay: 500 },
-              { text: "\u2248 everything you don\u2019t know", delay: 650 },
+              { text: "everything everyone searches + saves",  delay: 350 },
+              { text: "− everything you search + save",         delay: 500 },
+              { text: "\u2248 everything you don\u2019t know",  delay: 650 },
             ].map(({ text, delay }) => (
               <p
                 key={text}
