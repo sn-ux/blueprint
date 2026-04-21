@@ -72,12 +72,12 @@ function BlueprintMark() {
 
 // ── Layout constants ───────────────────────────────────────────────────────
 // All body text (quote + paragraphs) aligns with the philosopher name — i.e.
-// indented by image width (56) + gap (16) = 72 px from the section edge.
-// The Blueprint mark sits in that 72 px gutter at left = −(36 logo + 12 gap).
+// indented by image width (88) + gap (20) = 108 px from the section edge.
+// The Blueprint mark sits in that 108 px gutter at left = −(36 logo + 12 gap).
 
-const IMG_SIZE      = 56;   // px — portrait image
-const IMG_GAP       = 16;   // px — between image and name
-const INDENT        = IMG_SIZE + IMG_GAP; // 72 px
+const IMG_SIZE      = 88;   // px — portrait image (noticeably larger)
+const IMG_GAP       = 20;   // px — between image and name
+const INDENT        = IMG_SIZE + IMG_GAP; // 108 px
 const LOGO_LEFT     = -(36 + 12);         // −48 px — logo in gutter
 
 // ── Philosopher data ───────────────────────────────────────────────────────
@@ -99,7 +99,7 @@ const PHILOSOPHERS: Entry[] = [
   {
     id:    "socrates-meno",
     name:  "Socrates / Meno",
-    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/b/bc/Socrate_du_Louvre.jpg/120px-Socrate_du_Louvre.jpg",
+    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/b/bc/Socrate_du_Louvre.jpg/160px-Socrate_du_Louvre.jpg",
     quote: "And how will you enquire, Socrates, into that which you do not know?",
     saying:   "You cannot search for something if you don't know it exists. Inquiry itself requires a starting point, and without that, discovery collapses.",
     adds:     "This defines the fundamental constraint. There are two categories: what you know, and what you don't. You can access what you know to look for, but you cannot access what you don't yet know exists.",
@@ -108,7 +108,7 @@ const PHILOSOPHERS: Entry[] = [
   {
     id:    "plato",
     name:  "Plato",
-    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/88/Plato_Silanion_Musei_Capitolini_MC1377.jpg/120px-Plato_Silanion_Musei_Capitolini_MC1377.jpg",
+    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/88/Plato_Silanion_Musei_Capitolini_MC1377.jpg/160px-Plato_Silanion_Musei_Capitolini_MC1377.jpg",
     quote: "Learning is recollection.",
     saying:   "Plato argues that all knowledge already exists within you, and discovery is simply remembering what your soul has already encountered.",
     adds:     "This reframes discovery as internal rather than external. But it only works if you have already experienced the thing you are trying to recall.",
@@ -117,7 +117,7 @@ const PHILOSOPHERS: Entry[] = [
   {
     id:    "aristotle",
     name:  "Aristotle",
-    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ae/Aristotle_Altemps_Inv8575.jpg/120px-Aristotle_Altemps_Inv8575.jpg",
+    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ae/Aristotle_Altemps_Inv8575.jpg/160px-Aristotle_Altemps_Inv8575.jpg",
     quote: "From experience… comes the universal.",
     saying:   "Aristotle believed we discover new knowledge by observing many different things and extracting patterns from them.",
     adds:     "Discovery depends on exposure. Without a wide range of inputs, you cannot form new abstractions or arrive at new understanding.",
@@ -126,7 +126,7 @@ const PHILOSOPHERS: Entry[] = [
   {
     id:    "al-farabi",
     name:  "Al-Farabi",
-    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Al-Farabi.jpg/120px-Al-Farabi.jpg",
+    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Al-Farabi.jpg/160px-Al-Farabi.jpg",
     quote: "The intellect receives knowledge from a higher source.",
     saying:   "They argued that discovery requires connection to something beyond the individual mind — a broader intelligence that is not limited by personal experience.",
     adds:     "The self is not enough. To discover what you don't know, you need access to perspectives or knowledge outside your own history.",
@@ -135,7 +135,7 @@ const PHILOSOPHERS: Entry[] = [
   {
     id:    "avicenna",
     name:  "Avicenna",
-    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/12/Avicennagebel.jpg/120px-Avicennagebel.jpg",
+    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/12/Avicennagebel.jpg/160px-Avicennagebel.jpg",
     quote: "The soul perceives itself without the body.",
     saying:   null,
     adds:     null,
@@ -144,7 +144,7 @@ const PHILOSOPHERS: Entry[] = [
   {
     id:    "averroes",
     name:  "Averroes",
-    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/Averroes-cropped.jpg/120px-Averroes-cropped.jpg",
+    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/Averroes-cropped.jpg/160px-Averroes-cropped.jpg",
     quote: "The intellect is shared.",
     saying:   "Knowledge emerges from participation in a shared system of reasoning across many minds.",
     adds:     "Discovery depends on a shared reality — a common set of inputs that people can reason from together.",
@@ -153,7 +153,7 @@ const PHILOSOPHERS: Entry[] = [
   {
     id:    "kant",
     name:  "Kant",
-    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/43/Immanuel_Kant_%28painted_portrait%29.jpg/120px-Immanuel_Kant_%28painted_portrait%29.jpg",
+    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/43/Immanuel_Kant_%28painted_portrait%29.jpg/160px-Immanuel_Kant_%28painted_portrait%29.jpg",
     quote: "You see the world not as it is, but as you are.",
     saying:   "The mind structures reality. You do not perceive the world directly — you perceive it through your own cognitive framework.",
     adds:     "You cannot discover what falls outside your framework of thought. Your ability to know is constrained by how you interpret the world.",
@@ -162,7 +162,7 @@ const PHILOSOPHERS: Entry[] = [
   {
     id:    "wittgenstein",
     name:  "Wittgenstein",
-    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Ludwig_Wittgenstein.jpg/120px-Ludwig_Wittgenstein.jpg",
+    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Ludwig_Wittgenstein.jpg/160px-Ludwig_Wittgenstein.jpg",
     quote: "The limits of my language mean the limits of my world.",
     saying:   "You cannot think beyond the words you have. Language defines the boundary of what you can understand.",
     adds:     "Discovery is constrained not just by knowledge, but by vocabulary. If you cannot name something, you cannot access it.",
@@ -171,7 +171,7 @@ const PHILOSOPHERS: Entry[] = [
   {
     id:    "gadamer",
     name:  "Gadamer",
-    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/3/32/Gadamer_2.jpg/120px-Gadamer_2.jpg",
+    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/3/32/Gadamer_2.jpg/160px-Gadamer_2.jpg",
     quote: "Understanding is a fusion of horizons.",
     saying:   "Discovery happens through interaction with other perspectives. New understanding emerges when different viewpoints meet.",
     adds:     "You cannot discover alone. You need exposure to fundamentally different ways of thinking.",
@@ -180,7 +180,7 @@ const PHILOSOPHERS: Entry[] = [
   {
     id:    "foucault",
     name:  "Foucault",
-    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/Foucault5.jpg/120px-Foucault5.jpg",
+    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/Foucault5.jpg/160px-Foucault5.jpg",
     quote: "Knowledge is shaped by systems of power.",
     saying:   "What you are able to know is determined by the structure of the system you are in.",
     adds:     "Discovery is not just a cognitive problem — it is a structural one. Systems define what can be seen, asked, and known.",
@@ -246,7 +246,7 @@ export default function PhilosophyPage() {
                   height:         IMG_SIZE,
                   objectFit:      "cover",
                   objectPosition: "center top",
-                  filter:         "grayscale(100%) contrast(1.15) brightness(0.92)",
+                  filter:         "grayscale(100%) contrast(1.55) brightness(1.12)",
                   background:     "rgba(255,255,255,0.07)",
                   flexShrink:     0,
                   display:        "block",
@@ -300,9 +300,10 @@ export default function PhilosophyPage() {
                 <div style={{ position: "relative" }}>
                   <div
                     style={{
-                      position: "absolute",
-                      left:     LOGO_LEFT,
-                      top:      3,
+                      position:  "absolute",
+                      left:      LOGO_LEFT,
+                      top:       "50%",
+                      transform: "translateY(-50%)",
                     }}
                   >
                     <BlueprintMark />
