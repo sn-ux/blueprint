@@ -377,7 +377,7 @@ declare global {
 
 function SpotifyLogoButton({
   track,
-  size = 18,
+  size = 22,
 }: {
   track: { name: string; spotifyId?: string | null } | null;
   size?: number;
@@ -385,7 +385,7 @@ function SpotifyLogoButton({
   const active = !!(track?.spotifyId);
 
   const handleClick = (e: React.MouseEvent) => {
-    e.stopPropagation(); // don't bubble to the panel's close/scroll handlers
+    e.stopPropagation();
     if (!active || !track?.spotifyId) return;
     const url = `https://open.spotify.com/track/${track.spotifyId}`;
     const ok = window.confirm(`Open "${track.name}" on Spotify?`);
@@ -400,10 +400,12 @@ function SpotifyLogoButton({
         flexShrink:      0,
         background:      "none",
         border:          "none",
+        // Extra left margin separates the logo clearly from the title text
+        marginLeft:      8,
         padding:         0,
         cursor:          active ? "pointer" : "default",
-        color:           active ? "#1DB954" : "rgba(255,255,255,0.18)",
-        transition:      "color 0.25s ease, opacity 0.25s ease",
+        color:           active ? "#1DB954" : "rgba(255,255,255,0.20)",
+        transition:      "color 0.25s ease",
         display:         "flex",
         alignItems:      "center",
         lineHeight:      1,
@@ -1986,7 +1988,7 @@ export default function LandingPage() {
                       className="text-xs mb-3 flex items-center gap-1.5 transition-opacity hover:opacity-100"
                       style={{ color: `rgba(${sr},${sg},${sb},0.45)` }}
                     >← {selected ? shortLabel(selected) : ""}</button>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center">
                       <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{focusedSubgenre}</h2>
                       <SpotifyLogoButton track={nowPlayingTrack} />
                     </div>
@@ -1994,7 +1996,7 @@ export default function LandingPage() {
                 ) : (
                   <>
                     <p className="text-xs tracking-widest uppercase mb-2" style={{ color: `rgba(${sr},${sg},${sb},0.38)` }}>Now exploring</p>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center">
                       <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{selected ? shortLabel(selected) : ""}</h2>
                       <SpotifyLogoButton track={nowPlayingTrack} />
                     </div>
@@ -2078,7 +2080,12 @@ export default function LandingPage() {
                               className="text-sm font-medium truncate leading-snug"
                               style={{ color: isActive ? selectedColor : "#ffffff" }}
                             >{t.name}</span>
-                            <span className="text-zinc-500 text-xs truncate">{t.artist}</span>
+                            <span className="text-zinc-500 text-xs truncate">
+                              {t.artist}
+                              {!canPlay && (
+                                <span style={{ color: "rgba(255,255,255,0.22)", marginLeft: 4 }}>(No Preview)</span>
+                              )}
+                            </span>
                           </div>
                         </div>
                       );
@@ -2139,17 +2146,17 @@ export default function LandingPage() {
                   style={{ minHeight: 56 }}
                 >
                   {/* Genre / subgenre name + Spotify logo + track count */}
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <div className="flex items-center min-w-0 flex-1">
                     <h2
                       className="text-lg font-bold leading-tight truncate"
                       style={{ color: selectedColor }}
                     >
                       {focusedSubgenre ?? (selected ? shortLabel(selected) : "")}
                     </h2>
-                    <SpotifyLogoButton track={nowPlayingTrack} size={16} />
+                    <SpotifyLogoButton track={nowPlayingTrack} size={20} />
                     <span
-                      className="flex-shrink-0 text-xs ml-0.5"
-                      style={{ color: "rgba(255,255,255,0.30)" }}
+                      className="flex-shrink-0 text-xs"
+                      style={{ color: "rgba(255,255,255,0.30)", marginLeft: 8 }}
                     >
                       {displayedTracks.length} tracks
                     </span>
@@ -2263,7 +2270,12 @@ export default function LandingPage() {
                                 className="text-sm font-medium truncate leading-snug"
                                 style={{ color: isActive ? selectedColor : "#ffffff" }}
                               >{t.name}</span>
-                              <span className="text-zinc-500 text-xs truncate">{t.artist}</span>
+                              <span className="text-zinc-500 text-xs truncate">
+                                {t.artist}
+                                {!canPlay && (
+                                  <span style={{ color: "rgba(255,255,255,0.22)", marginLeft: 4 }}>(No Preview)</span>
+                                )}
+                              </span>
                             </div>
                           </div>
                         );
