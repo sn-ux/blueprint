@@ -1461,87 +1461,84 @@ export default function LandingPage() {
   // Calling playTrack() a second time on the same track toggles play/pause.
   // Calling it on a different track always starts that track from the top.
 
-  const playTrack = async (t: TrackItem) => {
-    const canSpotify = spotifyReady && !notPremium && !!t.spotifyId;
+  // ── playTrack: SYNCHRONOUS — must stay non-async so audio.play() fires
+  //   directly within the browser's user-gesture activation context.
+  //   Making it async breaks the gesture chain in Chrome and Safari and
+  //   causes play() to be rejected as "not user-initiated".
+  const playTrack = (t: TrackItem) => {
+    // ── Diagnostics (visible in DevTools console) ─────────────────────────
+    console.log("[Blueprint] track clicked:", t.name, "—", t.artist);
+    console.log("[Blueprint]   previewUrl :", t.previewUrl ?? "(null — no preview)");
+    console.log("[Blueprint]   spotifyId  :", t.spotifyId  ?? "(null)");
 
+    // ── Full Spotify path (SDK + Premium required) ────────────────────────
+    const canSpotify = spotifyReady && !notPremium && !!t.spotifyId;
     if (canSpotify) {
-      // ── Full Spotify playback ───────────────────────────────────────────
-      // Stop any running HTML5 preview first
+      // Stop any running HTML5 preview
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current.currentTime = 0;
         audioRef.current = null;
       }
-
-      if (nowPlayingId === t.id && spotifyMode) {
-        // Toggle pause/resume on the same track
-        const state = await spotifyPlayerRef.current?.getCurrentState();
-        if (state?.paused) {
-          spotifyPlayerRef.current?.resume();
-          setAudioPlaying(true);
-        } else {
-          spotifyPlayerRef.current?.pause();
-          setAudioPlaying(false);
-        }
-        return;
-      }
-
       setNowPlayingId(t.id);
       setSpotifyMode(true);
       setAudioPlaying(true);
-
-      try {
-        await fetch(
-          `https://api.spotify.com/v1/me/player/play?device_id=${spotifyDeviceIdRef.current}`,
-          {
-            method:  "PUT",
-            headers: {
-              Authorization:  `Bearer ${spotifyTokenRef.current}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ uris: [`spotify:track:${t.spotifyId}`] }),
-          }
-        );
-      } catch {
-        // If the API call fails (token expired, etc.) fall through to preview
-        setSpotifyMode(false);
-        setAudioPlaying(false);
-      }
+      // Fire-and-forget — no await so the function stays synchronous
+      fetch(
+        `https://api.spotify.com/v1/me/player/play?device_id=${spotifyDeviceIdRef.current}`,
+        {
+          method:  "PUT",
+          headers: {
+            Authorization:  `Bearer ${spotifyTokenRef.current}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ uris: [`spotify:track:${t.spotifyId}`] }),
+        }
+      ).catch(() => { setSpotifyMode(false); setAudioPlaying(false); });
       return;
     }
 
-    // ── Preview playback (30 s HTML5 Audio) ──────────────────────────────
-    if (!t.previewUrl) return; // no preview available
+    // ── Preview path (HTML5 Audio — no login needed) ──────────────────────
+    if (!t.previewUrl) {
+      console.log("[Blueprint]   → no preview URL, nothing to play");
+      return;
+    }
 
-    setSpotifyMode(false);
-
+    // Same track → toggle play / pause
     if (nowPlayingId === t.id && audioRef.current) {
-      // Toggle pause/resume on the same track
       if (audioRef.current.paused) {
-        audioRef.current.play().catch(() => setAudioPlaying(false));
-        setAudioPlaying(true);
+        console.log("[Blueprint]   → resuming");
+        audioRef.current.play()
+          .then(() => setAudioPlaying(true))
+          .catch(err => { console.error("[Blueprint]   resume failed:", err); setAudioPlaying(false); });
       } else {
+        console.log("[Blueprint]   → pausing");
         audioRef.current.pause();
         setAudioPlaying(false);
       }
       return;
     }
 
-    // Stop previous preview
+    // New track — stop the previous one, start fresh
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
     }
 
+    console.log("[Blueprint]   → creating Audio and calling play()");
+    const audio = new Audio(t.previewUrl);
+    audio.volume = 0.8;
+    audio.addEventListener("ended",  () => { console.log("[Blueprint]   preview ended"); setAudioPlaying(false); });
+    audio.addEventListener("error",  (e) => { console.error("[Blueprint]   audio error:", e); setAudioPlaying(false); });
+    audioRef.current = audio;
     setNowPlayingId(t.id);
     setAudioPlaying(true);
 
-    const audio = new Audio(t.previewUrl);
-    audio.volume = 0.70;
-    audioRef.current = audio;
-
-    audio.addEventListener("ended", () => setAudioPlaying(false));
-    audio.play().catch(() => setAudioPlaying(false));
+    const p = audio.play();
+    if (p !== undefined) {
+      p.then(()  => console.log("[Blueprint]   ✓ preview playing"))
+       .catch(err => { console.error("[Blueprint]   play() rejected:", err); setAudioPlaying(false); });
+    }
   };
 
   // ── Mouse handlers ────────────────────────────────────────────────────────
@@ -1925,7 +1922,7 @@ export default function LandingPage() {
                           key={t.id}
                           className="flex items-center gap-3 px-7 py-2"
                           style={{ borderBottom: "1px solid rgba(255,255,255,0.035)", cursor: canPlay ? "pointer" : "default" }}
-                          onClick={() => canPlay && playTrack(t)}
+                          onClick={() => playTrack(t)}
                         >
                           {/* Play indicator / track index */}
                           <span
@@ -2113,7 +2110,7 @@ export default function LandingPage() {
                             key={t.id}
                             className="flex items-center gap-3 px-5 py-2.5"
                             style={{ borderBottom: "1px solid rgba(255,255,255,0.04)", cursor: canPlay ? "pointer" : "default" }}
-                            onClick={() => canPlay && playTrack(t)}
+                            onClick={() => playTrack(t)}
                           >
                             {/* Play indicator / track index */}
                             <span
