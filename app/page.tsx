@@ -875,7 +875,9 @@ export default function LandingPage() {
           const lx=a.sx/a.n, ly=a.sy/a.n;
           const n2=activeSubsRef.current.length;
           const t2=n2>1?1-si/(n2-1):0.5;
-          const scale2=0.45+0.55*t2;
+          // Raised brightness floor: was 0.45+0.55*t2 (min 45%).
+          // Now 0.82+0.18*t2 (min 82%) — every subgenre reads clearly.
+          const scale2=0.82+0.18*t2;
           const [pr,pg,pb]=rgbMap[selectedIdx];
           const cr=Math.round(pr*scale2),cg=Math.round(pg*scale2),cb=Math.round(pb*scale2);
           const isActiveSub=selectedSubgenreRef.current===sub.name;
@@ -891,19 +893,27 @@ export default function LandingPage() {
           const tw2=ctx.measureText(sub.name).width;
           const bx2=lx-tw2/2-pad2,by2=ly-fs2/2-pad2,bw2=tw2+pad2*2,bh2=fs2+pad2*2;
           ctx.save();
-          ctx.shadowColor=isHovSub?`rgba(${cr},${cg},${cb},0.45)`:"rgba(0,0,0,0.55)";
-          ctx.shadowBlur=isHovSub?12:8;
-          ctx.fillStyle=isActiveSub?`rgba(${cr},${cg},${cb},0.18)`:isHovSub?`rgba(${cr},${cg},${cb},0.12)`:"rgba(8,8,16,0.60)";
+          // Color-tinted glow on all states (not just hover) lifts labels off
+          // the dark sphere surface.  Hover gets a stronger glow.
+          ctx.shadowColor=isHovSub?`rgba(${cr},${cg},${cb},0.70)`:`rgba(${cr},${cg},${cb},0.30)`;
+          ctx.shadowBlur=isHovSub?16:10;
+          // Darker pill background in default state for better text contrast.
+          ctx.fillStyle=isActiveSub?`rgba(${cr},${cg},${cb},0.22)`:isHovSub?`rgba(${cr},${cg},${cb},0.15)`:"rgba(4,4,12,0.80)";
           ctx.beginPath();ctx.roundRect(bx2,by2,bw2,bh2,rad2);ctx.fill();
           ctx.restore();
+          // Border on every label (not just active/hover) separates pill from surface.
           if(isActiveSub){
             ctx.strokeStyle=`rgba(${cr},${cg},${cb},1.0)`;ctx.lineWidth=1.5;
             ctx.beginPath();ctx.roundRect(bx2,by2,bw2,bh2,rad2);ctx.stroke();
           } else if(isHovSub){
-            ctx.strokeStyle=`rgba(${cr},${cg},${cb},0.60)`;ctx.lineWidth=1.0;
+            ctx.strokeStyle=`rgba(${cr},${cg},${cb},0.70)`;ctx.lineWidth=1.0;
+            ctx.beginPath();ctx.roundRect(bx2,by2,bw2,bh2,rad2);ctx.stroke();
+          } else {
+            ctx.strokeStyle=`rgba(${cr},${cg},${cb},0.28)`;ctx.lineWidth=0.75;
             ctx.beginPath();ctx.roundRect(bx2,by2,bw2,bh2,rad2);ctx.stroke();
           }
-          ctx.fillStyle=isHovSub?`rgb(${cr},${cg},${cb})`:`rgba(${cr},${cg},${cb},0.80)`;
+          // Full opacity text — brightness is already managed by scale2.
+          ctx.fillStyle=`rgb(${cr},${cg},${cb})`;
           ctx.fillText(sub.name,lx,ly);
           labelHitsRef.current.push({name:selected!,subgenre:sub.name,x1:bx2,y1:by2,x2:bx2+bw2,y2:by2+bh2});
         }
