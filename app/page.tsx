@@ -563,9 +563,7 @@ export default function LandingPage() {
     const ro = new ResizeObserver(sync);
     ro.observe(canvas);
 
-    // Subdivision 3 → 1 280 faces (vs 320 at level 2).  Each face is 4× smaller,
-    // giving a noticeably rounder, more refined silhouette with no design change.
-    const { verts, faces } = buildIcosphere(3);
+    const { verts, faces } = buildIcosphere(2);
     const entries = Object.entries(worlds);
     const total   = entries.reduce((s, [, c]) => s + c, 0) || 1;
     const names   = entries.map(([n]) => n);
