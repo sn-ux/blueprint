@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useSession, signIn } from "next-auth/react";
 import SphereCanvas from "@/components/SphereCanvas";
 import MiniSphere from "@/components/MiniSphere";
 import MapVisual from "@/components/MapVisual";
@@ -92,7 +93,7 @@ const DEMO_SUBGENRES: Record<string, SubItem[]> = {
   ],
 };
 
-type TrackItem = { id: string; name: string; artist: string; album?: string | null; imageUrl?: string | null; blueprintSubgenre: string };
+type TrackItem = { id: string; name: string; artist: string; album?: string | null; imageUrl?: string | null; previewUrl?: string | null; spotifyId?: string | null; blueprintSubgenre: string };
 const DEMO_TRACKS: Record<string, TrackItem[]> = {
   "Rap / Hip-Hop": [
     { id: "r1", name: "HUMBLE.", artist: "Kendrick Lamar", blueprintSubgenre: "Conscious Rap" },
@@ -345,10 +346,49 @@ function hexRgb(h: string): [number, number, number] {
   return [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)];
 }
 
+// ── Spotify Web Playback SDK — loaded dynamically from Spotify's CDN ─────────
+// Minimal ambient types so TypeScript accepts window.Spotify without a
+// separate @types package.
+interface SpotifySDKPlayer {
+  connect:          ()                                              => Promise<boolean>;
+  disconnect:       ()                                              => void;
+  addListener:      (event: string, cb: (data: any) => void)       => boolean;
+  getCurrentState:  ()                                              => Promise<{ paused: boolean } | null>;
+  pause:            ()                                              => Promise<void>;
+  resume:           ()                                              => Promise<void>;
+}
+declare global {
+  interface Window {
+    onSpotifyWebPlaybackSDKReady: () => void;
+    Spotify: {
+      Player: new (opts: {
+        name:            string;
+        getOAuthToken:   (cb: (token: string) => void) => void;
+        volume:          number;
+      }) => SpotifySDKPlayer;
+    } | undefined;
+  }
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function LandingPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // ── Auth session ──────────────────────────────────────────────────────────────
+  const { data: session } = useSession();
+
+  // ── Audio playback ────────────────────────────────────────────────────────────
+  // Preview: plain HTML5 Audio. Full: Spotify Web Playback SDK.
+  const [nowPlayingId, setNowPlayingId] = useState<string | null>(null);
+  const [audioPlaying, setAudioPlaying] = useState(false);
+  const audioRef           = useRef<HTMLAudioElement | null>(null);
+  const spotifyPlayerRef   = useRef<SpotifySDKPlayer | null>(null);
+  const spotifyDeviceIdRef = useRef<string | null>(null);
+  const spotifyTokenRef    = useRef<string | null>(null);
+  const [spotifyReady,  setSpotifyReady]  = useState(false);
+  const [spotifyMode,   setSpotifyMode]   = useState(false);  // true = SDK is active source
+  const [notPremium,    setNotPremium]    = useState(false);
 
   // ── Real data (same path as /world — starts empty, filled from API) ─────────
   const [worlds,   setWorlds]   = useState<Record<string, number>>({});
@@ -534,6 +574,90 @@ export default function LandingPage() {
       setSheetSnap(0);
     }
   }, [selected, isMobile]);
+
+  // ── Spotify Web Playback SDK — initialize when user logs in ──────────────
+  useEffect(() => {
+    const userEmail = session?.user?.email;
+
+    if (!userEmail) {
+      // Logged out — disconnect SDK and reset state
+      if (spotifyPlayerRef.current) {
+        spotifyPlayerRef.current.disconnect();
+        spotifyPlayerRef.current = null;
+      }
+      spotifyDeviceIdRef.current = null;
+      setSpotifyReady(false);
+      setSpotifyMode(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const initPlayer = async () => {
+      try {
+        const res = await fetch("/api/spotify/token");
+        if (!res.ok || cancelled) return;
+        const { accessToken, scope } = (await res.json()) as { accessToken: string; scope: string };
+        if (!scope?.includes("streaming")) return; // needs re-auth for new scopes
+
+        spotifyTokenRef.current = accessToken;
+
+        const createPlayer = () => {
+          if (cancelled || !window.Spotify) return;
+
+          const player = new window.Spotify.Player({
+            name: "Blueprint",
+            getOAuthToken: async (cb) => {
+              try {
+                const r = await fetch("/api/spotify/token");
+                if (!r.ok) return;
+                const { accessToken: fresh } = (await r.json()) as { accessToken: string };
+                spotifyTokenRef.current = fresh;
+                cb(fresh);
+              } catch { /* silent — preview fallback stays active */ }
+            },
+            volume: 0.8,
+          });
+
+          player.addListener("ready", (data: any) => {
+            if (!cancelled) {
+              spotifyDeviceIdRef.current = data.device_id;
+              setSpotifyReady(true);
+            }
+          });
+          player.addListener("not_ready",          () => setSpotifyReady(false));
+          player.addListener("account_error",       () => { setNotPremium(true); setSpotifyReady(false); });
+          player.addListener("authentication_error", () => setSpotifyReady(false));
+
+          player.connect();
+          spotifyPlayerRef.current = player;
+        };
+
+        if (window.Spotify) {
+          createPlayer();
+        } else {
+          window.onSpotifyWebPlaybackSDKReady = createPlayer;
+          if (!document.querySelector('script[src="https://sdk.scdn.co/spotify-player.js"]')) {
+            const s = document.createElement("script");
+            s.src   = "https://sdk.scdn.co/spotify-player.js";
+            s.async = true;
+            document.body.appendChild(s);
+          }
+        }
+      } catch { /* silent — preview mode stays active */ }
+    };
+
+    initPlayer();
+
+    return () => {
+      cancelled = true;
+      if (spotifyPlayerRef.current) {
+        spotifyPlayerRef.current.disconnect();
+        spotifyPlayerRef.current = null;
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user?.email]);
 
   // ── Poll zoomRef → text visibility (reversible) ──────────────────────────
   useEffect(() => {
@@ -1329,6 +1453,97 @@ export default function LandingPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [worlds, selected, subgenres]);
 
+  // ── Audio playback ────────────────────────────────────────────────────────
+  // Tier 1: HTML5 preview (30 s clip, no login required, works whenever
+  //         track.previewUrl is non-null).
+  // Tier 2: Full Spotify track via Web Playback SDK (logged-in Premium users).
+  //
+  // Calling playTrack() a second time on the same track toggles play/pause.
+  // Calling it on a different track always starts that track from the top.
+
+  const playTrack = async (t: TrackItem) => {
+    const canSpotify = spotifyReady && !notPremium && !!t.spotifyId;
+
+    if (canSpotify) {
+      // ── Full Spotify playback ───────────────────────────────────────────
+      // Stop any running HTML5 preview first
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        audioRef.current = null;
+      }
+
+      if (nowPlayingId === t.id && spotifyMode) {
+        // Toggle pause/resume on the same track
+        const state = await spotifyPlayerRef.current?.getCurrentState();
+        if (state?.paused) {
+          spotifyPlayerRef.current?.resume();
+          setAudioPlaying(true);
+        } else {
+          spotifyPlayerRef.current?.pause();
+          setAudioPlaying(false);
+        }
+        return;
+      }
+
+      setNowPlayingId(t.id);
+      setSpotifyMode(true);
+      setAudioPlaying(true);
+
+      try {
+        await fetch(
+          `https://api.spotify.com/v1/me/player/play?device_id=${spotifyDeviceIdRef.current}`,
+          {
+            method:  "PUT",
+            headers: {
+              Authorization:  `Bearer ${spotifyTokenRef.current}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ uris: [`spotify:track:${t.spotifyId}`] }),
+          }
+        );
+      } catch {
+        // If the API call fails (token expired, etc.) fall through to preview
+        setSpotifyMode(false);
+        setAudioPlaying(false);
+      }
+      return;
+    }
+
+    // ── Preview playback (30 s HTML5 Audio) ──────────────────────────────
+    if (!t.previewUrl) return; // no preview available
+
+    setSpotifyMode(false);
+
+    if (nowPlayingId === t.id && audioRef.current) {
+      // Toggle pause/resume on the same track
+      if (audioRef.current.paused) {
+        audioRef.current.play().catch(() => setAudioPlaying(false));
+        setAudioPlaying(true);
+      } else {
+        audioRef.current.pause();
+        setAudioPlaying(false);
+      }
+      return;
+    }
+
+    // Stop previous preview
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+
+    setNowPlayingId(t.id);
+    setAudioPlaying(true);
+
+    const audio = new Audio(t.previewUrl);
+    audio.volume = 0.70;
+    audioRef.current = audio;
+
+    audio.addEventListener("ended", () => setAudioPlaying(false));
+    audio.play().catch(() => setAudioPlaying(false));
+  };
+
   // ── Mouse handlers ────────────────────────────────────────────────────────
 
   const onMouseDown = (e: React.MouseEvent) => {
@@ -1679,33 +1894,76 @@ export default function LandingPage() {
                 </div>
               )}
               <div className="flex-shrink-0 mx-7" style={{ height: 1, background: "rgba(255,255,255,0.05)" }} />
+              {/* Spotify upsell — visible only when not logged in */}
+              {!session?.user && (
+                <div className="flex-shrink-0 px-7 py-2">
+                  <button
+                    onClick={() => signIn("spotify")}
+                    style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: "rgba(255,255,255,0.28)", fontSize: 11, letterSpacing: "0.03em" }}
+                  >
+                    <span style={{ color: "#1DB954" }}>♪</span> Log in with Spotify to hear full tracks
+                  </button>
+                </div>
+              )}
+              {/* Non-premium notice */}
+              {session?.user && notPremium && (
+                <div className="flex-shrink-0 px-7 py-2">
+                  <span style={{ fontSize: 11, color: "rgba(255,255,255,0.25)" }}>Full playback requires Spotify Premium</span>
+                </div>
+              )}
               <div className="overflow-y-auto flex-1" style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(255,255,255,0.08) transparent" }}>
                 {displayedTracks.length === 0 ? (
                   <p className="text-zinc-700 text-xs px-7 py-8 text-center">No tracks</p>
                 ) : (
                   <div className="flex flex-col pt-1 pb-6">
-                    {displayedTracks.map((t, idx) => (
-                      <div key={t.id} className="flex items-center gap-3 px-7 py-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.035)" }}>
-                        <span className="text-xs font-mono w-5 text-right flex-shrink-0" style={{ color: "rgba(255,255,255,0.13)" }}>{idx + 1}</span>
-                        {/* Album art */}
-                        <div className="flex-shrink-0" style={{ width: 36, height: 36, borderRadius: 4, overflow: "hidden", background: `rgba(${sr},${sg},${sb},0.10)` }}>
-                          {t.imageUrl && (
-                            <img
-                              src={t.imageUrl}
-                              alt=""
-                              width={36}
-                              height={36}
-                              style={{ width: 36, height: 36, objectFit: "cover", display: "block" }}
-                              onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-                            />
-                          )}
+                    {displayedTracks.map((t, idx) => {
+                      const canPlay = !!(t.previewUrl || (spotifyReady && !notPremium && t.spotifyId));
+                      const isPlaying = nowPlayingId === t.id && audioPlaying;
+                      const isPaused  = nowPlayingId === t.id && !audioPlaying;
+                      return (
+                        <div
+                          key={t.id}
+                          className="flex items-center gap-3 px-7 py-2"
+                          style={{ borderBottom: "1px solid rgba(255,255,255,0.035)", cursor: canPlay ? "pointer" : "default" }}
+                          onClick={() => canPlay && playTrack(t)}
+                        >
+                          {/* Play indicator / track index */}
+                          <span
+                            style={{
+                              flexShrink: 0, width: 20, textAlign: "center",
+                              fontSize: 10, lineHeight: 1, userSelect: "none",
+                              color: (isPlaying || isPaused)
+                                ? selectedColor
+                                : canPlay
+                                  ? "rgba(255,255,255,0.30)"
+                                  : "rgba(255,255,255,0.13)",
+                            }}
+                          >
+                            {isPlaying ? "⏸" : isPaused ? "▶" : canPlay ? "▶" : idx + 1}
+                          </span>
+                          {/* Album art */}
+                          <div className="flex-shrink-0" style={{ width: 36, height: 36, borderRadius: 4, overflow: "hidden", background: `rgba(${sr},${sg},${sb},0.10)` }}>
+                            {t.imageUrl && (
+                              <img
+                                src={t.imageUrl}
+                                alt=""
+                                width={36}
+                                height={36}
+                                style={{ width: 36, height: 36, objectFit: "cover", display: "block" }}
+                                onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                              />
+                            )}
+                          </div>
+                          <div className="flex flex-col min-w-0 flex-1">
+                            <span
+                              className="text-sm font-medium truncate leading-snug"
+                              style={{ color: (isPlaying || isPaused) ? selectedColor : "#ffffff" }}
+                            >{t.name}</span>
+                            <span className="text-zinc-500 text-xs truncate">{t.artist}</span>
+                          </div>
                         </div>
-                        <div className="flex flex-col min-w-0 flex-1">
-                          <span className="text-white text-sm font-medium truncate leading-snug">{t.name}</span>
-                          <span className="text-zinc-500 text-xs truncate">{t.artist}</span>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -1819,6 +2077,24 @@ export default function LandingPage() {
                 {/* Divider */}
                 <div className="flex-shrink-0 mx-5" style={{ height: 1, background: "rgba(255,255,255,0.05)" }} />
 
+                {/* Spotify upsell — visible only when not logged in */}
+                {!session?.user && (
+                  <div className="flex-shrink-0 px-5 py-2">
+                    <button
+                      onClick={() => signIn("spotify")}
+                      style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: "rgba(255,255,255,0.28)", fontSize: 11, letterSpacing: "0.03em" }}
+                    >
+                      <span style={{ color: "#1DB954" }}>♪</span> Log in with Spotify to hear full tracks
+                    </button>
+                  </div>
+                )}
+                {/* Non-premium notice */}
+                {session?.user && notPremium && (
+                  <div className="flex-shrink-0 px-5 py-2">
+                    <span style={{ fontSize: 11, color: "rgba(255,255,255,0.25)" }}>Full playback requires Spotify Premium</span>
+                  </div>
+                )}
+
                 {/* ── Track list — scrollable, shared between peek + fullscreen ─ */}
                 <div
                   className="overflow-y-auto flex-1"
@@ -1828,28 +2104,54 @@ export default function LandingPage() {
                     <p className="text-zinc-700 text-xs px-6 py-8 text-center">No tracks</p>
                   ) : (
                     <div className="flex flex-col pt-1 pb-8">
-                      {displayedTracks.map((t, idx) => (
-                        <div key={t.id} className="flex items-center gap-3 px-5 py-2.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                          <span className="text-xs font-mono w-5 text-right flex-shrink-0" style={{ color: "rgba(255,255,255,0.13)" }}>{idx + 1}</span>
-                          {/* Album art */}
-                          <div className="flex-shrink-0" style={{ width: 36, height: 36, borderRadius: 4, overflow: "hidden", background: `rgba(${sr},${sg},${sb},0.10)` }}>
-                            {t.imageUrl && (
-                              <img
-                                src={t.imageUrl}
-                                alt=""
-                                width={36}
-                                height={36}
-                                style={{ width: 36, height: 36, objectFit: "cover", display: "block" }}
-                                onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-                              />
-                            )}
+                      {displayedTracks.map((t, idx) => {
+                        const canPlay = !!(t.previewUrl || (spotifyReady && !notPremium && t.spotifyId));
+                        const isPlaying = nowPlayingId === t.id && audioPlaying;
+                        const isPaused  = nowPlayingId === t.id && !audioPlaying;
+                        return (
+                          <div
+                            key={t.id}
+                            className="flex items-center gap-3 px-5 py-2.5"
+                            style={{ borderBottom: "1px solid rgba(255,255,255,0.04)", cursor: canPlay ? "pointer" : "default" }}
+                            onClick={() => canPlay && playTrack(t)}
+                          >
+                            {/* Play indicator / track index */}
+                            <span
+                              style={{
+                                flexShrink: 0, width: 20, textAlign: "center",
+                                fontSize: 10, lineHeight: 1, userSelect: "none",
+                                color: (isPlaying || isPaused)
+                                  ? selectedColor
+                                  : canPlay
+                                    ? "rgba(255,255,255,0.30)"
+                                    : "rgba(255,255,255,0.13)",
+                              }}
+                            >
+                              {isPlaying ? "⏸" : isPaused ? "▶" : canPlay ? "▶" : idx + 1}
+                            </span>
+                            {/* Album art */}
+                            <div className="flex-shrink-0" style={{ width: 36, height: 36, borderRadius: 4, overflow: "hidden", background: `rgba(${sr},${sg},${sb},0.10)` }}>
+                              {t.imageUrl && (
+                                <img
+                                  src={t.imageUrl}
+                                  alt=""
+                                  width={36}
+                                  height={36}
+                                  style={{ width: 36, height: 36, objectFit: "cover", display: "block" }}
+                                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                                />
+                              )}
+                            </div>
+                            <div className="flex flex-col min-w-0 flex-1">
+                              <span
+                                className="text-sm font-medium truncate leading-snug"
+                                style={{ color: (isPlaying || isPaused) ? selectedColor : "#ffffff" }}
+                              >{t.name}</span>
+                              <span className="text-zinc-500 text-xs truncate">{t.artist}</span>
+                            </div>
                           </div>
-                          <div className="flex flex-col min-w-0 flex-1">
-                            <span className="text-white text-sm font-medium truncate leading-snug">{t.name}</span>
-                            <span className="text-zinc-500 text-xs truncate">{t.artist}</span>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>

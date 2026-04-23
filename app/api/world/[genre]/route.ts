@@ -26,6 +26,8 @@ export async function GET(
       artist:            true,
       album:             true,
       imageUrl:          true,
+      previewUrl:        true,
+      spotifyId:         true,
       blueprintSubgenre: true,
     },
     orderBy: [{ artist: "asc" }, { name: "asc" }],
