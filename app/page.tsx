@@ -425,6 +425,9 @@ export default function LandingPage() {
   const rafRef           = useRef<number>(0);
   const labelHitsRef     = useRef<{ name: string; subgenre?: string; x1: number; y1: number; x2: number; y2: number }[]>([]);
   const regionPolesRef   = useRef<{ name: string; pole: V3 }[]>([]);
+  // Per-face data exposed to click/hover handlers for exact region ownership
+  const faceCentsRef     = useRef<V3[]>([]);      // centroid of each icosphere face
+  const faceRegionRef    = useRef<number[]>([]);  // genre index for each face
   const hoveredRef       = useRef<{ genre: string; subgenre?: string } | null>(null);
   const autoSelectedRef  = useRef(false);
   // Sync ref so the wheel handler (stale closure) always reads the live selected value
@@ -589,6 +592,9 @@ export default function LandingPage() {
     regionPolesRef.current = names.map((n, i) => ({ name: n, pole: finalPoles[i] }));
     const adj    = buildAdjacency(faces);
     const region = removeIslands(rawRegion, adj, names.length);
+    // Expose per-face ownership to click/hover handlers for exact boundary resolution
+    faceCentsRef.current  = cents;
+    faceRegionRef.current = [...region];
 
     // Subgenre BFS — uses the `subgenres` state captured by this effect closure
     subRegionRef.current  = new Map();
@@ -1246,26 +1252,44 @@ export default function LandingPage() {
             const z_w  = nx3 * Math.sin(ry) + z1 * Math.cos(ry);
             if (regionPolesRef.current.length === 0) return;
 
-            let bestT = regionPolesRef.current[0], bestDotT = -Infinity;
-            for (const rd of regionPolesRef.current) {
-              const d = rd.pole[0] * x_w + rd.pole[1] * y_w + rd.pole[2] * z_w;
-              if (d > bestDotT) { bestDotT = d; bestT = rd; }
+            // Per-face genre lookup for accurate boundary resolution
+            const fCentsT  = faceCentsRef.current;
+            const fRegionT = faceRegionRef.current;
+            let bestTName: string;
+            if (fCentsT.length > 0 && fRegionT.length > 0) {
+              let bestTIdx = 0, bestTDot = -Infinity;
+              for (let i = 0; i < fCentsT.length; i++) {
+                const d = fCentsT[i][0]*x_w + fCentsT[i][1]*y_w + fCentsT[i][2]*z_w;
+                if (d > bestTDot) { bestTDot = d; bestTIdx = i; }
+              }
+              bestTName = regionPolesRef.current[fRegionT[bestTIdx]]?.name ?? regionPolesRef.current[0].name;
+            } else {
+              let bestT = regionPolesRef.current[0], bestTDotFb = -Infinity;
+              for (const rd of regionPolesRef.current) {
+                const d = rd.pole[0]*x_w + rd.pole[1]*y_w + rd.pole[2]*z_w;
+                if (d > bestTDotFb) { bestTDotFb = d; bestT = rd; }
+              }
+              bestTName = bestT.name;
             }
 
-            if (selected !== null && zoomRef.current >= 2.0 && bestT.name === selected && subPolesRef.current.length > 0) {
-              // Inside a zoomed genre — tap selects the nearest subgenre
-              let bestSubT = subPolesRef.current[0], bestSubDotT = -Infinity;
-              for (const sp of subPolesRef.current) {
-                const d = sp.pole[0] * x_w + sp.pole[1] * y_w + sp.pole[2] * z_w;
-                if (d > bestSubDotT) { bestSubDotT = d; bestSubT = sp; }
+            if (selected !== null && zoomRef.current >= 2.0 && bestTName === selected && subPolesRef.current.length > 0) {
+              // Per-face subgenre lookup — same principle as genre lookup
+              const subFacesT = [...subRegionRef.current.keys()];
+              let bestSFT = subFacesT[0] ?? -1, bestSDT = -Infinity;
+              for (const fi of subFacesT) {
+                const c = fCentsT[fi]; if (!c) continue;
+                const d = c[0]*x_w + c[1]*y_w + c[2]*z_w;
+                if (d > bestSDT) { bestSDT = d; bestSFT = fi; }
               }
-              const next = selectedSubgenreRef.current === bestSubT.name ? null : bestSubT.name;
+              const sIdxT = subRegionRef.current.get(bestSFT) ?? 0;
+              const sNameT = activeSubsRef.current[sIdxT]?.name ?? subPolesRef.current[0]?.name ?? "";
+              const next = selectedSubgenreRef.current === sNameT ? null : sNameT;
               selectedSubgenreRef.current = next; setSelectedSubgenre(next);
             } else {
               autoSelectedRef.current     = false;
               selectedSubgenreRef.current = null; setSelectedSubgenre(null);
               zoomSubgenreRef.current     = null; setZoomSubgenre(null);
-              setSelected(prev => prev === bestT.name ? null : bestT.name);
+              setSelected(prev => prev === bestTName ? null : bestTName);
             }
           }
         }
@@ -1311,24 +1335,41 @@ export default function LandingPage() {
     dragRef.current = { active: true, lx: e.clientX, ly: e.clientY, moved: false };
   };
 
+  // Converts screen (mx, my) → world-space unit vector, then finds the face
+  // centroid with the highest dot product (= nearest face on the sphere to the
+  // click ray). Resolves the face's region index → genre name for exact
+  // boundary ownership rather than nearest-region-pole (which averages all
+  // face centroids in a region and can misfire near boundaries).
   const hitTestSphere = (mx: number, my: number): string | null => {
     const canvas = canvasRef.current;
     if (!canvas || regionPolesRef.current.length === 0) return null;
-    const W=canvas.clientWidth, H=canvas.clientHeight;
-    const R=Math.min(W,H)*0.35*zoomRef.current;
-    const cx=W/2, cy=H/2;
-    const nx=(mx-cx)/R, ny=(my-cy)/R;
-    if (nx*nx+ny*ny > 1) return null;
-    const nz=Math.sqrt(Math.max(0,1-nx*nx-ny*ny));
-    const rx=rotRef.current.x, ry=rotRef.current.y;
-    const y_w=ny*Math.cos(rx)+nz*Math.sin(rx);
-    const z1=-ny*Math.sin(rx)+nz*Math.cos(rx);
-    const x_w=nx*Math.cos(ry)-z1*Math.sin(ry);
-    const z_w=nx*Math.sin(ry)+z1*Math.cos(ry);
-    let best=regionPolesRef.current[0], bestDot=-Infinity;
+    const W = canvas.clientWidth, H = canvas.clientHeight;
+    const R = Math.min(W, H) * 0.35 * zoomRef.current;
+    const cx = W / 2, cy = H / 2;
+    const nx = (mx - cx) / R, ny = (my - cy) / R;
+    if (nx * nx + ny * ny > 1) return null;
+    const nz  = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
+    const rx  = rotRef.current.x, ry = rotRef.current.y;
+    const y_w =  ny * Math.cos(rx) + nz * Math.sin(rx);
+    const z1  = -ny * Math.sin(rx) + nz * Math.cos(rx);
+    const x_w =  nx * Math.cos(ry) - z1 * Math.sin(ry);
+    const z_w =  nx * Math.sin(ry) + z1 * Math.cos(ry);
+    // Per-face lookup: 320 face centroids → exact region ownership
+    const fCents  = faceCentsRef.current;
+    const fRegion = faceRegionRef.current;
+    if (fCents.length > 0 && fRegion.length > 0) {
+      let bestIdx = 0, bestDot = -Infinity;
+      for (let i = 0; i < fCents.length; i++) {
+        const d = fCents[i][0] * x_w + fCents[i][1] * y_w + fCents[i][2] * z_w;
+        if (d > bestDot) { bestDot = d; bestIdx = i; }
+      }
+      return regionPolesRef.current[fRegion[bestIdx]]?.name ?? null;
+    }
+    // Fallback: nearest-pole (used before face data is available)
+    let best = regionPolesRef.current[0], bestDotFb = -Infinity;
     for (const rd of regionPolesRef.current) {
-      const d=rd.pole[0]*x_w+rd.pole[1]*y_w+rd.pole[2]*z_w;
-      if (d>bestDot){bestDot=d;best=rd;}
+      const d = rd.pole[0] * x_w + rd.pole[1] * y_w + rd.pole[2] * z_w;
+      if (d > bestDotFb) { bestDotFb = d; best = rd; }
     }
     return best.name;
   };
@@ -1378,9 +1419,17 @@ export default function LandingPage() {
         const z1=-ny2*Math.sin(rx2)+nz2*Math.cos(rx2);
         const x_w=nx2*Math.cos(ry2)-z1*Math.sin(ry2);
         const z_w=nx2*Math.sin(ry2)+z1*Math.cos(ry2);
-        let bestSub=subPolesRef.current[0], bestDot=-Infinity;
-        for (const sp of subPolesRef.current){const d=sp.pole[0]*x_w+sp.pole[1]*y_w+sp.pole[2]*z_w;if(d>bestDot){bestDot=d;bestSub=sp;}}
-        hoveredRef.current={genre:genreName,subgenre:bestSub.name}; return;
+        // Per-face subgenre lookup: find nearest owned face, resolve its subgenre
+        const subFacesHov = [...subRegionRef.current.keys()];
+        let bestSFHov = subFacesHov[0] ?? -1, bestSDHov = -Infinity;
+        for (const fi of subFacesHov) {
+          const c = faceCentsRef.current[fi]; if (!c) continue;
+          const d = c[0]*x_w + c[1]*y_w + c[2]*z_w;
+          if (d > bestSDHov) { bestSDHov = d; bestSFHov = fi; }
+        }
+        const sIdxHov = subRegionRef.current.get(bestSFHov) ?? 0;
+        const sNameHov = activeSubsRef.current[sIdxHov]?.name ?? subPolesRef.current[0]?.name ?? "";
+        hoveredRef.current={genre:genreName,subgenre:sNameHov}; return;
       }
     }
     hoveredRef.current={genre:genreName};
@@ -1427,21 +1476,41 @@ export default function LandingPage() {
     const x_w=nx*Math.cos(ry)-z1*Math.sin(ry);
     const z_w=nx*Math.sin(ry)+z1*Math.cos(ry);
     if (regionPolesRef.current.length===0) return;
-    let best=regionPolesRef.current[0], bestDot=-Infinity;
-    for (const rd of regionPolesRef.current){const d=rd.pole[0]*x_w+rd.pole[1]*y_w+rd.pole[2]*z_w;if(d>bestDot){bestDot=d;best=rd;}}
-    if (selected!==null&&zoomRef.current>=2.0&&best.name===selected&&subPolesRef.current.length>0) {
-      let bestSub=subPolesRef.current[0], bestSubDot=-Infinity;
-      for (const sp of subPolesRef.current){const d=sp.pole[0]*x_w+sp.pole[1]*y_w+sp.pole[2]*z_w;if(d>bestSubDot){bestSubDot=d;bestSub=sp;}}
-      // Toggle if same subgenre; always replace if different.
-      const next = selectedSubgenreRef.current === bestSub.name ? null : bestSub.name;
+    // Per-face genre lookup: find nearest face centroid → resolve region index → genre name
+    const fCentsC  = faceCentsRef.current;
+    const fRegionC = faceRegionRef.current;
+    let bestNameC: string;
+    if (fCentsC.length > 0 && fRegionC.length > 0) {
+      let bestCIdx = 0, bestCDot = -Infinity;
+      for (let i = 0; i < fCentsC.length; i++) {
+        const d = fCentsC[i][0]*x_w + fCentsC[i][1]*y_w + fCentsC[i][2]*z_w;
+        if (d > bestCDot) { bestCDot = d; bestCIdx = i; }
+      }
+      bestNameC = regionPolesRef.current[fRegionC[bestCIdx]]?.name ?? regionPolesRef.current[0].name;
+    } else {
+      let best = regionPolesRef.current[0], bestDotFb = -Infinity;
+      for (const rd of regionPolesRef.current) { const d = rd.pole[0]*x_w+rd.pole[1]*y_w+rd.pole[2]*z_w; if(d>bestDotFb){bestDotFb=d;best=rd;} }
+      bestNameC = best.name;
+    }
+    if (selected!==null&&zoomRef.current>=2.0&&bestNameC===selected&&subPolesRef.current.length>0) {
+      // Per-face subgenre lookup: find nearest genre-owned face → resolve subgenre index
+      const subFacesC = [...subRegionRef.current.keys()];
+      let bestSFC = subFacesC[0] ?? -1, bestSDC = -Infinity;
+      for (const fi of subFacesC) {
+        const c = fCentsC[fi]; if (!c) continue;
+        const d = c[0]*x_w + c[1]*y_w + c[2]*z_w;
+        if (d > bestSDC) { bestSDC = d; bestSFC = fi; }
+      }
+      const sIdxC = subRegionRef.current.get(bestSFC) ?? 0;
+      const sNameC = activeSubsRef.current[sIdxC]?.name ?? subPolesRef.current[0]?.name ?? "";
+      const next = selectedSubgenreRef.current === sNameC ? null : sNameC;
       selectedSubgenreRef.current = next; setSelectedSubgenre(next);
-      // zoomSubgenreRef is managed by the wheel handler independently
       return;
     }
     autoSelectedRef.current=false;
     selectedSubgenreRef.current=null; setSelectedSubgenre(null);
     zoomSubgenreRef.current=null; setZoomSubgenre(null);
-    setSelected(prev=>prev===best.name?null:best.name);
+    setSelected(prev=>prev===bestNameC?null:bestNameC);
   };
 
   // ── Derived display values ────────────────────────────────────────────────
