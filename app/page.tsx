@@ -365,6 +365,10 @@ export default function LandingPage() {
   const [prevPage3LabelIdx, setPrevPage3LabelIdx] = useState<number | null>(null);
   const [page3LabelAnimKey, setPage3LabelAnimKey] = useState(0);
 
+  // ── Mobile onboarding hint ───────────────────────────────────────────────
+  const [showMobileHint,   setShowMobileHint]   = useState(false);
+  const mobileHintDismissedRef                  = useRef(false);
+
   // ── Interaction refs ──────────────────────────────────────────────────────
   const zoomRef          = useRef(1);       // visual zoom — lerped each RAF frame
   const zoomTargetRef    = useRef(1);       // intended zoom — updated immediately by wheel
@@ -470,6 +474,16 @@ export default function LandingPage() {
     setPage3LabelAnimKey(k => k + 1);
     page3PrevIdxRef.current = carouselIdx;
   }, [carouselIdx]);
+
+  // ── Mobile hint: show once on touch devices, auto-dismiss after 3.5 s ────
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const isTouch = "ontouchstart" in window || navigator.maxTouchPoints > 0;
+    if (!isTouch) return;
+    setShowMobileHint(true);
+    const id = setTimeout(() => setShowMobileHint(false), 3500);
+    return () => clearTimeout(id);
+  }, []);
 
   // ── Poll zoomRef → text visibility (reversible) ──────────────────────────
   useEffect(() => {
@@ -946,6 +960,226 @@ export default function LandingPage() {
     canvas.addEventListener("gesturechange", onGestureChange, { passive: false });
     canvas.addEventListener("gestureend",    onGestureEnd,    { passive: false });
 
+    // ── Touch handlers (mobile) ───────────────────────────────────────────────
+    // Touch state is local to this effect instance. Re-created on every effect run
+    // (which happens when worlds/selected/subgenres change), matching how the mouse
+    // handlers rebuild their stale closures.
+    let touchDrag   = { active: false, lx: 0, ly: 0, moved: false };
+    let pinchActive = false;
+    let pinchDist0  = 0;
+    let pinchZoom0  = 1;
+    let lastTapTime = 0;
+    let lastTapX    = 0;
+    let lastTapY    = 0;
+
+    // Dismiss the onboarding hint on first real interaction.
+    const dismissHint = () => {
+      if (!mobileHintDismissedRef.current) {
+        mobileHintDismissedRef.current = true;
+        setShowMobileHint(false);
+      }
+    };
+
+    // Returns true if a touch point is within the (slightly enlarged) sphere area.
+    // The enlarged radius makes touch easier without changing the visual.
+    const touchOverSphere = (clientX: number, clientY: number) => {
+      const rect2 = canvas.getBoundingClientRect();
+      const mx2   = clientX - rect2.left, my2 = clientY - rect2.top;
+      const W2    = canvas.clientWidth,   H2  = canvas.clientHeight;
+      const R2    = Math.min(W2, H2) * 0.40 * zoomRef.current; // 18% larger than visual radius
+      const dx2   = mx2 - W2 / 2,        dy2 = my2 - H2 / 2;
+      return dx2 * dx2 + dy2 * dy2 <= R2 * R2;
+    };
+
+    const onTouchStart = (e: TouchEvent) => {
+      dismissHint();
+      const touches = e.touches;
+
+      if (touches.length === 1) {
+        const t = touches[0];
+        if (!touchOverSphere(t.clientX, t.clientY)) return; // outside sphere → let page scroll
+        e.preventDefault();
+        touchDrag = { active: true, lx: t.clientX, ly: t.clientY, moved: false };
+
+        // Double-tap detection: second tap within 320 ms and 55 px → zoom in
+        const now = performance.now();
+        const dtx = t.clientX - lastTapX, dty = t.clientY - lastTapY;
+        if (now - lastTapTime < 320 && dtx * dtx + dty * dty < 55 * 55) {
+          applyZoomDelta(-120);
+        }
+
+      } else if (touches.length === 2) {
+        e.preventDefault();
+        pinchActive = true;
+        const dx = touches[0].clientX - touches[1].clientX;
+        const dy = touches[0].clientY - touches[1].clientY;
+        pinchDist0       = Math.sqrt(dx * dx + dy * dy);
+        pinchZoom0       = zoomTargetRef.current;
+        touchDrag.active = false; // cancel any single-finger drag in progress
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      const touches = e.touches;
+
+      if (touches.length === 1 && touchDrag.active) {
+        e.preventDefault();
+        const t  = touches[0];
+        const dx = t.clientX - touchDrag.lx;
+        const dy = t.clientY - touchDrag.ly;
+        rotRef.current.y += dx * 0.005;
+        rotRef.current.x -= dy * 0.005;
+        rotRef.current.x  = Math.max(-1.2, Math.min(1.2, rotRef.current.x));
+        touchDrag.lx      = t.clientX;
+        touchDrag.ly      = t.clientY;
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) touchDrag.moved = true;
+        hoveredRef.current = null;
+
+        // Auto-deselect when selected genre rotates to the back hemisphere
+        if (selected !== null && zoomRef.current >= 1.1 && regionPolesRef.current.length > 0) {
+          const selEntry = regionPolesRef.current.find(r => r.name === selected);
+          if (selEntry) {
+            const [px, py, pz] = selEntry.pole;
+            const rx = rotRef.current.x, ry = rotRef.current.y;
+            const sz2 = py * Math.sin(rx) + (-px * Math.sin(ry) + pz * Math.cos(ry)) * Math.cos(rx);
+            if (sz2 < 0) {
+              autoSelectedRef.current     = false;
+              selectedSubgenreRef.current = null; setSelectedSubgenre(null);
+              zoomSubgenreRef.current     = null; setZoomSubgenre(null);
+              setSelected(null);
+            }
+          }
+        }
+
+      } else if (touches.length === 2 && pinchActive) {
+        e.preventDefault();
+        const dx      = touches[0].clientX - touches[1].clientX;
+        const dy      = touches[0].clientY - touches[1].clientY;
+        const newDist = Math.sqrt(dx * dx + dy * dy);
+        const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, pinchZoom0 * (newDist / pinchDist0)));
+        zoomTargetRef.current = newZoom;
+
+        // Same auto-select logic as applyZoomDelta
+        if (newZoom >= 1.2 && selectedRef.current === null && regionPolesRef.current.length > 0) {
+          const rx = rotRef.current.x, ry = rotRef.current.y;
+          let bestName = regionPolesRef.current[0].name, bestZ = -Infinity;
+          for (const { name, pole: [px, py, pz] } of regionPolesRef.current) {
+            const z2 = py * Math.sin(rx) + (-px * Math.sin(ry) + pz * Math.cos(ry)) * Math.cos(rx);
+            if (z2 > bestZ) { bestZ = z2; bestName = name; }
+          }
+          autoSelectedRef.current = true;
+          setSelected(bestName);
+        }
+        if (newZoom < 2.0) {
+          if (zoomSubgenreRef.current     !== null) { zoomSubgenreRef.current     = null; setZoomSubgenre(null); }
+          if (selectedSubgenreRef.current !== null) { selectedSubgenreRef.current = null; setSelectedSubgenre(null); }
+        }
+        if (newZoom <= MIN_ZOOM + 0.1 && selectedRef.current !== null) {
+          autoSelectedRef.current     = false;
+          selectedSubgenreRef.current = null; setSelectedSubgenre(null);
+          zoomSubgenreRef.current     = null; setZoomSubgenre(null);
+          setSelected(null);
+        }
+      }
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      const remaining    = e.touches.length;
+      const wasPinching  = pinchActive;
+      const wasDragging  = touchDrag.active;
+      const wasMoved     = touchDrag.moved;
+
+      if (remaining === 0) {
+        // All fingers lifted
+        pinchActive      = false;
+        touchDrag.active = false;
+
+        // A stationary single-finger tap → treat as click
+        if (!wasPinching && wasDragging && !wasMoved) {
+          const ct   = e.changedTouches[0];
+          const rect3 = canvas.getBoundingClientRect();
+          const mx3  = ct.clientX - rect3.left, my3 = ct.clientY - rect3.top;
+          // Record for double-tap detection
+          lastTapTime = performance.now();
+          lastTapX    = ct.clientX;
+          lastTapY    = ct.clientY;
+
+          // ── Label hit test (10 px padding on each side = larger tap targets) ──
+          for (const h of labelHitsRef.current) {
+            const E = 10;
+            if (mx3 >= h.x1 - E && mx3 <= h.x2 + E && my3 >= h.y1 - E && my3 <= h.y2 + E) {
+              if (h.subgenre) {
+                const next = selectedSubgenreRef.current === h.subgenre ? null : h.subgenre;
+                selectedSubgenreRef.current = next; setSelectedSubgenre(next);
+              } else {
+                autoSelectedRef.current     = false;
+                selectedSubgenreRef.current = null; setSelectedSubgenre(null);
+                zoomSubgenreRef.current     = null; setZoomSubgenre(null);
+                setSelected(prev => prev === h.name ? null : h.name);
+              }
+              return;
+            }
+          }
+
+          // ── Sphere hit test — snaps to nearest region automatically ──────────
+          const W3  = canvas.clientWidth, H3 = canvas.clientHeight;
+          const R3  = Math.min(W3, H3) * 0.35 * zoomRef.current;
+          const nx3 = (mx3 - W3 / 2) / R3, ny3 = (my3 - H3 / 2) / R3;
+
+          if (nx3 * nx3 + ny3 * ny3 > 1.0) {
+            // Tapped outside sphere — clear selection
+            autoSelectedRef.current     = false;
+            selectedSubgenreRef.current = null; setSelectedSubgenre(null);
+            zoomSubgenreRef.current     = null; setZoomSubgenre(null);
+            setSelected(null);
+          } else {
+            const nz3 = Math.sqrt(Math.max(0, 1 - nx3 * nx3 - ny3 * ny3));
+            const rx   = rotRef.current.x, ry = rotRef.current.y;
+            const y_w  = ny3 * Math.cos(rx) + nz3 * Math.sin(rx);
+            const z1   = -ny3 * Math.sin(rx) + nz3 * Math.cos(rx);
+            const x_w  = nx3 * Math.cos(ry) - z1 * Math.sin(ry);
+            const z_w  = nx3 * Math.sin(ry) + z1 * Math.cos(ry);
+            if (regionPolesRef.current.length === 0) return;
+
+            let bestT = regionPolesRef.current[0], bestDotT = -Infinity;
+            for (const rd of regionPolesRef.current) {
+              const d = rd.pole[0] * x_w + rd.pole[1] * y_w + rd.pole[2] * z_w;
+              if (d > bestDotT) { bestDotT = d; bestT = rd; }
+            }
+
+            if (selected !== null && zoomRef.current >= 2.0 && bestT.name === selected && subPolesRef.current.length > 0) {
+              // Inside a zoomed genre — tap selects the nearest subgenre
+              let bestSubT = subPolesRef.current[0], bestSubDotT = -Infinity;
+              for (const sp of subPolesRef.current) {
+                const d = sp.pole[0] * x_w + sp.pole[1] * y_w + sp.pole[2] * z_w;
+                if (d > bestSubDotT) { bestSubDotT = d; bestSubT = sp; }
+              }
+              const next = selectedSubgenreRef.current === bestSubT.name ? null : bestSubT.name;
+              selectedSubgenreRef.current = next; setSelectedSubgenre(next);
+            } else {
+              autoSelectedRef.current     = false;
+              selectedSubgenreRef.current = null; setSelectedSubgenre(null);
+              zoomSubgenreRef.current     = null; setZoomSubgenre(null);
+              setSelected(prev => prev === bestT.name ? null : bestT.name);
+            }
+          }
+        }
+
+      } else if (remaining === 1 && wasPinching) {
+        // Transition 2 → 1: stop pinch, hand off to single-finger drag
+        pinchActive = false;
+        const t = e.touches[0];
+        touchDrag = { active: true, lx: t.clientX, ly: t.clientY, moved: false };
+      }
+    };
+
+    const onTouchCancel = () => { touchDrag.active = false; pinchActive = false; };
+
+    canvas.addEventListener("touchstart",  onTouchStart,  { passive: false });
+    canvas.addEventListener("touchmove",   onTouchMove,   { passive: false });
+    canvas.addEventListener("touchend",    onTouchEnd,    { passive: false });
+    canvas.addEventListener("touchcancel", onTouchCancel, { passive: true  });
+
     function animate() { drawFrame(); rafRef.current = requestAnimationFrame(animate); }
     rafRef.current = requestAnimationFrame(animate);
 
@@ -956,6 +1190,10 @@ export default function LandingPage() {
       canvas.removeEventListener("gesturestart",   onGestureStart);
       canvas.removeEventListener("gesturechange",  onGestureChange);
       canvas.removeEventListener("gestureend",     onGestureEnd);
+      canvas.removeEventListener("touchstart",     onTouchStart);
+      canvas.removeEventListener("touchmove",      onTouchMove);
+      canvas.removeEventListener("touchend",       onTouchEnd);
+      canvas.removeEventListener("touchcancel",    onTouchCancel);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [worlds, selected, subgenres]);
@@ -1200,6 +1438,74 @@ export default function LandingPage() {
             </div>
           )}
 
+          {/* Mobile reset button — appears when a genre is selected on touch devices.
+              md:hidden hides it on desktop. Gives phone users a clear exit. */}
+          {selected && (
+            <button
+              className="md:hidden absolute top-4 right-4 z-30 flex items-center justify-center"
+              style={{
+                width:              44,
+                height:             44,
+                borderRadius:       22,
+                background:         "rgba(0,0,0,0.68)",
+                backdropFilter:     "blur(10px)",
+                WebkitBackdropFilter: "blur(10px)",
+                border:             "1px solid rgba(255,255,255,0.13)",
+                color:              "rgba(255,255,255,0.72)",
+                fontSize:           16,
+                cursor:             "pointer",
+              }}
+              onClick={() => {
+                setSelected(null);
+                setSelectedSubgenre(null); selectedSubgenreRef.current = null;
+                setZoomSubgenre(null);     zoomSubgenreRef.current     = null;
+                autoSelectedRef.current   = false;
+                zoomTargetRef.current     = 1.0;
+              }}
+            >
+              ✕
+            </button>
+          )}
+
+          {/* Mobile onboarding hint — mobile-only, fades after first interaction */}
+          {showMobileHint && (
+            <div
+              className="absolute inset-x-0 pointer-events-none"
+              style={{ bottom: "16vh", display: "flex", justifyContent: "center", zIndex: 20 }}
+            >
+              <div
+                style={{
+                  display:              "flex",
+                  alignItems:           "center",
+                  gap:                  16,
+                  background:           "rgba(0,0,0,0.60)",
+                  backdropFilter:       "blur(12px)",
+                  WebkitBackdropFilter: "blur(12px)",
+                  borderRadius:         100,
+                  padding:              "10px 22px",
+                  border:               "1px solid rgba(255,255,255,0.08)",
+                }}
+              >
+                {(["Drag to rotate", "Tap to select", "Pinch to zoom"] as const).map((label, i) => (
+                  <span key={label} style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                    {i > 0 && (
+                      <span style={{ width: 1, height: 10, background: "rgba(255,255,255,0.13)", display: "inline-block" }} />
+                    )}
+                    <span style={{
+                      fontSize:      11,
+                      letterSpacing: "0.09em",
+                      color:         "rgba(255,255,255,0.52)",
+                      textTransform: "uppercase",
+                      whiteSpace:    "nowrap",
+                    }}>
+                      {label}
+                    </span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Right panel — absolute overlay, does not affect canvas layout */}
           {selected && (
             <div
@@ -1337,7 +1643,7 @@ export default function LandingPage() {
               className="text-[52px] md:text-[60px] lg:text-[64px] font-semibold leading-[1.05] text-white"
               style={{ letterSpacing: "-0.02em" }}
             >
-              The internet runs on one model.
+              The internet runs on one bad model.
             </h2>
           </div>
 
@@ -2103,7 +2409,7 @@ export default function LandingPage() {
               key={page3LabelAnimKey}
               style={{
                 display: "block",
-                fontSize: 11, fontWeight: 600, letterSpacing: "0.18em",
+                fontSize: 17, fontWeight: 600, letterSpacing: "0.18em",
                 textTransform: "uppercase", whiteSpace: "nowrap",
                 ...(page3LabelAnimKey > 0 && prevPage3LabelIdx !== null ? {
                   background: `linear-gradient(to right, ${PAGE3_COLORS[carouselIdx]} 50%, ${PAGE3_COLORS[prevPage3LabelIdx]} 50%)`,
