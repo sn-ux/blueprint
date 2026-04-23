@@ -21,10 +21,11 @@ export async function GET(
   const tracks = await prisma.track.findMany({
     where: { userId: user.id, blueprintWorld },
     select: {
-      id:               true,
-      name:             true,
-      artist:           true,
-      album:            true,
+      id:                true,
+      name:              true,
+      artist:            true,
+      album:             true,
+      imageUrl:          true,
       blueprintSubgenre: true,
     },
     orderBy: [{ artist: "asc" }, { name: "asc" }],

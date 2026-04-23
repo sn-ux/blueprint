@@ -74,7 +74,7 @@ const DEMO_SUBGENRES: Record<string, SubItem[]> = {
   ],
 };
 
-type TrackItem = { id: string; name: string; artist: string; album?: string | null; blueprintSubgenre: string };
+type TrackItem = { id: string; name: string; artist: string; album?: string | null; imageUrl?: string | null; blueprintSubgenre: string };
 const DEMO_TRACKS: Record<string, TrackItem[]> = {
   "Rap / Hip-Hop": [
     { id: "r1", name: "HUMBLE.", artist: "Kendrick Lamar", blueprintSubgenre: "Conscious Rap" },
@@ -1583,8 +1583,21 @@ export default function LandingPage() {
                 ) : (
                   <div className="flex flex-col pt-1 pb-6">
                     {displayedTracks.map((t, idx) => (
-                      <div key={t.id} className="flex items-center gap-4 px-7 py-2.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.035)" }}>
+                      <div key={t.id} className="flex items-center gap-3 px-7 py-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.035)" }}>
                         <span className="text-xs font-mono w-5 text-right flex-shrink-0" style={{ color: "rgba(255,255,255,0.13)" }}>{idx + 1}</span>
+                        {/* Album art */}
+                        <div className="flex-shrink-0" style={{ width: 36, height: 36, borderRadius: 4, overflow: "hidden", background: `rgba(${sr},${sg},${sb},0.10)` }}>
+                          {t.imageUrl && (
+                            <img
+                              src={t.imageUrl}
+                              alt=""
+                              width={36}
+                              height={36}
+                              style={{ width: 36, height: 36, objectFit: "cover", display: "block" }}
+                              onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                            />
+                          )}
+                        </div>
                         <div className="flex flex-col min-w-0 flex-1">
                           <span className="text-white text-sm font-medium truncate leading-snug">{t.name}</span>
                           <span className="text-zinc-500 text-xs truncate">{t.artist}</span>
@@ -1745,8 +1758,21 @@ export default function LandingPage() {
                       ) : (
                         <div className="flex flex-col pt-1 pb-8">
                           {displayedTracks.map((t, idx) => (
-                            <div key={t.id} className="flex items-center gap-4 px-6 py-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                            <div key={t.id} className="flex items-center gap-3 px-6 py-2.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
                               <span className="text-xs font-mono w-5 text-right flex-shrink-0" style={{ color: "rgba(255,255,255,0.13)" }}>{idx + 1}</span>
+                              {/* Album art */}
+                              <div className="flex-shrink-0" style={{ width: 36, height: 36, borderRadius: 4, overflow: "hidden", background: `rgba(${sr},${sg},${sb},0.10)` }}>
+                                {t.imageUrl && (
+                                  <img
+                                    src={t.imageUrl}
+                                    alt=""
+                                    width={36}
+                                    height={36}
+                                    style={{ width: 36, height: 36, objectFit: "cover", display: "block" }}
+                                    onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                                  />
+                                )}
+                              </div>
                               <div className="flex flex-col min-w-0 flex-1">
                                 <span className="text-white text-sm font-medium truncate leading-snug">{t.name}</span>
                                 <span className="text-zinc-500 text-xs truncate">{t.artist}</span>
