@@ -1420,13 +1420,11 @@ export default function LandingPage() {
             className="absolute inset-0 w-full h-full cursor-pointer"
             style={{
               display:   "block",
-              // On mobile, shift sphere up based on how much sheet is covering.
-              transform: isMobile
-                ? (sheetSnap === 3 ? "translateY(-22%)"
-                   : sheetSnap >= 2 ? "translateY(-15%)"
-                   : "translateY(-3%)")
-                : "translateY(-3%)",
-              transition: "transform 0.38s cubic-bezier(0.4,0,0.2,1)",
+              // Mobile: fixed upward offset — never changes, so the sheet
+              // opening/closing cannot cause the sphere to shift position.
+              // Desktop: slight upward nudge for visual centering.
+              transform: isMobile ? "translateY(-20%)" : "translateY(-3%)",
+              transition: "none",
             }}
             onMouseDown={onMouseDown}
             onMouseMove={onMouseMove}
@@ -1439,15 +1437,16 @@ export default function LandingPage() {
           <div
             className="absolute z-10 flex flex-col pointer-events-none"
             style={isMobile ? {
-              // Mobile: sit below the sphere, centered, above the bottom sheet
-              bottom:     sheetSnap >= 2 ? "46%" : "13%",
+              // Mobile: fixed position anchored below the sphere.
+              // Does not react to sheet state — headline stays put.
+              bottom:     "28%",
               left:       0,
               right:      0,
               alignItems: "center",
               textAlign:  "center",
               padding:    "0 24px",
-              transition: "bottom 0.36s cubic-bezier(0.32,0.72,0,1)",
               opacity:    textVisible ? 1 : 0,
+              transition: "opacity 0.4s ease-in-out",
             } : {
               top:        "9%",
               left:       "8%",
