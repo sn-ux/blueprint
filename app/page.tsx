@@ -382,11 +382,13 @@ function SpotifyLogoButton({
   track: { name: string; spotifyId?: string | null } | null;
   size?: number;
 }) {
-  const active = !!(track?.spotifyId);
+  // Light up whenever any track is selected (even no-preview); only clickable if spotifyId exists
+  const active = !!track;
+  const canOpen = !!(track?.spotifyId);
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!active || !track?.spotifyId) return;
+    if (!canOpen || !track?.spotifyId) return;
     const url = `https://open.spotify.com/track/${track.spotifyId}`;
     const ok = window.confirm(`Open "${track.name}" on Spotify?`);
     if (ok) window.open(url, "_blank", "noopener,noreferrer");
@@ -395,15 +397,14 @@ function SpotifyLogoButton({
   return (
     <button
       onClick={handleClick}
-      aria-label={active ? `Open ${track?.name} on Spotify` : "Spotify"}
+      aria-label={canOpen ? `Open ${track?.name} on Spotify` : "Spotify"}
       style={{
         flexShrink:      0,
         background:      "none",
         border:          "none",
-        // Extra left margin separates the logo clearly from the title text
         marginLeft:      8,
         padding:         0,
-        cursor:          active ? "pointer" : "default",
+        cursor:          canOpen ? "pointer" : "default",
         color:           active ? "#1DB954" : "rgba(255,255,255,0.20)",
         transition:      "color 0.25s ease",
         display:         "flex",
@@ -1557,9 +1558,16 @@ export default function LandingPage() {
     console.log("[play] 2 previewUrl at click time:", previewUrl ? previewUrl.slice(0, 80) + "…" : "null");
 
     if (!previewUrl) {
-      // URL not cached yet — fire on-demand fetch and let the re-render
-      // (which flips canPlay → true) signal the user to click again.
-      console.log("[play] 2a no URL in ref — firing on-demand fetch for", t.name);
+      // No preview URL yet — select the track (lights up Spotify logo) and
+      // fire an on-demand fetch in case the batch hasn't reached this track yet.
+      // We do NOT attempt audio playback since there's nothing to play.
+      console.log("[play] 2a no URL — selecting track + on-demand fetch for", t.name);
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
+      setNowPlayingId(t.id);
+      setAudioPlaying(false);
       fetch(`/api/preview?track=${encodeURIComponent(t.name)}&artist=${encodeURIComponent(t.artist)}`)
         .then(r => r.json())
         .then((d: { previewUrl: string | null }) => {
@@ -1988,7 +1996,7 @@ export default function LandingPage() {
                       className="text-xs mb-3 flex items-center gap-1.5 transition-opacity hover:opacity-100"
                       style={{ color: `rgba(${sr},${sg},${sb},0.45)` }}
                     >← {selected ? shortLabel(selected) : ""}</button>
-                    <div className="flex items-center">
+                    <div className="flex items-center justify-between gap-4">
                       <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{focusedSubgenre}</h2>
                       <SpotifyLogoButton track={nowPlayingTrack} />
                     </div>
@@ -1996,7 +2004,7 @@ export default function LandingPage() {
                 ) : (
                   <>
                     <p className="text-xs tracking-widest uppercase mb-2" style={{ color: `rgba(${sr},${sg},${sb},0.38)` }}>Now exploring</p>
-                    <div className="flex items-center">
+                    <div className="flex items-center justify-between gap-4">
                       <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{selected ? shortLabel(selected) : ""}</h2>
                       <SpotifyLogoButton track={nowPlayingTrack} />
                     </div>
@@ -2048,7 +2056,7 @@ export default function LandingPage() {
                         <div
                           key={t.id}
                           className="flex items-center gap-3 px-7 py-2"
-                          style={{ borderBottom: "1px solid rgba(255,255,255,0.035)", cursor: canPlay ? "pointer" : "default" }}
+                          style={{ borderBottom: "1px solid rgba(255,255,255,0.035)", cursor: "pointer" }}
                           onClick={() => playTrack(t)}
                         >
                           {/* Track number */}
@@ -2145,7 +2153,7 @@ export default function LandingPage() {
                   className="flex-shrink-0 px-5 pt-3 pb-2.5 flex items-center gap-2"
                   style={{ minHeight: 56 }}
                 >
-                  {/* Genre / subgenre name + Spotify logo + track count */}
+                  {/* Genre / subgenre name + track count */}
                   <div className="flex items-center min-w-0 flex-1">
                     <h2
                       className="text-lg font-bold leading-tight truncate"
@@ -2153,7 +2161,6 @@ export default function LandingPage() {
                     >
                       {focusedSubgenre ?? (selected ? shortLabel(selected) : "")}
                     </h2>
-                    <SpotifyLogoButton track={nowPlayingTrack} size={20} />
                     <span
                       className="flex-shrink-0 text-xs"
                       style={{ color: "rgba(255,255,255,0.30)", marginLeft: 8 }}
@@ -2161,6 +2168,9 @@ export default function LandingPage() {
                       {displayedTracks.length} tracks
                     </span>
                   </div>
+
+                  {/* Spotify logo — lights up when a track is selected */}
+                  <SpotifyLogoButton track={nowPlayingTrack} size={20} />
 
                   {/* Arrow toggle: ↑ expands to fullscreen, ↓ collapses to peek */}
                   <button
@@ -2182,23 +2192,6 @@ export default function LandingPage() {
                   >
                     {sheetSnap === 1 ? "↑" : "↓"}
                   </button>
-
-                  {/* Close — intentional dismiss, always available */}
-                  <button
-                    onClick={() => setSheetSnap(0)}
-                    aria-label="Close"
-                    style={{
-                      flexShrink: 0,
-                      width:      36,
-                      height:     36,
-                      display:    "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color:      "rgba(255,255,255,0.28)",
-                      fontSize:   18,
-                      lineHeight: 1,
-                    }}
-                  >✕</button>
                 </div>
 
                 {/* Divider */}
@@ -2238,7 +2231,7 @@ export default function LandingPage() {
                           <div
                             key={t.id}
                             className="flex items-center gap-3 px-5 py-2.5"
-                            style={{ borderBottom: "1px solid rgba(255,255,255,0.04)", cursor: canPlay ? "pointer" : "default" }}
+                            style={{ borderBottom: "1px solid rgba(255,255,255,0.04)", cursor: "pointer" }}
                             onClick={() => playTrack(t)}
                           >
                             {/* Track number */}
