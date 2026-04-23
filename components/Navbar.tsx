@@ -58,10 +58,9 @@ export default function Navbar() {
         display:              "flex",
         alignItems:           "center",
         justifyContent:       "space-between",
-        // Left padding places the logo well clear of the viewport edge.
-        // Right padding pulls Philosophy / Connect noticeably inward.
-        paddingLeft:          56,
-        paddingRight:         64,
+        // clamp() keeps padding generous on desktop but readable on iPhone
+        paddingLeft:          "clamp(20px, 5vw, 56px)",
+        paddingRight:         "clamp(20px, 5vw, 64px)",
         background:           "rgba(0,0,0,0.38)",
         backdropFilter:       "blur(12px)",
         WebkitBackdropFilter: "blur(12px)",

@@ -365,6 +365,22 @@ export default function LandingPage() {
   const [prevPage3LabelIdx, setPrevPage3LabelIdx] = useState<number | null>(null);
   const [page3LabelAnimKey, setPage3LabelAnimKey] = useState(0);
 
+  // ── Mobile layout detection ──────────────────────────────────────────────
+  // Driven by matchMedia so it updates on orientation change / resize.
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 768px)");
+    setIsMobile(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+
+  // ── Bottom sheet state (mobile only) ─────────────────────────────────────
+  const [sheetDragY,  setSheetDragY]  = useState(0);
+  const sheetDragRef = useRef({ active: false, startY: 0 });
+
   // ── Mobile onboarding hint ───────────────────────────────────────────────
   const [showMobileHint,   setShowMobileHint]   = useState(false);
   const mobileHintDismissedRef                  = useRef(false);
@@ -1379,7 +1395,13 @@ export default function LandingPage() {
           <canvas
             ref={canvasRef}
             className="absolute inset-0 w-full h-full cursor-pointer"
-            style={{ display: "block", transform: "translateY(-3%)" }}
+            style={{
+              display:   "block",
+              // On mobile with a bottom sheet open, shift the sphere up so it
+              // clears the sheet and stays fully visible in the top half.
+              transform: isMobile && selected ? "translateY(-20%)" : "translateY(-3%)",
+              transition: "transform 0.38s cubic-bezier(0.4,0,0.2,1)",
+            }}
             onMouseDown={onMouseDown}
             onMouseMove={onMouseMove}
             onMouseUp={stopDrag}
@@ -1506,8 +1528,8 @@ export default function LandingPage() {
             </div>
           )}
 
-          {/* Right panel — absolute overlay, does not affect canvas layout */}
-          {selected && (
+          {/* ── Desktop right panel (hidden on mobile) ──────────────────────── */}
+          {selected && !isMobile && (
             <div
               className="absolute top-0 right-0 bottom-0 z-20 flex flex-col overflow-hidden"
               style={{
@@ -1517,82 +1539,48 @@ export default function LandingPage() {
                 backdropFilter: "blur(12px)",
               }}
             >
-              {/* Thin genre-color accent strip */}
               <div className="flex-shrink-0" style={{ height: 2, background: selectedColor, opacity: 0.85 }} />
-
-              {/* Panel header */}
               <div className="flex-shrink-0 px-7 pt-6 pb-4">
                 {focusedSubgenre ? (
                   <>
                     <button
-                      onClick={() => {
-                        setSelectedSubgenre(null); selectedSubgenreRef.current = null;
-                        setZoomSubgenre(null); zoomSubgenreRef.current = null;
-                      }}
+                      onClick={() => { setSelectedSubgenre(null); selectedSubgenreRef.current = null; setZoomSubgenre(null); zoomSubgenreRef.current = null; }}
                       className="text-xs mb-3 flex items-center gap-1.5 transition-opacity hover:opacity-100"
                       style={{ color: `rgba(${sr},${sg},${sb},0.45)` }}
-                    >
-                      ← {selected}
-                    </button>
-                    <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>
-                      {focusedSubgenre}
-                    </h2>
+                    >← {selected}</button>
+                    <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{focusedSubgenre}</h2>
                   </>
                 ) : (
                   <>
-                    <p className="text-xs tracking-widest uppercase mb-2"
-                      style={{ color: `rgba(${sr},${sg},${sb},0.38)` }}>
-                      Now exploring
-                    </p>
-                    <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>
-                      {selected}
-                    </h2>
+                    <p className="text-xs tracking-widest uppercase mb-2" style={{ color: `rgba(${sr},${sg},${sb},0.38)` }}>Now exploring</p>
+                    <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{selected}</h2>
                   </>
                 )}
                 <p className="text-zinc-600 text-xs mt-1.5">{displayedTracks.length} tracks</p>
               </div>
-
-              {/* Subgenre pills */}
               {subgenres.length > 0 && (
                 <div className="flex-shrink-0 flex gap-1.5 px-7 pb-4 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
                   {subgenres.map(sub => {
                     const active = selectedSubgenre === sub.name;
                     return (
-                      <button
-                        key={sub.name}
-                        onClick={() => {
-                          const next = selectedSubgenre === sub.name ? null : sub.name;
-                          setSelectedSubgenre(next); selectedSubgenreRef.current = next;
-                        }}
+                      <button key={sub.name}
+                        onClick={() => { const next = selectedSubgenre === sub.name ? null : sub.name; setSelectedSubgenre(next); selectedSubgenreRef.current = next; }}
                         className="flex-shrink-0 text-xs px-3 py-1 rounded-full whitespace-nowrap transition-all"
-                        style={{
-                          background: active ? `rgba(${sr},${sg},${sb},0.18)` : "transparent",
-                          color: active ? `rgb(${sr},${sg},${sb})` : "rgba(255,255,255,0.30)",
-                          border: `1px solid rgba(${sr},${sg},${sb},${active ? 0.45 : 0.10})`,
-                        }}
-                      >
-                        {sub.name}
-                      </button>
+                        style={{ background: active ? `rgba(${sr},${sg},${sb},0.18)` : "transparent", color: active ? `rgb(${sr},${sg},${sb})` : "rgba(255,255,255,0.30)", border: `1px solid rgba(${sr},${sg},${sb},${active ? 0.45 : 0.10})` }}
+                      >{sub.name}</button>
                     );
                   })}
                 </div>
               )}
-
               <div className="flex-shrink-0 mx-7" style={{ height: 1, background: "rgba(255,255,255,0.05)" }} />
-
-              {/* Track list */}
               <div className="overflow-y-auto flex-1" style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(255,255,255,0.08) transparent" }}>
                 {displayedTracks.length === 0 ? (
                   <p className="text-zinc-700 text-xs px-7 py-8 text-center">No tracks</p>
                 ) : (
                   <div className="flex flex-col pt-1 pb-6">
                     {displayedTracks.map((t, idx) => (
-                      <div key={t.id} className="flex items-center gap-4 px-7 py-2.5"
-                        style={{ borderBottom: "1px solid rgba(255,255,255,0.035)" }}>
-                        <span className="text-xs font-mono w-5 text-right flex-shrink-0"
-                          style={{ color: "rgba(255,255,255,0.13)" }}>
-                          {idx + 1}
-                        </span>
+                      <div key={t.id} className="flex items-center gap-4 px-7 py-2.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.035)" }}>
+                        <span className="text-xs font-mono w-5 text-right flex-shrink-0" style={{ color: "rgba(255,255,255,0.13)" }}>{idx + 1}</span>
                         <div className="flex flex-col min-w-0 flex-1">
                           <span className="text-white text-sm font-medium truncate leading-snug">{t.name}</span>
                           <span className="text-zinc-500 text-xs truncate">{t.artist}</span>
@@ -1602,19 +1590,127 @@ export default function LandingPage() {
                   </div>
                 )}
               </div>
+              <div className="flex-shrink-0 flex justify-end px-6 py-3" style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
+                <button onClick={() => { setSelected(null); setSelectedSubgenre(null); selectedSubgenreRef.current = null; setZoomSubgenre(null); zoomSubgenreRef.current = null; autoSelectedRef.current = false; }}
+                  className="text-zinc-700 hover:text-zinc-400 text-xs transition-colors">close ✕</button>
+              </div>
+            </div>
+          )}
 
-              {/* Close */}
-              <div className="flex-shrink-0 flex justify-end px-6 py-3"
-                style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
-                <button
-                  onClick={() => {
+          {/* ── Mobile bottom sheet (replaces right panel on small screens) ───── */}
+          {/* position:fixed so it always covers the bottom of the viewport,       */}
+          {/* leaving the sphere fully visible above it.                           */}
+          {selected && isMobile && (
+            <div
+              style={{
+                position:             "fixed",
+                bottom:               0,
+                left:                 0,
+                right:                0,
+                height:               "58vh",
+                zIndex:               100,
+                display:              "flex",
+                flexDirection:        "column",
+                overflow:             "hidden",
+                background:           "rgba(4,4,8,0.97)",
+                backdropFilter:       "blur(18px)",
+                WebkitBackdropFilter: "blur(18px)",
+                borderTop:            `1px solid rgba(${sr},${sg},${sb},0.18)`,
+                borderTopLeftRadius:  18,
+                borderTopRightRadius: 18,
+                transform:            `translateY(${sheetDragY}px)`,
+                transition:           sheetDragY === 0
+                  ? "transform 0.36s cubic-bezier(0.32,0.72,0,1)"
+                  : "none",
+              }}
+            >
+              {/* ── Drag handle — swipe down to dismiss ─────────────────────── */}
+              <div
+                style={{ display: "flex", justifyContent: "center", paddingTop: 10, paddingBottom: 6, flexShrink: 0, cursor: "grab", touchAction: "none" }}
+                onTouchStart={e => { sheetDragRef.current = { active: true, startY: e.touches[0].clientY }; }}
+                onTouchMove={e => {
+                  if (!sheetDragRef.current.active) return;
+                  const dy = e.touches[0].clientY - sheetDragRef.current.startY;
+                  if (dy > 0) { setSheetDragY(dy); e.stopPropagation(); }
+                }}
+                onTouchEnd={() => {
+                  if (sheetDragY > 90) {
                     setSelected(null); setSelectedSubgenre(null); selectedSubgenreRef.current = null;
-                    setZoomSubgenre(null); zoomSubgenreRef.current = null; autoSelectedRef.current = false;
-                  }}
-                  className="text-zinc-700 hover:text-zinc-400 text-xs transition-colors"
-                >
-                  close ✕
-                </button>
+                    setZoomSubgenre(null); zoomSubgenreRef.current = null;
+                    autoSelectedRef.current = false; zoomTargetRef.current = 1.0;
+                  }
+                  setSheetDragY(0);
+                  sheetDragRef.current.active = false;
+                }}
+              >
+                <div style={{ width: 36, height: 4, borderRadius: 2, background: "rgba(255,255,255,0.20)" }} />
+              </div>
+
+              {/* Color accent line */}
+              <div style={{ height: 2, background: selectedColor, opacity: 0.85, flexShrink: 0 }} />
+
+              {/* Header */}
+              <div className="flex-shrink-0 px-6 pt-4 pb-3 flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  {focusedSubgenre ? (
+                    <>
+                      <button
+                        onClick={() => { setSelectedSubgenre(null); selectedSubgenreRef.current = null; setZoomSubgenre(null); zoomSubgenreRef.current = null; }}
+                        className="text-xs mb-2 flex items-center gap-1.5"
+                        style={{ color: `rgba(${sr},${sg},${sb},0.45)` }}
+                      >← {selected}</button>
+                      <h2 className="text-xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{focusedSubgenre}</h2>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-xs tracking-widest uppercase mb-1.5" style={{ color: `rgba(${sr},${sg},${sb},0.38)` }}>Now exploring</p>
+                      <h2 className="text-xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{selected}</h2>
+                    </>
+                  )}
+                  <p className="text-zinc-600 text-xs mt-1">{displayedTracks.length} tracks</p>
+                </div>
+                {/* Close button in header */}
+                <button
+                  onClick={() => { setSelected(null); setSelectedSubgenre(null); selectedSubgenreRef.current = null; setZoomSubgenre(null); zoomSubgenreRef.current = null; autoSelectedRef.current = false; zoomTargetRef.current = 1.0; }}
+                  style={{ flexShrink: 0, color: "rgba(255,255,255,0.28)", fontSize: 20, padding: "2px 4px", lineHeight: 1 }}
+                >✕</button>
+              </div>
+
+              {/* Subgenre pills */}
+              {subgenres.length > 0 && (
+                <div className="flex-shrink-0 flex gap-1.5 px-6 pb-3 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+                  {subgenres.map(sub => {
+                    const active = selectedSubgenre === sub.name;
+                    return (
+                      <button key={sub.name}
+                        onClick={() => { const next = selectedSubgenre === sub.name ? null : sub.name; setSelectedSubgenre(next); selectedSubgenreRef.current = next; }}
+                        className="flex-shrink-0 text-xs px-3 py-1 rounded-full whitespace-nowrap transition-all"
+                        style={{ background: active ? `rgba(${sr},${sg},${sb},0.18)` : "transparent", color: active ? `rgb(${sr},${sg},${sb})` : "rgba(255,255,255,0.30)", border: `1px solid rgba(${sr},${sg},${sb},${active ? 0.45 : 0.10})` }}
+                      >{sub.name}</button>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="flex-shrink-0 mx-6" style={{ height: 1, background: "rgba(255,255,255,0.05)" }} />
+
+              {/* Track list — independently scrollable */}
+              <div className="overflow-y-auto flex-1" style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" } as React.CSSProperties}>
+                {displayedTracks.length === 0 ? (
+                  <p className="text-zinc-700 text-xs px-6 py-8 text-center">No tracks</p>
+                ) : (
+                  <div className="flex flex-col pt-1 pb-8">
+                    {displayedTracks.map((t, idx) => (
+                      <div key={t.id} className="flex items-center gap-4 px-6 py-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                        <span className="text-xs font-mono w-5 text-right flex-shrink-0" style={{ color: "rgba(255,255,255,0.13)" }}>{idx + 1}</span>
+                        <div className="flex flex-col min-w-0 flex-1">
+                          <span className="text-white text-sm font-medium truncate leading-snug">{t.name}</span>
+                          <span className="text-zinc-500 text-xs truncate">{t.artist}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1624,17 +1720,14 @@ export default function LandingPage() {
       </section>
 
       {/* ══ SECTION 2 — The Problem ═══════════════════════════════════════════ */}
-      <section className="min-h-screen bg-black flex overflow-hidden"
+      <section className="min-h-screen bg-black flex flex-col md:flex-row overflow-hidden"
         style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
 
         {/* ── LEFT: problem copy ──────────────────────────────────────────────── */}
-        {/* Explicit mt-[6vh] between groups 1–3, mt-auto on group 4.
-            Avoids justify-between (which re-distributes gaps when rotating text
-            changes height). Group 3 has a fixed minHeight so text length changes
-            never affect the position of anything above or below it.            */}
+        {/* On mobile: order-2 so the carousel visual appears first (order-1).    */}
         <div
-          className="flex flex-col px-12 pt-[10vh] pb-[8vh] overflow-hidden"
-          style={{ width: "54%", minHeight: "100vh", borderRight: "1px solid rgba(255,255,255,0.05)" }}
+          className="flex flex-col order-2 md:order-1 px-6 md:px-12 pt-[8vh] md:pt-[10vh] pb-[8vh] overflow-hidden"
+          style={{ width: isMobile ? "100%" : "54%", borderRight: isMobile ? "none" : "1px solid rgba(255,255,255,0.05)" }}
         >
 
           {/* ── Group 1: Headline ─────────────────────────────────────────────── */}
@@ -1723,7 +1816,9 @@ export default function LandingPage() {
         </div>
 
         {/* ── RIGHT: rotating company showcase ─────────────────────────────── */}
-        <div className="flex flex-col py-8 px-7 overflow-hidden" style={{ width: "46%" }}>
+        {/* On mobile: order-1 so it appears above the copy text.               */}
+        <div className="flex flex-col order-1 md:order-2 py-8 px-6 md:px-7 overflow-hidden"
+          style={{ width: isMobile ? "100%" : "46%", minHeight: isMobile ? "52vh" : undefined }}>
 
           <p className="text-[11px] tracking-widest uppercase mb-4 select-none flex-shrink-0" style={{ color: "rgba(255,255,255,0.35)" }}>
             Different content.<br />Same model.
@@ -2205,28 +2300,24 @@ export default function LandingPage() {
       </section>
 
       {/* ══ SECTION 3 — Friends ═══════════════════════════════════════════════ */}
-      <section className="min-h-[90vh] bg-black flex items-center overflow-hidden"
+      <section className="min-h-[90vh] bg-black flex flex-col md:flex-row md:items-center overflow-hidden"
         style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
 
-        {/* ── LEFT: spheres ───────────────────────────────────────────────────── */}
-        {/* relative + alignSelf:stretch so the absolute label can anchor to top-left */}
-        <div className="relative flex flex-col items-center justify-center py-8 pl-6 pr-14 flex-shrink-0"
-          style={{ width: "54%", alignSelf: "stretch" }}>
+        {/* ── LEFT / TOP: spheres ─────────────────────────────────────────────── */}
+        {/* On mobile: full-width, stacked above the copy. Sphere cluster scales   */}
+        {/* down to fit the narrower viewport without overflowing.                 */}
+        <div className="relative flex flex-col items-center justify-center py-8 flex-shrink-0"
+          style={{ width: isMobile ? "100%" : "54%", alignSelf: isMobile ? undefined : "stretch",
+                   paddingLeft: isMobile ? 16 : 24, paddingRight: isMobile ? 16 : 56 }}>
 
-          {/* Domain label — top-left, single text node.
-              On platform change: a 200%-wide gradient (new color left | old color
-              right) is applied via background-clip:text. Animating background-
-              position from 100%→0% reveals the new color left-to-right across
-              the letters. No second text node = no overlap ever.             */}
-          <div className="absolute top-10 left-10 select-none">
+          {/* Domain label */}
+          <div className="absolute select-none" style={{ top: isMobile ? 20 : 40, left: isMobile ? 16 : 40 }}>
             <span
               key={page3LabelAnimKey}
               style={{
                 display: "block",
                 fontSize: 17, fontWeight: 600, letterSpacing: "0.18em",
                 textTransform: "uppercase", whiteSpace: "nowrap",
-                // Animating: gradient wipe via background-clip
-                // Static (first render): plain color
                 ...(page3LabelAnimKey > 0 && prevPage3LabelIdx !== null ? {
                   background: `linear-gradient(to right, ${PAGE3_COLORS[carouselIdx]} 50%, ${PAGE3_COLORS[prevPage3LabelIdx]} 50%)`,
                   backgroundSize: "200% 100%",
@@ -2243,7 +2334,7 @@ export default function LandingPage() {
             </span>
           </div>
 
-          {/* Circular arrangement — Friends in centre, 6 friends orbiting */}
+          {/* Circular arrangement — responsive sizes */}
           {(() => {
             const friends = [
               { name: "Chris",   seed:  1 },
@@ -2253,28 +2344,29 @@ export default function LandingPage() {
               { name: "UCLA",    seed:  7 },
               { name: "Atlanta", seed: 11 },
             ];
-            const SIZE          = 660;          // scaled up ~25% for visual dominance
-            const CX            = SIZE / 2;     // 330
-            const CY            = SIZE / 2;     // 330
-            const ORBIT         = 240;          // scaled orbit (~+23%)
+            // Scale the whole cluster down on mobile so it fits without overflow
+            const SIZE          = isMobile ? 320 : 660;
+            const CX            = SIZE / 2;
+            const CY            = SIZE / 2;
+            const ORBIT         = isMobile ? 108 : 240;
+            const CENTER_R      = isMobile ? 110 : 240;
+            const FRIEND_R      = isMobile ?  68 : 152;
             const N             = friends.length;
-            // Stagger: map x-position linearly to delay (leftmost = 0ms, rightmost = 200ms)
-            const STAGGER_RANGE = 200;          // ms — total sweep duration
-            const minX          = CX - ORBIT;  // 90
-            const maxX          = CX + ORBIT;  // 570
+            const STAGGER_RANGE = 200;
+            const minX          = CX - ORBIT;
+            const maxX          = CX + ORBIT;
             const xToDelay      = (x: number) =>
               Math.round(((x - minX) / (maxX - minX)) * STAGGER_RANGE);
             return (
-              <div style={{ position: "relative", width: SIZE, height: SIZE, flexShrink: 0, transform: "translateX(-16px)" }}>
+              <div style={{ position: "relative", width: SIZE, height: SIZE, flexShrink: 0,
+                            transform: isMobile ? undefined : "translateX(-16px)" }}>
 
-                {/* Centre: Friends aggregate sphere — x=CX → ~100ms delay */}
                 <div style={{
-                  position: "absolute",
-                  left: CX, top: CY,
+                  position: "absolute", left: CX, top: CY,
                   transform: "translate(-50%, -50%)",
                   display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
                 }}>
-                  <MiniSphere size={240} seed={99}
+                  <MiniSphere size={CENTER_R} seed={99}
                     platformColor={PAGE3_COLORS[carouselIdx]}
                     transitionDelay={xToDelay(CX)} />
                   <span style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(255,255,255,0.30)" }}>
@@ -2282,22 +2374,20 @@ export default function LandingPage() {
                   </span>
                 </div>
 
-                {/* Individual friend spheres — delay derived from each sphere's x-position */}
                 {friends.map((f, i) => {
-                  const angle = (i / N) * 2 * Math.PI - Math.PI / 2; // start at top
+                  const angle = (i / N) * 2 * Math.PI - Math.PI / 2;
                   const x = CX + ORBIT * Math.cos(angle);
                   const y = CY + ORBIT * Math.sin(angle);
                   return (
                     <div key={f.name} style={{
-                      position: "absolute",
-                      left: x, top: y,
+                      position: "absolute", left: x, top: y,
                       transform: "translate(-50%, -50%)",
                       display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
                     }}>
-                      <MiniSphere size={152} seed={f.seed}
+                      <MiniSphere size={FRIEND_R} seed={f.seed}
                         platformColor={PAGE3_COLORS[carouselIdx]}
                         transitionDelay={xToDelay(x)} />
-                      <span style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", whiteSpace: "nowrap" }}>
+                      <span style={{ fontSize: 10, color: "rgba(255,255,255,0.40)", whiteSpace: "nowrap" }}>
                         {f.name}
                       </span>
                     </div>
@@ -2308,9 +2398,14 @@ export default function LandingPage() {
           })()}
         </div>
 
-        {/* ── RIGHT: copy ─────────────────────────────────────────────────────── */}
-        <div className="flex flex-col justify-center py-12 pl-16 pr-10 overflow-hidden"
-          style={{ width: "46%", borderLeft: "1px solid rgba(255,255,255,0.05)", alignSelf: "stretch" }}>
+        {/* ── RIGHT / BOTTOM: copy ────────────────────────────────────────────── */}
+        <div className="flex flex-col justify-center overflow-hidden"
+          style={{
+            width:       isMobile ? "100%" : "46%",
+            borderLeft:  isMobile ? "none" : "1px solid rgba(255,255,255,0.05)",
+            alignSelf:   isMobile ? undefined : "stretch",
+            padding:     isMobile ? "0 24px 56px" : "48px 40px 48px 64px",
+          }}>
 
           {/* maxWidth 620 — wider than before so headline fits on one line */}
           <div style={{ maxWidth: 620 }}>
@@ -2352,14 +2447,19 @@ export default function LandingPage() {
       </section>
 
       {/* ══ SECTION 4 — Places ═══════════════════════════════════════════════ */}
-      <section className="min-h-[90vh] bg-black flex overflow-hidden"
+      {/* Mobile: flex-col — map appears first (order-1), text below (order-2). */}
+      <section className="min-h-[90vh] bg-black flex flex-col md:flex-row overflow-hidden"
         style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
 
-        {/* ── LEFT: copy ──────────────────────────────────────────────────────── */}
-        <div className="flex flex-col justify-center px-12 py-12 overflow-hidden"
-          style={{ width: "54%", borderRight: "1px solid rgba(255,255,255,0.05)" }}>
+        {/* ── LEFT / BOTTOM: copy ─────────────────────────────────────────────── */}
+        <div className="flex flex-col justify-center order-2 md:order-1 overflow-hidden"
+          style={{
+            width:        isMobile ? "100%" : "54%",
+            borderRight:  isMobile ? "none" : "1px solid rgba(255,255,255,0.05)",
+            padding:      isMobile ? "40px 24px 56px" : "48px",
+          }}>
 
-          <div style={{ maxWidth: 540 }}>
+          <div style={{ maxWidth: isMobile ? "100%" : 540 }}>
 
             {/* Headline */}
             <h2 className="text-[38px] md:text-[42px] font-semibold leading-[1.07] text-white" style={{ letterSpacing: "-0.02em" }}>
@@ -2401,8 +2501,14 @@ export default function LandingPage() {
           </div>
         </div>
 
-        {/* ── RIGHT: animated map visual ──────────────────────────────────────── */}
-        <div className="relative overflow-hidden" style={{ width: "46%", alignSelf: "stretch" }}>
+        {/* ── RIGHT / TOP: animated map visual ────────────────────────────────── */}
+        {/* On mobile: full-width, 45vh tall, sits above the copy text.           */}
+        <div className="relative overflow-hidden order-1 md:order-2"
+          style={{
+            width:      isMobile ? "100%" : "46%",
+            height:     isMobile ? "45vh" : undefined,
+            alignSelf:  isMobile ? undefined : "stretch",
+          }}>
           {/* Rotating domain label — same gradient-wipe animation as the sphere section */}
           <div className="absolute top-8 left-7 select-none pointer-events-none" style={{ zIndex: 10 }}>
             <span

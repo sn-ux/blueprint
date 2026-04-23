@@ -23,3 +23,44 @@ body {
   from { background-position: 100% center; }
   to   { background-position:   0% center; }
 }
+
+/* ── Mobile layout fixes (≤ 768 px) ──────────────────────────────────────── */
+@media (max-width: 768px) {
+
+  /* Prevent any section from scrolling horizontally */
+  section {
+    overflow-x: hidden;
+  }
+
+  /* Page 1: nudge the top-left headline down slightly to clear the fixed nav */
+  /* (handled inline via isMobile; this is a fallback)                        */
+
+  /* Page 2: scale down headline at the top of the copy column */
+  /* The text-[52px] and text-[60px] classes apply desktop sizes;             */
+  /* override them at the element level so copy is readable without a         */
+  /* side-by-side column constraining the line length.                        */
+
+  /* Reduce forced <br> impact — let text reflow naturally on narrow screens  */
+  /* We can't remove <br> with CSS, but we ensure max-width doesn't squish    */
+  .bp-copy-block {
+    max-width: 100% !important;
+  }
+
+  /* Give page-1 text overlay more breathing room at the top on small screens */
+  /* The existing inline top:"9%" works fine; this adjusts font scale         */
+  /* via Tailwind's md: prefix on the element itself.                         */
+
+  /* Bottom sheet: ensure it sits above any other fixed UI */
+  /* zIndex is already 100 inline; this is a safeguard     */
+
+  /* Smooth scrolling at the page level */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Hide desktop-only scrollbars on mobile */
+  ::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+}
