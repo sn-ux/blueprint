@@ -396,6 +396,11 @@ export default function LandingPage() {
   const [deezerPreviews,    setDeezerPreviews]    = useState<Record<string, string>>({});
   const deezerPreviewsRef = useRef<Record<string, string>>({});
 
+  // Stable ref to nowPlayingId — lets playTrack read the current playing track
+  // without relying on a React closure that might be one render stale.
+  const nowPlayingIdRef = useRef<string | null>(null);
+  nowPlayingIdRef.current = nowPlayingId;
+
   // ── Real data (same path as /world — starts empty, filled from API) ─────────
   const [worlds,   setWorlds]   = useState<Record<string, number>>({});
   const [subgenres, setSubgenres] = useState<SubItem[]>([]);
@@ -1490,51 +1495,121 @@ export default function LandingPage() {
   }, [worlds, selected, subgenres]);
 
   // ── playTrack ─────────────────────────────────────────────────────────────
-  // Must stay synchronous — calling audio.play() inside an async function
-  // breaks the browser user-gesture activation context.
+  // MUST remain synchronous. audio.play() must be called in the same
+  // call stack as the user click — async/await before play() breaks
+  // Chrome/Safari user-gesture activation.
   const playTrack = (t: TrackItem) => {
+
+    // ── Step 1: click fired ──────────────────────────────────────────────
+    console.log("[play] 1 clicked:", t.name, "—", t.artist);
+
+    // ── Step 2: look up preview URL from ref (synchronous, no fetch) ────
     const previewUrl = deezerPreviewsRef.current[t.id] ?? t.previewUrl ?? null;
-    console.log("[play] clicked:", t.name, "/", t.artist);
-    console.log("[play] previewUrl:", previewUrl ?? "NONE — preview not ready yet");
+    console.log("[play] 2 previewUrl at click time:", previewUrl ? previewUrl.slice(0, 80) + "…" : "null");
 
-    if (!previewUrl) return;
+    if (!previewUrl) {
+      // URL not cached yet — fire on-demand fetch and let the re-render
+      // (which flips canPlay → true) signal the user to click again.
+      console.log("[play] 2a no URL in ref — firing on-demand fetch for", t.name);
+      fetch(`/api/preview?track=${encodeURIComponent(t.name)}&artist=${encodeURIComponent(t.artist)}`)
+        .then(r => r.json())
+        .then((d: { previewUrl: string | null }) => {
+          if (d.previewUrl) {
+            console.log("[play] 2b on-demand result:", d.previewUrl.slice(0, 80) + "…");
+            deezerPreviewsRef.current[t.id] = d.previewUrl;
+            setDeezerPreviews(prev => ({ ...prev, [t.id]: d.previewUrl! }));
+          } else {
+            console.log("[play] 2b Deezer returned no preview for this track");
+          }
+        })
+        .catch(err => console.error("[play] 2b on-demand fetch error:", err));
+      return;
+    }
 
-    // Toggle same track
-    if (nowPlayingId === t.id && audioRef.current) {
-      if (audioRef.current.paused) {
-        audioRef.current.play()
-          .then(() => setAudioPlaying(true))
-          .catch(err => console.error("[play] resume failed:", err));
-      } else {
+    // ── Step 3: toggle check (same track) ───────────────────────────────
+    console.log("[play] 3 nowPlayingIdRef:", nowPlayingIdRef.current ?? "null");
+    if (nowPlayingIdRef.current === t.id && audioRef.current) {
+      if (!audioRef.current.paused) {
+        console.log("[play] 3a same track playing → pause");
         audioRef.current.pause();
         setAudioPlaying(false);
+        // Keep nowPlayingId so track stays highlighted as "paused"
+      } else {
+        console.log("[play] 3b same track paused → resume");
+        const p = audioRef.current.play();
+        if (p !== undefined) {
+          p.then(() => { console.log("[play] 3c ✓ resumed"); setAudioPlaying(true); })
+           .catch(err => {
+             console.error("[play] 3d resume rejected:", err.name, err.message);
+             // Stale URL — purge so next click re-fetches
+             delete deezerPreviewsRef.current[t.id];
+             setDeezerPreviews(prev => { const n = { ...prev }; delete n[t.id]; return n; });
+             setAudioPlaying(false);
+             setNowPlayingId(null);
+           });
+        }
       }
       return;
     }
 
-    // Stop previous
+    // ── Step 4: stop current audio before switching tracks ───────────────
     if (audioRef.current) {
+      console.log("[play] 4 stopping previous audio");
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
     }
 
+    // ── Step 5: set audio src ────────────────────────────────────────────
+    console.log("[play] 5 new Audio, src =", previewUrl.slice(0, 80) + "…");
     const audio = new Audio(previewUrl);
     audio.volume = 0.8;
-    audio.addEventListener("ended", () => setAudioPlaying(false));
-    audio.addEventListener("error", (e) => {
-      console.error("[play] audio error:", e);
+
+    audio.addEventListener("ended", () => {
+      console.log("[play] ← audio ended naturally");
       setAudioPlaying(false);
+      setNowPlayingId(null);
     });
+
+    audio.addEventListener("error", () => {
+      const err = audio.error;
+      console.error("[play] ← audio element error — code:", err?.code, "msg:", err?.message);
+      // Purge the bad URL from cache so the next click re-fetches a fresh one
+      delete deezerPreviewsRef.current[t.id];
+      setDeezerPreviews(prev => { const n = { ...prev }; delete n[t.id]; return n; });
+      setAudioPlaying(false);
+      setNowPlayingId(null);
+    });
+
+    // ── Step 6: wire state BEFORE calling play() ─────────────────────────
     audioRef.current = audio;
     setNowPlayingId(t.id);
     setAudioPlaying(true);
 
-    audio.play()
-      .then(() => console.log("[play] ✓ playing:", t.name))
-      .catch(err => {
-        console.error("[play] play() rejected:", err);
-        setAudioPlaying(false);
+    // ── Step 7 + 8: call play() and log outcome ──────────────────────────
+    console.log("[play] 7 calling audio.play()");
+    const p = audio.play();
+    if (p !== undefined) {
+      p.then(() => {
+        console.log("[play] 8 ✓ play() resolved — audio is playing");
+      }).catch(err => {
+        console.error("[play] 8 play() rejected —", err.name + ":", err.message);
+        if (err.name === "AbortError") {
+          // We interrupted our own playback (e.g. rapid double-click).
+          // Don't clear state — the user is in the middle of interacting.
+          console.log("[play] 8a AbortError: self-interrupted, state preserved");
+          setAudioPlaying(false);
+        } else {
+          // NotAllowedError, NotSupportedError, etc — clear everything
+          delete deezerPreviewsRef.current[t.id];
+          setDeezerPreviews(prev => { const n = { ...prev }; delete n[t.id]; return n; });
+          setNowPlayingId(null);
+          setAudioPlaying(false);
+        }
       });
+    } else {
+      // Safari (older) returns undefined from play()
+      console.log("[play] 8 play() returned undefined — assuming Safari, audio started");
+    }
   };
 
   // ── Mouse handlers ────────────────────────────────────────────────────────
@@ -1909,21 +1984,33 @@ export default function LandingPage() {
                   <p className="text-zinc-700 text-xs px-7 py-8 text-center">No tracks</p>
                 ) : (
                   <div className="flex flex-col pt-1 pb-6">
-                    {/* ── AUDIO TEST BUTTON — remove after confirming playback works ── */}
+                    {/* ── Audio test: plays the first loaded preview synchronously ──
+                         Uses deezerPreviews state (live URLs, never hardcoded/expired).
+                         Remove once track-click playback is confirmed working.      */}
                     <div style={{ padding: "6px 28px" }}>
                       <button
                         style={{ fontSize: 10, color: "#22d3ee", background: "none", border: "1px solid #22d3ee", borderRadius: 4, padding: "2px 8px", cursor: "pointer" }}
                         onClick={() => {
-                          const url = "https://cdnt-preview.dzcdn.net/api/1/1/f/0/f/0/f0fc31e524543feefc9901f8d5f6bb03.mp3";
-                          console.log("[test] playing hardcoded URL:", url);
+                          const entry = Object.entries(deezerPreviewsRef.current)[0];
+                          if (!entry) {
+                            console.log("[test] no previews in ref yet — batch fetch still running");
+                            return;
+                          }
+                          const [tid, url] = entry;
+                          const name = displayedTracks.find(x => x.id === tid)?.name ?? tid;
+                          console.log("[test] playing first loaded preview:", name);
+                          console.log("[test] url:", url.slice(0, 80) + "…");
                           const a = new Audio(url);
                           a.volume = 0.8;
-                          a.play()
-                            .then(() => console.log("[test] ✓ hardcoded audio playing"))
-                            .catch(err => console.error("[test] hardcoded play() rejected:", err));
+                          a.addEventListener("error", () => console.error("[test] audio.error:", a.error?.code, a.error?.message));
+                          const p = a.play();
+                          if (p !== undefined) {
+                            p.then(() => console.log("[test] ✓ playing"))
+                             .catch(err => console.error("[test] play() rejected:", err.name, err.message));
+                          }
                         }}
                       >
-                        ▶ test audio
+                        ▶ test preview
                       </button>
                     </div>
                     {displayedTracks.map((t, idx) => {

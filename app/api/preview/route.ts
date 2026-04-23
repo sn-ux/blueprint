@@ -20,7 +20,9 @@ export async function GET(req: Request) {
   try {
     const q   = encodeURIComponent(`track:"${track}" artist:"${artist}"`);
     const url = `https://api.deezer.com/search?q=${q}&limit=1`;
-    const res = await fetch(url, { next: { revalidate: 3600 } }); // cache 1 hr
+    // no-store: Deezer CDN URLs contain time-limited HMAC tokens.
+    // Always fetch fresh so we never serve an expired signed URL from cache.
+    const res = await fetch(url, { cache: "no-store" });
     if (!res.ok) {
       return NextResponse.json({ previewUrl: null });
     }
