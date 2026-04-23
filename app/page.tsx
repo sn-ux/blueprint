@@ -390,6 +390,12 @@ export default function LandingPage() {
   const [spotifyMode,   setSpotifyMode]   = useState(false);  // true = SDK is active source
   const [notPremium,    setNotPremium]    = useState(false);
 
+  // ── Deezer preview URLs (fetched in background after track list loads) ────────
+  // Record<trackId, deezer 30-second mp3 URL>. Ref is read synchronously in
+  // playTrack (must stay inside the user-gesture activation context).
+  const [deezerPreviews,    setDeezerPreviews]    = useState<Record<string, string>>({});
+  const deezerPreviewsRef = useRef<Record<string, string>>({});
+
   // ── Real data (same path as /world — starts empty, filled from API) ─────────
   const [worlds,   setWorlds]   = useState<Record<string, number>>({});
   const [subgenres, setSubgenres] = useState<SubItem[]>([]);
@@ -516,6 +522,8 @@ export default function LandingPage() {
     setHoveredSubgenre(null);
     if (!selected) {
       setTracks([]); setSubgenres([]);
+      deezerPreviewsRef.current = {};
+      setDeezerPreviews({});
       setSelectedSubgenre(null); selectedSubgenreRef.current = null;
       setZoomSubgenre(null);     zoomSubgenreRef.current = null;
       return;
@@ -523,10 +531,35 @@ export default function LandingPage() {
     setSelectedSubgenre(null); selectedSubgenreRef.current = null;
     setZoomSubgenre(null);     zoomSubgenreRef.current = null;
 
+    // Clear stale Deezer URLs immediately so previous genre's previews
+    // don't flash for new genre rows while background fetch runs.
+    deezerPreviewsRef.current = {};
+    setDeezerPreviews({});
+
     const enc = encodeURIComponent(selected);
     fetch(`/api/world/${enc}`)
       .then(r => r.json())
-      .then(d => setTracks(d?.tracks ?? []))
+      .then(d => {
+        const loadedTracks: TrackItem[] = d?.tracks ?? [];
+        setTracks(loadedTracks);
+
+        // Background-fetch 30-second Deezer preview URLs for each track.
+        // Deezer public search is free, requires no auth, and sends
+        // Access-Control-Allow-Origin: * so it works from the browser.
+        loadedTracks.forEach((t: TrackItem) => {
+          const q = encodeURIComponent(`track:"${t.name}" artist:"${t.artist}"`);
+          fetch(`https://api.deezer.com/search?q=${q}&limit=1`)
+            .then(r => r.json())
+            .then(data => {
+              const url: string | undefined = data?.data?.[0]?.preview;
+              if (url) {
+                deezerPreviewsRef.current = { ...deezerPreviewsRef.current, [t.id]: url };
+                setDeezerPreviews(prev => ({ ...prev, [t.id]: url }));
+              }
+            })
+            .catch(() => {});
+        });
+      })
       .catch(() => setTracks([]));
 
     fetch(`/api/world/${enc}/subgenres`)
@@ -1499,7 +1532,11 @@ export default function LandingPage() {
     }
 
     // ── Preview path (HTML5 Audio — no login needed) ──────────────────────
-    if (!t.previewUrl) {
+    // Prefer a Deezer 30-second preview (fetched in background after tracks
+    // load); fall back to the stored Spotify previewUrl if present.
+    const previewUrl = deezerPreviewsRef.current[t.id] ?? t.previewUrl ?? null;
+    console.log("[Blueprint]   deezerUrl  :", deezerPreviewsRef.current[t.id] ?? "(not yet fetched)");
+    if (!previewUrl) {
       console.log("[Blueprint]   → no preview URL, nothing to play");
       return;
     }
@@ -1526,7 +1563,7 @@ export default function LandingPage() {
     }
 
     console.log("[Blueprint]   → creating Audio and calling play()");
-    const audio = new Audio(t.previewUrl);
+    const audio = new Audio(previewUrl);
     audio.volume = 0.8;
     audio.addEventListener("ended",  () => { console.log("[Blueprint]   preview ended"); setAudioPlaying(false); });
     audio.addEventListener("error",  (e) => { console.error("[Blueprint]   audio error:", e); setAudioPlaying(false); });
@@ -1914,7 +1951,7 @@ export default function LandingPage() {
                 ) : (
                   <div className="flex flex-col pt-1 pb-6">
                     {displayedTracks.map((t, idx) => {
-                      const canPlay = !!(t.previewUrl || (spotifyReady && !notPremium && t.spotifyId));
+                      const canPlay = !!(deezerPreviews[t.id] || t.previewUrl || (spotifyReady && !notPremium && t.spotifyId));
                       const isPlaying = nowPlayingId === t.id && audioPlaying;
                       const isPaused  = nowPlayingId === t.id && !audioPlaying;
                       return (
@@ -2102,7 +2139,7 @@ export default function LandingPage() {
                   ) : (
                     <div className="flex flex-col pt-1 pb-8">
                       {displayedTracks.map((t, idx) => {
-                        const canPlay = !!(t.previewUrl || (spotifyReady && !notPremium && t.spotifyId));
+                        const canPlay = !!(deezerPreviews[t.id] || t.previewUrl || (spotifyReady && !notPremium && t.spotifyId));
                         const isPlaying = nowPlayingId === t.id && audioPlaying;
                         const isPaused  = nowPlayingId === t.id && !audioPlaying;
                         return (

@@ -29,7 +29,9 @@
       "Bash(node_modules/.bin/tsc --noEmit)",
       "Bash(/usr/local/bin/node node_modules/.bin/tsc --noEmit)",
       "Bash(npm install:*)",
-      "Bash(npm list:*)"
+      "Bash(npm list:*)",
+      "Bash(curl -sI \"https://api.deezer.com/search?q=test&limit=1\")",
+      "Bash(curl -sI \"https://cdnt-preview.dzcdn.net/api/1/1/0/d/1/0/0d1e424d62504\")"
     ]
   }
 }
