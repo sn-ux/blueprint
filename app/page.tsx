@@ -545,12 +545,27 @@ export default function LandingPage() {
     const canvas = canvasRef.current;
     if (!canvas || Object.keys(worlds).length === 0) return;
 
-    const sync = () => { canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight; };
+    // Cap DPR at 2 — anything higher (e.g. 3× mobile screens) hits diminishing
+    // returns and wastes GPU fill-rate. 2× covers Retina Mac and every flagship phone.
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+    // sync: sets the canvas BUFFER to physical pixels so there is a 1-to-1 mapping
+    // between canvas pixels and screen pixels.  The CSS size (w-full h-full) stays
+    // unchanged — only the internal resolution increases.
+    const sync = () => {
+      const w = canvas.offsetWidth;
+      const h = canvas.offsetHeight;
+      if (w === 0 || h === 0) return;
+      canvas.width  = Math.round(w * dpr);
+      canvas.height = Math.round(h * dpr);
+    };
     sync();
     const ro = new ResizeObserver(sync);
     ro.observe(canvas);
 
-    const { verts, faces } = buildIcosphere(2);
+    // Subdivision 3 → 1 280 faces (vs 320 at level 2).  Each face is 4× smaller,
+    // giving a noticeably rounder, more refined silhouette with no design change.
+    const { verts, faces } = buildIcosphere(3);
     const entries = Object.entries(worlds);
     const total   = entries.reduce((s, [, c]) => s + c, 0) || 1;
     const names   = entries.map(([n]) => n);
@@ -663,12 +678,20 @@ export default function LandingPage() {
       const canvas = canvasRef.current;
       if (!canvas) return;
 
-      const W = canvas.width;
-      const H = canvas.height;
+      // Work in CSS pixels so all geometry math, hit-test coords, and label
+      // positions stay consistent with pointer/touch events (which are CSS px).
+      // ctx.setTransform scales every draw call up to physical pixels internally.
+      const W = canvas.offsetWidth;
+      const H = canvas.offsetHeight;
       if (!W || !H) return;
 
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
+
+      // Scale context to physical pixels — this is what makes every stroke,
+      // fill, and text render at full Retina / high-DPI sharpness.
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
       const R   = Math.min(W, H) * 0.34 * zoomRef.current;
       const cx  = W / 2, cy = H / 2;
       const rx  = rotRef.current.x, ry = rotRef.current.y;
