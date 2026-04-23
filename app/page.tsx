@@ -1122,7 +1122,10 @@ export default function LandingPage() {
         const dy      = touches[0].clientY - touches[1].clientY;
         const newDist = Math.sqrt(dx * dx + dy * dy);
         const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, pinchZoom0 * (newDist / pinchDist0)));
+        // Write to BOTH refs so zoomRef never lags behind zoomTargetRef during
+        // the gesture.  This eliminates the lerp gap that caused post-pinch glide.
         zoomTargetRef.current = newZoom;
+        zoomRef.current       = newZoom;
 
         // Same auto-select logic as applyZoomDelta
         if (newZoom >= 1.2 && selectedRef.current === null && regionPolesRef.current.length > 0) {
@@ -1233,8 +1236,10 @@ export default function LandingPage() {
         }
 
       } else if (remaining === 1 && wasPinching) {
-        // Transition 2 → 1: stop pinch, hand off to single-finger drag
+        // Transition 2 → 1 fingers: stop pinch, snap zoom, hand off to drag.
+        // Without snapZoom here the lerp would keep running after one finger lifts.
         pinchActive = false;
+        snapZoom    = true;
         const t = e.touches[0];
         touchDrag = { active: true, lx: t.clientX, ly: t.clientY, moved: false };
       }
