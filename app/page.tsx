@@ -398,10 +398,6 @@ export default function LandingPage() {
   const sheetDragDyRef                = useRef(0);
   const sheetGestureRef = useRef({ active: false, startY: 0, startSnap: 0 as 0|1|2|3 });
 
-  // ── Mobile onboarding hint ───────────────────────────────────────────────
-  const [showMobileHint,   setShowMobileHint]   = useState(false);
-  const mobileHintDismissedRef                  = useRef(false);
-
   // ── Interaction refs ──────────────────────────────────────────────────────
   const zoomRef          = useRef(1);       // visual zoom — lerped each RAF frame
   const zoomTargetRef    = useRef(1);       // intended zoom — updated immediately by wheel
@@ -507,16 +503,6 @@ export default function LandingPage() {
     setPage3LabelAnimKey(k => k + 1);
     page3PrevIdxRef.current = carouselIdx;
   }, [carouselIdx]);
-
-  // ── Mobile hint: show once on touch devices, auto-dismiss after 3.5 s ────
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const isTouch = "ontouchstart" in window || navigator.maxTouchPoints > 0;
-    if (!isTouch) return;
-    setShowMobileHint(true);
-    const id = setTimeout(() => setShowMobileHint(false), 3500);
-    return () => clearTimeout(id);
-  }, []);
 
   // ── Sheet ↔ selection sync (mobile only) ────────────────────────────────
   // When a genre is tapped → open sheet to MID (if not already open/higher).
@@ -659,11 +645,20 @@ export default function LandingPage() {
     const rgbMap: [number,number,number][] = names.map(n => hexRgb(COLORS[n] ?? "#71717a"));
     const FOV = 900;
 
+    // On mobile, pinch end sets this flag so zoom snaps immediately (no glide).
+    let snapZoom = false;
+
     function drawFrame() {
-      // ── Smooth zoom interpolation (Google Maps feel) ────────────────────────
-      // zoomRef lerps toward zoomTargetRef each frame. Wheel events only update
-      // the target; the visual sphere follows smoothly at ~10% per frame (~60fps).
-      zoomRef.current += (zoomTargetRef.current - zoomRef.current) * 0.10;
+      // ── Zoom interpolation ──────────────────────────────────────────────────
+      // Desktop: smooth lerp for Google Maps feel.
+      // Mobile: snap immediately on pinch end (snapZoom flag) for direct feel;
+      // normal lerp on wheel (desktop-only path) or between snap events.
+      if (snapZoom) {
+        zoomRef.current = zoomTargetRef.current;
+        snapZoom = false;
+      } else {
+        zoomRef.current += (zoomTargetRef.current - zoomRef.current) * 0.10;
+      }
 
       const canvas = canvasRef.current;
       if (!canvas) return;
@@ -810,6 +805,9 @@ export default function LandingPage() {
         if(a.n<4)continue;
         const ri=Number(riStr);
         const isSelG=ri===selectedIdx;
+        // On mobile, hide the selected-genre label once subgenres are revealed —
+        // subgenre labels on the sphere surface replace it at that zoom level.
+        if (isMobileRef.current && isSelG && zoomRef.current >= 1.9) continue;
         const rawLx=a.sx/a.n, rawLy=a.sy/a.n;
         const lx=isSelG?Math.max(80,Math.min(W-80,rawLx)):rawLx;
         const ly=isSelG?Math.max(24,Math.min(H*0.88,rawLy)):rawLy;
@@ -1017,14 +1015,6 @@ export default function LandingPage() {
     let lastTapX    = 0;
     let lastTapY    = 0;
 
-    // Dismiss the onboarding hint on first real interaction.
-    const dismissHint = () => {
-      if (!mobileHintDismissedRef.current) {
-        mobileHintDismissedRef.current = true;
-        setShowMobileHint(false);
-      }
-    };
-
     // Returns true if a touch point is within the (slightly enlarged) sphere area.
     // The enlarged radius makes touch easier without changing the visual.
     const touchOverSphere = (clientX: number, clientY: number) => {
@@ -1037,7 +1027,6 @@ export default function LandingPage() {
     };
 
     const onTouchStart = (e: TouchEvent) => {
-      dismissHint();
       const touches = e.touches;
 
       if (touches.length === 1) {
@@ -1074,8 +1063,11 @@ export default function LandingPage() {
         const dy = t.clientY - touchDrag.ly;
         rotRef.current.y += dx * 0.005;
         rotRef.current.x -= dy * 0.005;
-        rotRef.current.x  = Math.max(-1.2, Math.min(1.2, rotRef.current.x));
-        touchDrag.lx      = t.clientX;
+        // Desktop only: clamp vertical tilt. Mobile allows full vertical rotation.
+        if (!isMobileRef.current) {
+          rotRef.current.x = Math.max(-1.2, Math.min(1.2, rotRef.current.x));
+        }
+        touchDrag.lx = t.clientX;
         touchDrag.ly      = t.clientY;
         if (Math.abs(dx) > 3 || Math.abs(dy) > 3) touchDrag.moved = true;
         hoveredRef.current = null;
@@ -1136,6 +1128,8 @@ export default function LandingPage() {
 
       if (remaining === 0) {
         // All fingers lifted
+        // On mobile: snap zoom immediately when pinch ends (no post-pinch glide)
+        if (wasPinching) snapZoom = true;
         pinchActive      = false;
         touchDrag.active = false;
 
@@ -1441,31 +1435,44 @@ export default function LandingPage() {
             onClick={handleClick}
           />
 
-          {/* Top-left: Headline + supporting text
-              maxWidth keeps the text anchored to the left column and prevents
-              it from visually bleeding into the sphere. The canvas remains
-              full-width with the sphere centered — the constraint is purely
-              on the text overlay, not the canvas dimensions.             */}
+          {/* Headline — desktop: top-left overlay; mobile: centered below sphere */}
           <div
             className="absolute z-10 flex flex-col pointer-events-none"
-            style={{
-              top: "9%",
-              left: "8%",
-              maxWidth: 420,
-              opacity: textVisible ? 1 : 0,
+            style={isMobile ? {
+              // Mobile: sit below the sphere, centered, above the bottom sheet
+              bottom:     sheetSnap >= 2 ? "46%" : "13%",
+              left:       0,
+              right:      0,
+              alignItems: "center",
+              textAlign:  "center",
+              padding:    "0 24px",
+              transition: "bottom 0.36s cubic-bezier(0.32,0.72,0,1)",
+              opacity:    textVisible ? 1 : 0,
+            } : {
+              top:        "9%",
+              left:       "8%",
+              maxWidth:   420,
+              opacity:    textVisible ? 1 : 0,
               transition: "opacity 0.4s ease-in-out",
             }}
           >
-            <h1 className="text-[28px] md:text-[52px] lg:text-[56px] font-semibold leading-[1.06] text-white mb-3" style={{ letterSpacing: "-0.02em" }}>
-              This is what a music taste looks like.
+            <h1
+              className="text-[24px] md:text-[52px] lg:text-[56px] font-semibold leading-[1.06] text-white mb-3"
+              style={{ letterSpacing: "-0.02em" }}
+            >
+              {isMobile
+                ? "this is what a music taste looks like"
+                : "This is what a music taste looks like."}
             </h1>
-            <p className="text-xs tracking-[0.22em] uppercase" style={{ color: "rgba(255,255,255,0.62)" }}>
-              Click. Zoom. Discover.
-            </p>
+            {!isMobile && (
+              <p className="text-xs tracking-[0.22em] uppercase" style={{ color: "rgba(255,255,255,0.62)" }}>
+                Click. Zoom. Discover.
+              </p>
+            )}
           </div>
 
-          {/* Stats row — bottom-right, clear of the sphere */}
-          {totalTrackCount > 0 && (
+          {/* Stats row — bottom-right, desktop only */}
+          {totalTrackCount > 0 && !isMobile && (
             <div
               className="absolute bottom-[11vh] z-10 flex flex-row gap-8 pointer-events-none"
               style={{
@@ -1492,45 +1499,6 @@ export default function LandingPage() {
             </div>
           )}
 
-
-          {/* Mobile onboarding hint — mobile-only, fades after first interaction */}
-          {showMobileHint && (
-            <div
-              className="absolute inset-x-0 pointer-events-none"
-              style={{ bottom: "16vh", display: "flex", justifyContent: "center", zIndex: 20 }}
-            >
-              <div
-                style={{
-                  display:              "flex",
-                  alignItems:           "center",
-                  gap:                  16,
-                  background:           "rgba(0,0,0,0.60)",
-                  backdropFilter:       "blur(12px)",
-                  WebkitBackdropFilter: "blur(12px)",
-                  borderRadius:         100,
-                  padding:              "10px 22px",
-                  border:               "1px solid rgba(255,255,255,0.08)",
-                }}
-              >
-                {(["Drag to rotate", "Tap to select", "Pinch to zoom"] as const).map((label, i) => (
-                  <span key={label} style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                    {i > 0 && (
-                      <span style={{ width: 1, height: 10, background: "rgba(255,255,255,0.13)", display: "inline-block" }} />
-                    )}
-                    <span style={{
-                      fontSize:      11,
-                      letterSpacing: "0.09em",
-                      color:         "rgba(255,255,255,0.52)",
-                      textTransform: "uppercase",
-                      whiteSpace:    "nowrap",
-                    }}>
-                      {label}
-                    </span>
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* ── Desktop right panel (hidden on mobile) ──────────────────────── */}
           {selected && !isMobile && (
@@ -1713,25 +1681,21 @@ export default function LandingPage() {
                 {/* ── MID / EXPANDED content ─────────────────────────────────── */}
                 {sheetSnap >= 2 && (
                   <>
-                    {/* Header */}
-                    <div className="flex-shrink-0 px-6 pt-4 pb-3 flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        {focusedSubgenre ? (
-                          <>
-                            <button
-                              onClick={() => { setSelectedSubgenre(null); selectedSubgenreRef.current = null; setZoomSubgenre(null); zoomSubgenreRef.current = null; }}
-                              className="text-xs mb-2 flex items-center gap-1.5"
-                              style={{ color: `rgba(${sr},${sg},${sb},0.45)` }}
-                            >← {selected}</button>
-                            <h2 className="text-xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{focusedSubgenre}</h2>
-                          </>
-                        ) : (
-                          <>
-                            <p className="text-xs tracking-widest uppercase mb-1.5" style={{ color: `rgba(${sr},${sg},${sb},0.38)` }}>Now exploring</p>
-                            <h2 className="text-xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{selected}</h2>
-                          </>
-                        )}
-                        <p className="text-zinc-600 text-xs mt-1">{displayedTracks.length} tracks</p>
+                    {/* Header — genre name + track count inline, close button */}
+                    <div className="flex-shrink-0 px-6 pt-4 pb-3 flex items-center justify-between gap-3">
+                      <div className="flex items-baseline gap-3 min-w-0 flex-1">
+                        <h2
+                          className="text-xl font-bold leading-tight truncate"
+                          style={{ color: selectedColor }}
+                        >
+                          {focusedSubgenre ?? selected ?? ""}
+                        </h2>
+                        <span
+                          className="flex-shrink-0 text-xs"
+                          style={{ color: "rgba(255,255,255,0.30)" }}
+                        >
+                          {displayedTracks.length} tracks
+                        </span>
                       </div>
                       {/* Close: dismisses sheet only — sphere stays selected */}
                       <button
@@ -1740,25 +1704,9 @@ export default function LandingPage() {
                       >✕</button>
                     </div>
 
-                    {/* Subgenre pills */}
-                    {subgenres.length > 0 && (
-                      <div className="flex-shrink-0 flex gap-1.5 px-6 pb-3 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
-                        {subgenres.map(sub => {
-                          const active = selectedSubgenre === sub.name;
-                          return (
-                            <button key={sub.name}
-                              onClick={() => { const next = selectedSubgenre === sub.name ? null : sub.name; setSelectedSubgenre(next); selectedSubgenreRef.current = next; }}
-                              className="flex-shrink-0 text-xs px-3 py-1 rounded-full whitespace-nowrap transition-all"
-                              style={{ background: active ? `rgba(${sr},${sg},${sb},0.18)` : "transparent", color: active ? `rgb(${sr},${sg},${sb})` : "rgba(255,255,255,0.30)", border: `1px solid rgba(${sr},${sg},${sb},${active ? 0.45 : 0.10})` }}
-                            >{sub.name}</button>
-                          );
-                        })}
-                      </div>
-                    )}
-
                     <div className="flex-shrink-0 mx-6" style={{ height: 1, background: "rgba(255,255,255,0.05)" }} />
 
-                    {/* Track list — independently scrollable */}
+                    {/* Track list — maximises available space, navigate subgenres via sphere */}
                     <div className="overflow-y-auto flex-1" style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" } as React.CSSProperties}>
                       {displayedTracks.length === 0 ? (
                         <p className="text-zinc-700 text-xs px-6 py-8 text-center">No tracks</p>
