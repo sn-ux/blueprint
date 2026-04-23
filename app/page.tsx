@@ -368,6 +368,8 @@ export default function LandingPage() {
   // ── Mobile layout detection ──────────────────────────────────────────────
   // Driven by matchMedia so it updates on orientation change / resize.
   const [isMobile, setIsMobile] = useState(false);
+  const isMobileRef = useRef(false);
+  isMobileRef.current = isMobile;
   useEffect(() => {
     if (typeof window === "undefined") return;
     const mq = window.matchMedia("(max-width: 768px)");
@@ -377,9 +379,24 @@ export default function LandingPage() {
     return () => mq.removeEventListener("change", handler);
   }, []);
 
-  // ── Bottom sheet state (mobile only) ─────────────────────────────────────
-  const [sheetDragY,  setSheetDragY]  = useState(0);
-  const sheetDragRef = useRef({ active: false, startY: 0 });
+  // ── Viewport height (for sheet snap math) ────────────────────────────────
+  const [viewportH, setViewportH] = useState(0);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const update = () => setViewportH(window.innerHeight);
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
+  // ── 3-state bottom sheet (mobile only) ───────────────────────────────────
+  // 0 = hidden, 1 = peek (~100px), 2 = mid (~44vh), 3 = expanded (~75vh)
+  const [sheetSnap, setSheetSnap] = useState<0|1|2|3>(0);
+  const sheetSnapRef              = useRef<0|1|2|3>(0);
+  sheetSnapRef.current            = sheetSnap;
+  const [sheetDragDy, setSheetDragDy] = useState(0);
+  const sheetDragDyRef                = useRef(0);
+  const sheetGestureRef = useRef({ active: false, startY: 0, startSnap: 0 as 0|1|2|3 });
 
   // ── Mobile onboarding hint ───────────────────────────────────────────────
   const [showMobileHint,   setShowMobileHint]   = useState(false);
@@ -500,6 +517,18 @@ export default function LandingPage() {
     const id = setTimeout(() => setShowMobileHint(false), 3500);
     return () => clearTimeout(id);
   }, []);
+
+  // ── Sheet ↔ selection sync (mobile only) ────────────────────────────────
+  // When a genre is tapped → open sheet to MID (if not already open/higher).
+  // When selection cleared → close sheet. Sheet state does NOT affect sphere.
+  useEffect(() => {
+    if (!isMobile) return;
+    if (selected !== null) {
+      setSheetSnap(prev => (prev === 0 ? 2 : prev));
+    } else {
+      setSheetSnap(0);
+    }
+  }, [selected, isMobile]);
 
   // ── Poll zoomRef → text visibility (reversible) ──────────────────────────
   useEffect(() => {
@@ -1397,9 +1426,12 @@ export default function LandingPage() {
             className="absolute inset-0 w-full h-full cursor-pointer"
             style={{
               display:   "block",
-              // On mobile with a bottom sheet open, shift the sphere up so it
-              // clears the sheet and stays fully visible in the top half.
-              transform: isMobile && selected ? "translateY(-20%)" : "translateY(-3%)",
+              // On mobile, shift sphere up based on how much sheet is covering.
+              transform: isMobile
+                ? (sheetSnap === 3 ? "translateY(-22%)"
+                   : sheetSnap >= 2 ? "translateY(-15%)"
+                   : "translateY(-3%)")
+                : "translateY(-3%)",
               transition: "transform 0.38s cubic-bezier(0.4,0,0.2,1)",
             }}
             onMouseDown={onMouseDown}
@@ -1424,7 +1456,7 @@ export default function LandingPage() {
               transition: "opacity 0.4s ease-in-out",
             }}
           >
-            <h1 className="text-[44px] md:text-[52px] lg:text-[56px] font-semibold leading-[1.06] text-white mb-3" style={{ letterSpacing: "-0.02em" }}>
+            <h1 className="text-[28px] md:text-[52px] lg:text-[56px] font-semibold leading-[1.06] text-white mb-3" style={{ letterSpacing: "-0.02em" }}>
               This is what a music taste looks like.
             </h1>
             <p className="text-xs tracking-[0.22em] uppercase" style={{ color: "rgba(255,255,255,0.62)" }}>
@@ -1460,34 +1492,6 @@ export default function LandingPage() {
             </div>
           )}
 
-          {/* Mobile reset button — appears when a genre is selected on touch devices.
-              md:hidden hides it on desktop. Gives phone users a clear exit. */}
-          {selected && (
-            <button
-              className="md:hidden absolute top-4 right-4 z-30 flex items-center justify-center"
-              style={{
-                width:              44,
-                height:             44,
-                borderRadius:       22,
-                background:         "rgba(0,0,0,0.68)",
-                backdropFilter:     "blur(10px)",
-                WebkitBackdropFilter: "blur(10px)",
-                border:             "1px solid rgba(255,255,255,0.13)",
-                color:              "rgba(255,255,255,0.72)",
-                fontSize:           16,
-                cursor:             "pointer",
-              }}
-              onClick={() => {
-                setSelected(null);
-                setSelectedSubgenre(null); selectedSubgenreRef.current = null;
-                setZoomSubgenre(null);     zoomSubgenreRef.current     = null;
-                autoSelectedRef.current   = false;
-                zoomTargetRef.current     = 1.0;
-              }}
-            >
-              ✕
-            </button>
-          )}
 
           {/* Mobile onboarding hint — mobile-only, fades after first interaction */}
           {showMobileHint && (
@@ -1597,123 +1601,186 @@ export default function LandingPage() {
             </div>
           )}
 
-          {/* ── Mobile bottom sheet (replaces right panel on small screens) ───── */}
-          {/* position:fixed so it always covers the bottom of the viewport,       */}
-          {/* leaving the sphere fully visible above it.                           */}
-          {selected && isMobile && (
-            <div
-              style={{
-                position:             "fixed",
-                bottom:               0,
-                left:                 0,
-                right:                0,
-                height:               "58vh",
-                zIndex:               100,
-                display:              "flex",
-                flexDirection:        "column",
-                overflow:             "hidden",
-                background:           "rgba(4,4,8,0.97)",
-                backdropFilter:       "blur(18px)",
-                WebkitBackdropFilter: "blur(18px)",
-                borderTop:            `1px solid rgba(${sr},${sg},${sb},0.18)`,
-                borderTopLeftRadius:  18,
-                borderTopRightRadius: 18,
-                transform:            `translateY(${sheetDragY}px)`,
-                transition:           sheetDragY === 0
-                  ? "transform 0.36s cubic-bezier(0.32,0.72,0,1)"
-                  : "none",
-              }}
-            >
-              {/* ── Drag handle — swipe down to dismiss ─────────────────────── */}
+          {/* ── Mobile bottom sheet — 3-state snap (peek / mid / expanded) ───── */}
+          {/* Always rendered on mobile so transitions work; visibility driven    */}
+          {/* purely by translateY. Sheet state is decoupled from sphere state.  */}
+          {isMobile && viewportH > 0 && (() => {
+            const h75    = viewportH * 0.75;
+            // translateY from the bottom — positive = slide down (more hidden)
+            const snapTY = sheetSnap === 0 ? h75 + 20          // fully off-screen
+                         : sheetSnap === 1 ? h75 - 100          // peek: 100px visible
+                         : sheetSnap === 2 ? h75 - viewportH * 0.44  // mid: 44vh visible
+                         : 0;                                   // expanded: full 75vh
+            const rawTY   = snapTY + sheetDragDy;
+            // Clamp so sheet can't be dragged below fully-hidden or above full height
+            const activeTY = Math.max(0, Math.min(h75 + 20, rawTY));
+            const isDragging = sheetDragDy !== 0;
+
+            return (
               <div
-                style={{ display: "flex", justifyContent: "center", paddingTop: 10, paddingBottom: 6, flexShrink: 0, cursor: "grab", touchAction: "none" }}
-                onTouchStart={e => { sheetDragRef.current = { active: true, startY: e.touches[0].clientY }; }}
-                onTouchMove={e => {
-                  if (!sheetDragRef.current.active) return;
-                  const dy = e.touches[0].clientY - sheetDragRef.current.startY;
-                  if (dy > 0) { setSheetDragY(dy); e.stopPropagation(); }
-                }}
-                onTouchEnd={() => {
-                  if (sheetDragY > 90) {
-                    setSelected(null); setSelectedSubgenre(null); selectedSubgenreRef.current = null;
-                    setZoomSubgenre(null); zoomSubgenreRef.current = null;
-                    autoSelectedRef.current = false; zoomTargetRef.current = 1.0;
-                  }
-                  setSheetDragY(0);
-                  sheetDragRef.current.active = false;
+                style={{
+                  position:             "fixed",
+                  bottom:               0,
+                  left:                 0,
+                  right:                0,
+                  height:               h75,
+                  zIndex:               100,
+                  display:              "flex",
+                  flexDirection:        "column",
+                  overflow:             "hidden",
+                  background:           "rgba(4,4,8,0.97)",
+                  backdropFilter:       "blur(18px)",
+                  WebkitBackdropFilter: "blur(18px)",
+                  borderTop:            sheetSnap > 0
+                    ? `1px solid rgba(${sr},${sg},${sb},0.18)`
+                    : "1px solid rgba(255,255,255,0.06)",
+                  borderTopLeftRadius:  18,
+                  borderTopRightRadius: 18,
+                  transform:            `translateY(${activeTY}px)`,
+                  transition:           isDragging
+                    ? "none"
+                    : "transform 0.36s cubic-bezier(0.32,0.72,0,1)",
+                  // When fully hidden, pass touches through so sphere stays usable
+                  pointerEvents: sheetSnap === 0 && !isDragging ? "none" : "auto",
                 }}
               >
-                <div style={{ width: 36, height: 4, borderRadius: 2, background: "rgba(255,255,255,0.20)" }} />
-              </div>
-
-              {/* Color accent line */}
-              <div style={{ height: 2, background: selectedColor, opacity: 0.85, flexShrink: 0 }} />
-
-              {/* Header */}
-              <div className="flex-shrink-0 px-6 pt-4 pb-3 flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  {focusedSubgenre ? (
-                    <>
-                      <button
-                        onClick={() => { setSelectedSubgenre(null); selectedSubgenreRef.current = null; setZoomSubgenre(null); zoomSubgenreRef.current = null; }}
-                        className="text-xs mb-2 flex items-center gap-1.5"
-                        style={{ color: `rgba(${sr},${sg},${sb},0.45)` }}
-                      >← {selected}</button>
-                      <h2 className="text-xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{focusedSubgenre}</h2>
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-xs tracking-widest uppercase mb-1.5" style={{ color: `rgba(${sr},${sg},${sb},0.38)` }}>Now exploring</p>
-                      <h2 className="text-xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{selected}</h2>
-                    </>
-                  )}
-                  <p className="text-zinc-600 text-xs mt-1">{displayedTracks.length} tracks</p>
+                {/* ── Drag handle ─────────────────────────────────────────────── */}
+                <div
+                  style={{
+                    display: "flex", justifyContent: "center",
+                    paddingTop: 10, paddingBottom: 6,
+                    flexShrink: 0, cursor: "grab", touchAction: "none",
+                  }}
+                  onTouchStart={e => {
+                    sheetGestureRef.current = {
+                      active: true,
+                      startY: e.touches[0].clientY,
+                      startSnap: sheetSnapRef.current,
+                    };
+                    setSheetDragDy(0);
+                    sheetDragDyRef.current = 0;
+                    e.stopPropagation();
+                  }}
+                  onTouchMove={e => {
+                    if (!sheetGestureRef.current.active) return;
+                    const dy = e.touches[0].clientY - sheetGestureRef.current.startY;
+                    sheetDragDyRef.current = dy;
+                    setSheetDragDy(dy);
+                    e.stopPropagation();
+                    e.preventDefault();
+                  }}
+                  onTouchEnd={() => {
+                    if (!sheetGestureRef.current.active) return;
+                    sheetGestureRef.current.active = false;
+                    const dy         = sheetDragDyRef.current;
+                    const startSnap  = sheetGestureRef.current.startSnap;
+                    let   newSnap    = startSnap;
+                    // Swipe down → lower state, but NEVER below 1 via drag
+                    if (dy > 50 && startSnap > 1) newSnap = (startSnap - 1) as 0|1|2|3;
+                    // Swipe up → higher state (max 3)
+                    else if (dy < -50 && startSnap < 3) newSnap = (startSnap + 1) as 0|1|2|3;
+                    sheetDragDyRef.current = 0;
+                    setSheetDragDy(0);
+                    setSheetSnap(newSnap);
+                  }}
+                  onTouchCancel={() => {
+                    sheetGestureRef.current.active = false;
+                    sheetDragDyRef.current = 0;
+                    setSheetDragDy(0);
+                  }}
+                >
+                  <div style={{ width: 36, height: 4, borderRadius: 2, background: "rgba(255,255,255,0.20)" }} />
                 </div>
-                {/* Close button in header */}
-                <button
-                  onClick={() => { setSelected(null); setSelectedSubgenre(null); selectedSubgenreRef.current = null; setZoomSubgenre(null); zoomSubgenreRef.current = null; autoSelectedRef.current = false; zoomTargetRef.current = 1.0; }}
-                  style={{ flexShrink: 0, color: "rgba(255,255,255,0.28)", fontSize: 20, padding: "2px 4px", lineHeight: 1 }}
-                >✕</button>
-              </div>
 
-              {/* Subgenre pills */}
-              {subgenres.length > 0 && (
-                <div className="flex-shrink-0 flex gap-1.5 px-6 pb-3 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
-                  {subgenres.map(sub => {
-                    const active = selectedSubgenre === sub.name;
-                    return (
-                      <button key={sub.name}
-                        onClick={() => { const next = selectedSubgenre === sub.name ? null : sub.name; setSelectedSubgenre(next); selectedSubgenreRef.current = next; }}
-                        className="flex-shrink-0 text-xs px-3 py-1 rounded-full whitespace-nowrap transition-all"
-                        style={{ background: active ? `rgba(${sr},${sg},${sb},0.18)` : "transparent", color: active ? `rgb(${sr},${sg},${sb})` : "rgba(255,255,255,0.30)", border: `1px solid rgba(${sr},${sg},${sb},${active ? 0.45 : 0.10})` }}
-                      >{sub.name}</button>
-                    );
-                  })}
-                </div>
-              )}
+                {/* Color accent line */}
+                <div style={{ height: 2, background: selectedColor ?? "rgba(255,255,255,0.12)", opacity: 0.85, flexShrink: 0 }} />
 
-              <div className="flex-shrink-0 mx-6" style={{ height: 1, background: "rgba(255,255,255,0.05)" }} />
-
-              {/* Track list — independently scrollable */}
-              <div className="overflow-y-auto flex-1" style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" } as React.CSSProperties}>
-                {displayedTracks.length === 0 ? (
-                  <p className="text-zinc-700 text-xs px-6 py-8 text-center">No tracks</p>
-                ) : (
-                  <div className="flex flex-col pt-1 pb-8">
-                    {displayedTracks.map((t, idx) => (
-                      <div key={t.id} className="flex items-center gap-4 px-6 py-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                        <span className="text-xs font-mono w-5 text-right flex-shrink-0" style={{ color: "rgba(255,255,255,0.13)" }}>{idx + 1}</span>
-                        <div className="flex flex-col min-w-0 flex-1">
-                          <span className="text-white text-sm font-medium truncate leading-snug">{t.name}</span>
-                          <span className="text-zinc-500 text-xs truncate">{t.artist}</span>
-                        </div>
-                      </div>
-                    ))}
+                {/* ── PEEK content: just the genre name pill ─────────────────── */}
+                {sheetSnap === 1 && (
+                  <div
+                    style={{ flex: 1, display: "flex", alignItems: "center", paddingLeft: 20, paddingRight: 12, gap: 10, cursor: "pointer" }}
+                    onClick={() => setSheetSnap(2)}
+                  >
+                    <span style={{ color: selectedColor ?? "#fff", fontWeight: 700, fontSize: 16, flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {focusedSubgenre ?? selected ?? ""}
+                    </span>
+                    <span style={{ color: "rgba(255,255,255,0.35)", fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", flexShrink: 0 }}>
+                      expand ↑
+                    </span>
                   </div>
                 )}
+
+                {/* ── MID / EXPANDED content ─────────────────────────────────── */}
+                {sheetSnap >= 2 && (
+                  <>
+                    {/* Header */}
+                    <div className="flex-shrink-0 px-6 pt-4 pb-3 flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        {focusedSubgenre ? (
+                          <>
+                            <button
+                              onClick={() => { setSelectedSubgenre(null); selectedSubgenreRef.current = null; setZoomSubgenre(null); zoomSubgenreRef.current = null; }}
+                              className="text-xs mb-2 flex items-center gap-1.5"
+                              style={{ color: `rgba(${sr},${sg},${sb},0.45)` }}
+                            >← {selected}</button>
+                            <h2 className="text-xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{focusedSubgenre}</h2>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-xs tracking-widest uppercase mb-1.5" style={{ color: `rgba(${sr},${sg},${sb},0.38)` }}>Now exploring</p>
+                            <h2 className="text-xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{selected}</h2>
+                          </>
+                        )}
+                        <p className="text-zinc-600 text-xs mt-1">{displayedTracks.length} tracks</p>
+                      </div>
+                      {/* Close: dismisses sheet only — sphere stays selected */}
+                      <button
+                        onClick={() => setSheetSnap(0)}
+                        style={{ flexShrink: 0, color: "rgba(255,255,255,0.28)", fontSize: 20, padding: "2px 4px", lineHeight: 1 }}
+                      >✕</button>
+                    </div>
+
+                    {/* Subgenre pills */}
+                    {subgenres.length > 0 && (
+                      <div className="flex-shrink-0 flex gap-1.5 px-6 pb-3 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+                        {subgenres.map(sub => {
+                          const active = selectedSubgenre === sub.name;
+                          return (
+                            <button key={sub.name}
+                              onClick={() => { const next = selectedSubgenre === sub.name ? null : sub.name; setSelectedSubgenre(next); selectedSubgenreRef.current = next; }}
+                              className="flex-shrink-0 text-xs px-3 py-1 rounded-full whitespace-nowrap transition-all"
+                              style={{ background: active ? `rgba(${sr},${sg},${sb},0.18)` : "transparent", color: active ? `rgb(${sr},${sg},${sb})` : "rgba(255,255,255,0.30)", border: `1px solid rgba(${sr},${sg},${sb},${active ? 0.45 : 0.10})` }}
+                            >{sub.name}</button>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    <div className="flex-shrink-0 mx-6" style={{ height: 1, background: "rgba(255,255,255,0.05)" }} />
+
+                    {/* Track list — independently scrollable */}
+                    <div className="overflow-y-auto flex-1" style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" } as React.CSSProperties}>
+                      {displayedTracks.length === 0 ? (
+                        <p className="text-zinc-700 text-xs px-6 py-8 text-center">No tracks</p>
+                      ) : (
+                        <div className="flex flex-col pt-1 pb-8">
+                          {displayedTracks.map((t, idx) => (
+                            <div key={t.id} className="flex items-center gap-4 px-6 py-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                              <span className="text-xs font-mono w-5 text-right flex-shrink-0" style={{ color: "rgba(255,255,255,0.13)" }}>{idx + 1}</span>
+                              <div className="flex flex-col min-w-0 flex-1">
+                                <span className="text-white text-sm font-medium truncate leading-snug">{t.name}</span>
+                                <span className="text-zinc-500 text-xs truncate">{t.artist}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
-            </div>
-          )}
+            );
+          })()}
 
         </div>
 
