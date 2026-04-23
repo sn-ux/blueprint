@@ -5,6 +5,24 @@ import SphereCanvas from "@/components/SphereCanvas";
 import MiniSphere from "@/components/MiniSphere";
 import MapVisual from "@/components/MapVisual";
 
+// ── Genre display-name overrides (short labels for sphere + UI) ───────────────
+// Keys are the full canonical genre names used as data keys everywhere.
+// Values are the shorter display strings shown on the sphere and in panels.
+
+const GENRE_SHORT: Record<string, string> = {
+  "Jazz / Blues":                   "Jazz",
+  "Rap / Hip-Hop":                  "Rap",
+  "R&B / Soul / Funk":              "R&B",
+  "Classical / Score / Soundtrack": "Classical",
+  "Pop / Dance":                    "Pop",
+  "Rock / Indie / Alternative":     "Rock",
+  "Electronic / Ambient":           "Electronic",
+  "World / Folk / Regional":        "World",
+};
+
+/** Returns the short display label for a genre, falling back to the full name. */
+const shortLabel = (genre: string) => GENRE_SHORT[genre] ?? genre;
+
 // ── Palette ───────────────────────────────────────────────────────────────────
 
 const COLORS: Record<string, string> = {
@@ -833,13 +851,14 @@ export default function LandingPage() {
         const lx=isSelG?Math.max(80,Math.min(W-80,rawLx)):rawLx;
         const ly=isSelG?Math.max(24,Math.min(H*0.88,rawLy)):rawLy;
         const name=names[ri];
+        const label=shortLabel(name); // short display name; full name kept for data lookups
         const [r,g,b]=rgbMap[ri];
         const isThisHov=ri===hoveredIdx;
         const labelDim=isSelG||isThisHov?1.0:selectedIdx>=0?0.28:0.75;
         const fs=isSelG?15:13;
         ctx.globalAlpha=labelDim;
         ctx.font=`700 ${fs}px system-ui, sans-serif`;
-        const tw=ctx.measureText(name).width, pad=8, rad=8;
+        const tw=ctx.measureText(label).width, pad=8, rad=8;
         const bx=lx-tw/2-pad, by=ly-fs/2-pad, bw=tw+pad*2, bh=fs+pad*2;
         ctx.save();
         ctx.shadowColor="rgba(0,0,0,0.75)"; ctx.shadowBlur=14;
@@ -850,8 +869,9 @@ export default function LandingPage() {
           ctx.strokeStyle=`rgba(${r},${g},${b},0.7)`;ctx.lineWidth=1;
           ctx.beginPath();ctx.roundRect(bx,by,bw,bh,rad);ctx.stroke();
         }
-        ctx.fillStyle=`rgb(${r},${g},${b})`; ctx.fillText(name,lx,ly);
+        ctx.fillStyle=`rgb(${r},${g},${b})`; ctx.fillText(label,lx,ly);
         ctx.globalAlpha=1.0;
+        // hit-box uses full `name` so tap/click lookups still resolve to the correct data key
         labelHitsRef.current.push({name,x1:bx,y1:by,x2:bx+bw,y2:by+bh});
       }
 
@@ -1568,13 +1588,13 @@ export default function LandingPage() {
                       onClick={() => { setSelectedSubgenre(null); selectedSubgenreRef.current = null; setZoomSubgenre(null); zoomSubgenreRef.current = null; }}
                       className="text-xs mb-3 flex items-center gap-1.5 transition-opacity hover:opacity-100"
                       style={{ color: `rgba(${sr},${sg},${sb},0.45)` }}
-                    >← {selected}</button>
+                    >← {selected ? shortLabel(selected) : ""}</button>
                     <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{focusedSubgenre}</h2>
                   </>
                 ) : (
                   <>
                     <p className="text-xs tracking-widest uppercase mb-2" style={{ color: `rgba(${sr},${sg},${sb},0.38)` }}>Now exploring</p>
-                    <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{selected}</h2>
+                    <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{selected ? shortLabel(selected) : ""}</h2>
                   </>
                 )}
                 <p className="text-zinc-600 text-xs mt-1.5">{displayedTracks.length} tracks</p>
@@ -1732,7 +1752,7 @@ export default function LandingPage() {
                     onClick={() => setSheetSnap(2)}
                   >
                     <span style={{ color: selectedColor ?? "#fff", fontWeight: 700, fontSize: 16, flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {focusedSubgenre ?? selected ?? ""}
+                      {focusedSubgenre ?? (selected ? shortLabel(selected) : "")}
                     </span>
                     <span style={{ color: "rgba(255,255,255,0.35)", fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", flexShrink: 0 }}>
                       expand ↑
@@ -1750,7 +1770,7 @@ export default function LandingPage() {
                           className="text-xl font-bold leading-tight truncate"
                           style={{ color: selectedColor }}
                         >
-                          {focusedSubgenre ?? selected ?? ""}
+                          {focusedSubgenre ?? (selected ? shortLabel(selected) : "")}
                         </h2>
                         <span
                           className="flex-shrink-0 text-xs"
