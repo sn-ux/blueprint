@@ -1082,7 +1082,14 @@ export default function LandingPage() {
         const t  = touches[0];
         const dx = t.clientX - touchDrag.lx;
         const dy = t.clientY - touchDrag.ly;
-        rotRef.current.y += dx * 0.005;
+        // On mobile, full vertical rotation is allowed, which means the sphere
+        // can flip past ±90°. Once flipped, cos(rotX) goes negative — from the
+        // user's perspective the sphere is "upside down" and a naive +dx rotates
+        // the Y axis in the visually-backwards direction. Multiplying by the sign
+        // of cos(rotX) flips the horizontal direction exactly when needed, keeping
+        // left=left and right=right from every vertical orientation.
+        const yDir = isMobileRef.current ? (Math.cos(rotRef.current.x) < 0 ? -1 : 1) : 1;
+        rotRef.current.y += dx * 0.005 * yDir;
         rotRef.current.x -= dy * 0.005;
         // Desktop only: clamp vertical tilt. Mobile allows full vertical rotation.
         if (!isMobileRef.current) {
