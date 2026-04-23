@@ -12,9 +12,18 @@ body {
   font-family: var(--font-inter), system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* Prevent iOS pull-to-refresh interfering with the bottom sheet */
-  overscroll-behavior: none;
-  overscroll-behavior-y: none;
+}
+
+/* Prevent iOS pull-to-refresh and overscroll bounce on touch devices only.
+   `hover: none` + `pointer: coarse` = primary-touch device (phone / tablet).
+   Desktop Mac trackpads are `hover: hover, pointer: fine` — left untouched so
+   elastic scroll, momentum scroll, and rubber-band bounce work normally.       */
+@media (hover: none) and (pointer: coarse) {
+  html,
+  body {
+    overscroll-behavior: none;
+    overscroll-behavior-y: none;
+  }
 }
 
 @keyframes fadeSlideUp {
