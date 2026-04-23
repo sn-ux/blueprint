@@ -370,6 +370,53 @@ declare global {
   }
 }
 
+// ── SpotifyLogoButton ─────────────────────────────────────────────────────────
+// Sits in the panel/sheet header next to the genre title.
+// Dims when no track is selected; lights up green and becomes clickable when
+// a track is active. Clicking opens that track on Spotify (new tab).
+
+function SpotifyLogoButton({
+  track,
+  size = 18,
+}: {
+  track: { name: string; spotifyId?: string | null } | null;
+  size?: number;
+}) {
+  const active = !!(track?.spotifyId);
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation(); // don't bubble to the panel's close/scroll handlers
+    if (!active || !track?.spotifyId) return;
+    const url = `https://open.spotify.com/track/${track.spotifyId}`;
+    const ok = window.confirm(`Open "${track.name}" on Spotify?`);
+    if (ok) window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  return (
+    <button
+      onClick={handleClick}
+      aria-label={active ? `Open ${track?.name} on Spotify` : "Spotify"}
+      style={{
+        flexShrink:      0,
+        background:      "none",
+        border:          "none",
+        padding:         0,
+        cursor:          active ? "pointer" : "default",
+        color:           active ? "#1DB954" : "rgba(255,255,255,0.18)",
+        transition:      "color 0.25s ease, opacity 0.25s ease",
+        display:         "flex",
+        alignItems:      "center",
+        lineHeight:      1,
+      }}
+    >
+      {/* Official Spotify "sound waves in a circle" mark */}
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+      </svg>
+    </button>
+  );
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function LandingPage() {
@@ -1807,6 +1854,8 @@ export default function LandingPage() {
   // zoomSubgenre is intentionally excluded — zoom never drives the panel.
   const focusedSubgenre = hoveredSubgenre ?? selectedSubgenre;
   const displayedTracks = focusedSubgenre ? tracks.filter(t => t.blueprintSubgenre === focusedSubgenre) : tracks;
+  // Track currently selected/playing (may not be in displayedTracks if filtered by subgenre)
+  const nowPlayingTrack = nowPlayingId ? (tracks.find(t => t.id === nowPlayingId) ?? null) : null;
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -1937,12 +1986,18 @@ export default function LandingPage() {
                       className="text-xs mb-3 flex items-center gap-1.5 transition-opacity hover:opacity-100"
                       style={{ color: `rgba(${sr},${sg},${sb},0.45)` }}
                     >← {selected ? shortLabel(selected) : ""}</button>
-                    <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{focusedSubgenre}</h2>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{focusedSubgenre}</h2>
+                      <SpotifyLogoButton track={nowPlayingTrack} />
+                    </div>
                   </>
                 ) : (
                   <>
                     <p className="text-xs tracking-widest uppercase mb-2" style={{ color: `rgba(${sr},${sg},${sb},0.38)` }}>Now exploring</p>
-                    <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{selected ? shortLabel(selected) : ""}</h2>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{selected ? shortLabel(selected) : ""}</h2>
+                      <SpotifyLogoButton track={nowPlayingTrack} />
+                    </div>
                   </>
                 )}
                 <p className="text-zinc-600 text-xs mt-1.5">{displayedTracks.length} tracks</p>
@@ -1984,39 +2039,9 @@ export default function LandingPage() {
                   <p className="text-zinc-700 text-xs px-7 py-8 text-center">No tracks</p>
                 ) : (
                   <div className="flex flex-col pt-1 pb-6">
-                    {/* ── Audio test: plays the first loaded preview synchronously ──
-                         Uses deezerPreviews state (live URLs, never hardcoded/expired).
-                         Remove once track-click playback is confirmed working.      */}
-                    <div style={{ padding: "6px 28px" }}>
-                      <button
-                        style={{ fontSize: 10, color: "#22d3ee", background: "none", border: "1px solid #22d3ee", borderRadius: 4, padding: "2px 8px", cursor: "pointer" }}
-                        onClick={() => {
-                          const entry = Object.entries(deezerPreviewsRef.current)[0];
-                          if (!entry) {
-                            console.log("[test] no previews in ref yet — batch fetch still running");
-                            return;
-                          }
-                          const [tid, url] = entry;
-                          const name = displayedTracks.find(x => x.id === tid)?.name ?? tid;
-                          console.log("[test] playing first loaded preview:", name);
-                          console.log("[test] url:", url.slice(0, 80) + "…");
-                          const a = new Audio(url);
-                          a.volume = 0.8;
-                          a.addEventListener("error", () => console.error("[test] audio.error:", a.error?.code, a.error?.message));
-                          const p = a.play();
-                          if (p !== undefined) {
-                            p.then(() => console.log("[test] ✓ playing"))
-                             .catch(err => console.error("[test] play() rejected:", err.name, err.message));
-                          }
-                        }}
-                      >
-                        ▶ test preview
-                      </button>
-                    </div>
                     {displayedTracks.map((t, idx) => {
                       const canPlay = !!(deezerPreviews[t.id] || t.previewUrl || (spotifyReady && !notPremium && t.spotifyId));
-                      const isPlaying = nowPlayingId === t.id && audioPlaying;
-                      const isPaused  = nowPlayingId === t.id && !audioPlaying;
+                      const isActive = nowPlayingId === t.id;
                       return (
                         <div
                           key={t.id}
@@ -2024,19 +2049,15 @@ export default function LandingPage() {
                           style={{ borderBottom: "1px solid rgba(255,255,255,0.035)", cursor: canPlay ? "pointer" : "default" }}
                           onClick={() => playTrack(t)}
                         >
-                          {/* Play indicator / track index */}
+                          {/* Track number */}
                           <span
                             style={{
                               flexShrink: 0, width: 20, textAlign: "center",
-                              fontSize: 10, lineHeight: 1, userSelect: "none",
-                              color: (isPlaying || isPaused)
-                                ? selectedColor
-                                : canPlay
-                                  ? "rgba(255,255,255,0.30)"
-                                  : "rgba(255,255,255,0.13)",
+                              fontSize: 11, lineHeight: 1, userSelect: "none",
+                              color: isActive ? selectedColor : "rgba(255,255,255,0.22)",
                             }}
                           >
-                            {isPlaying ? "⏸" : isPaused ? "▶" : canPlay ? "▶" : idx + 1}
+                            {idx + 1}
                           </span>
                           {/* Album art */}
                           <div className="flex-shrink-0" style={{ width: 36, height: 36, borderRadius: 4, overflow: "hidden", background: `rgba(${sr},${sg},${sb},0.10)` }}>
@@ -2051,10 +2072,11 @@ export default function LandingPage() {
                               />
                             )}
                           </div>
+                          {/* Title / artist */}
                           <div className="flex flex-col min-w-0 flex-1">
                             <span
                               className="text-sm font-medium truncate leading-snug"
-                              style={{ color: (isPlaying || isPaused) ? selectedColor : "#ffffff" }}
+                              style={{ color: isActive ? selectedColor : "#ffffff" }}
                             >{t.name}</span>
                             <span className="text-zinc-500 text-xs truncate">{t.artist}</span>
                           </div>
@@ -2116,16 +2138,17 @@ export default function LandingPage() {
                   className="flex-shrink-0 px-5 pt-3 pb-2.5 flex items-center gap-2"
                   style={{ minHeight: 56 }}
                 >
-                  {/* Genre / subgenre name + track count */}
-                  <div className="flex items-baseline gap-2.5 min-w-0 flex-1">
+                  {/* Genre / subgenre name + Spotify logo + track count */}
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
                     <h2
                       className="text-lg font-bold leading-tight truncate"
                       style={{ color: selectedColor }}
                     >
                       {focusedSubgenre ?? (selected ? shortLabel(selected) : "")}
                     </h2>
+                    <SpotifyLogoButton track={nowPlayingTrack} size={16} />
                     <span
-                      className="flex-shrink-0 text-xs"
+                      className="flex-shrink-0 text-xs ml-0.5"
                       style={{ color: "rgba(255,255,255,0.30)" }}
                     >
                       {displayedTracks.length} tracks
@@ -2203,8 +2226,7 @@ export default function LandingPage() {
                     <div className="flex flex-col pt-1 pb-8">
                       {displayedTracks.map((t, idx) => {
                         const canPlay = !!(deezerPreviews[t.id] || t.previewUrl || (spotifyReady && !notPremium && t.spotifyId));
-                        const isPlaying = nowPlayingId === t.id && audioPlaying;
-                        const isPaused  = nowPlayingId === t.id && !audioPlaying;
+                        const isActive = nowPlayingId === t.id;
                         return (
                           <div
                             key={t.id}
@@ -2212,19 +2234,15 @@ export default function LandingPage() {
                             style={{ borderBottom: "1px solid rgba(255,255,255,0.04)", cursor: canPlay ? "pointer" : "default" }}
                             onClick={() => playTrack(t)}
                           >
-                            {/* Play indicator / track index */}
+                            {/* Track number */}
                             <span
                               style={{
                                 flexShrink: 0, width: 20, textAlign: "center",
-                                fontSize: 10, lineHeight: 1, userSelect: "none",
-                                color: (isPlaying || isPaused)
-                                  ? selectedColor
-                                  : canPlay
-                                    ? "rgba(255,255,255,0.30)"
-                                    : "rgba(255,255,255,0.13)",
+                                fontSize: 11, lineHeight: 1, userSelect: "none",
+                                color: isActive ? selectedColor : "rgba(255,255,255,0.22)",
                               }}
                             >
-                              {isPlaying ? "⏸" : isPaused ? "▶" : canPlay ? "▶" : idx + 1}
+                              {idx + 1}
                             </span>
                             {/* Album art */}
                             <div className="flex-shrink-0" style={{ width: 36, height: 36, borderRadius: 4, overflow: "hidden", background: `rgba(${sr},${sg},${sb},0.10)` }}>
@@ -2239,10 +2257,11 @@ export default function LandingPage() {
                                 />
                               )}
                             </div>
+                            {/* Title / artist */}
                             <div className="flex flex-col min-w-0 flex-1">
                               <span
                                 className="text-sm font-medium truncate leading-snug"
-                                style={{ color: (isPlaying || isPaused) ? selectedColor : "#ffffff" }}
+                                style={{ color: isActive ? selectedColor : "#ffffff" }}
                               >{t.name}</span>
                               <span className="text-zinc-500 text-xs truncate">{t.artist}</span>
                             </div>
