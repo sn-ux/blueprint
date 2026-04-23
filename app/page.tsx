@@ -408,13 +408,11 @@ export default function LandingPage() {
   }, []);
 
   // ── 3-state bottom sheet (mobile only) ───────────────────────────────────
-  // 0 = hidden, 1 = peek (~100px), 2 = mid (~44vh), 3 = expanded (~75vh)
-  const [sheetSnap, setSheetSnap] = useState<0|1|2|3>(0);
-  const sheetSnapRef              = useRef<0|1|2|3>(0);
+  // 0 = hidden, 1 = peek (200px visible), 2 = fullscreen (fills to nav)
+  // No free dragging — transitions are preset-only via arrow button or close.
+  const [sheetSnap, setSheetSnap] = useState<0|1|2>(0);
+  const sheetSnapRef              = useRef<0|1|2>(0);
   sheetSnapRef.current            = sheetSnap;
-  const [sheetDragDy, setSheetDragDy] = useState(0);
-  const sheetDragDyRef                = useRef(0);
-  const sheetGestureRef = useRef({ active: false, startY: 0, startSnap: 0 as 0|1|2|3 });
 
   // ── Interaction refs ──────────────────────────────────────────────────────
   const zoomRef          = useRef(1);       // visual zoom — lerped each RAF frame
@@ -528,7 +526,7 @@ export default function LandingPage() {
   useEffect(() => {
     if (!isMobile) return;
     if (selected !== null) {
-      setSheetSnap(prev => (prev === 0 ? 2 : prev));
+      setSheetSnap(prev => (prev === 0 ? 1 : prev));
     } else {
       setSheetSnap(0);
     }
@@ -1649,20 +1647,16 @@ export default function LandingPage() {
             </div>
           )}
 
-          {/* ── Mobile bottom sheet — 3-state snap (peek / mid / expanded) ───── */}
-          {/* Always rendered on mobile so transitions work; visibility driven    */}
-          {/* purely by translateY. Sheet state is decoupled from sphere state.  */}
+          {/* ── Mobile bottom sheet — preset-state only (peek / fullscreen) ──── */}
+          {/* No drag handle, no free dragging. Transitions are driven entirely   */}
+          {/* by the arrow toggle button and the close (✕) button.               */}
           {isMobile && viewportH > 0 && (() => {
-            const h75    = viewportH * 0.75;
-            // translateY from the bottom — positive = slide down (more hidden)
-            const snapTY = sheetSnap === 0 ? h75 + 20          // fully off-screen
-                         : sheetSnap === 1 ? h75 - 100          // peek: 100px visible
-                         : sheetSnap === 2 ? h75 - viewportH * 0.44  // mid: 44vh visible
-                         : 0;                                   // expanded: full 75vh
-            const rawTY   = snapTY + sheetDragDy;
-            // Clamp so sheet can't be dragged below fully-hidden or above full height
-            const activeTY = Math.max(0, Math.min(h75 + 20, rawTY));
-            const isDragging = sheetDragDy !== 0;
+            // Sheet fills from bottom to just below the nav (~60px reserved).
+            const sheetH = Math.round(viewportH * 0.90);
+            // translateY: positive = slide toward bottom (more hidden)
+            const snapTY = sheetSnap === 0 ? sheetH + 20   // hidden: fully off-screen
+                         : sheetSnap === 1 ? sheetH - 200   // peek: 200px visible
+                         : 0;                               // fullscreen: full sheet
 
             return (
               <div
@@ -1671,7 +1665,7 @@ export default function LandingPage() {
                   bottom:               0,
                   left:                 0,
                   right:                0,
-                  height:               h75,
+                  height:               sheetH,
                   zIndex:               100,
                   display:              "flex",
                   flexDirection:        "column",
@@ -1684,141 +1678,112 @@ export default function LandingPage() {
                     : "1px solid rgba(255,255,255,0.06)",
                   borderTopLeftRadius:  18,
                   borderTopRightRadius: 18,
-                  transform:            `translateY(${activeTY}px)`,
-                  transition:           isDragging
-                    ? "none"
-                    : "transform 0.36s cubic-bezier(0.32,0.72,0,1)",
-                  // When fully hidden, pass touches through so sphere stays usable
-                  pointerEvents: sheetSnap === 0 && !isDragging ? "none" : "auto",
+                  transform:            `translateY(${snapTY}px)`,
+                  transition:           "transform 0.36s cubic-bezier(0.32,0.72,0,1)",
+                  // Pass touches through to sphere when fully hidden
+                  pointerEvents: sheetSnap === 0 ? "none" : "auto",
                 }}
               >
-                {/* ── Drag handle ─────────────────────────────────────────────── */}
-                <div
-                  style={{
-                    display: "flex", justifyContent: "center",
-                    paddingTop: 10, paddingBottom: 6,
-                    flexShrink: 0, cursor: "grab", touchAction: "none",
-                  }}
-                  onTouchStart={e => {
-                    sheetGestureRef.current = {
-                      active: true,
-                      startY: e.touches[0].clientY,
-                      startSnap: sheetSnapRef.current,
-                    };
-                    setSheetDragDy(0);
-                    sheetDragDyRef.current = 0;
-                    e.stopPropagation();
-                  }}
-                  onTouchMove={e => {
-                    if (!sheetGestureRef.current.active) return;
-                    const dy = e.touches[0].clientY - sheetGestureRef.current.startY;
-                    sheetDragDyRef.current = dy;
-                    setSheetDragDy(dy);
-                    e.stopPropagation();
-                    e.preventDefault();
-                  }}
-                  onTouchEnd={() => {
-                    if (!sheetGestureRef.current.active) return;
-                    sheetGestureRef.current.active = false;
-                    const dy         = sheetDragDyRef.current;
-                    const startSnap  = sheetGestureRef.current.startSnap;
-                    let   newSnap    = startSnap;
-                    // Swipe down → lower state, but NEVER below 1 via drag
-                    if (dy > 50 && startSnap > 1) newSnap = (startSnap - 1) as 0|1|2|3;
-                    // Swipe up → higher state (max 3)
-                    else if (dy < -50 && startSnap < 3) newSnap = (startSnap + 1) as 0|1|2|3;
-                    sheetDragDyRef.current = 0;
-                    setSheetDragDy(0);
-                    setSheetSnap(newSnap);
-                  }}
-                  onTouchCancel={() => {
-                    sheetGestureRef.current.active = false;
-                    sheetDragDyRef.current = 0;
-                    setSheetDragDy(0);
-                  }}
-                >
-                  <div style={{ width: 36, height: 4, borderRadius: 2, background: "rgba(255,255,255,0.20)" }} />
-                </div>
-
-                {/* Color accent line */}
+                {/* Color accent line — always present at top of sheet */}
                 <div style={{ height: 2, background: selectedColor ?? "rgba(255,255,255,0.12)", opacity: 0.85, flexShrink: 0 }} />
 
-                {/* ── PEEK content: just the genre name pill ─────────────────── */}
-                {sheetSnap === 1 && (
-                  <div
-                    style={{ flex: 1, display: "flex", alignItems: "center", paddingLeft: 20, paddingRight: 12, gap: 10, cursor: "pointer" }}
-                    onClick={() => setSheetSnap(2)}
-                  >
-                    <span style={{ color: selectedColor ?? "#fff", fontWeight: 700, fontSize: 16, flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {/* ── Header — genre name · track count · arrow toggle · close ── */}
+                <div
+                  className="flex-shrink-0 px-5 pt-3 pb-2.5 flex items-center gap-2"
+                  style={{ minHeight: 56 }}
+                >
+                  {/* Genre / subgenre name + track count */}
+                  <div className="flex items-baseline gap-2.5 min-w-0 flex-1">
+                    <h2
+                      className="text-lg font-bold leading-tight truncate"
+                      style={{ color: selectedColor }}
+                    >
                       {focusedSubgenre ?? (selected ? shortLabel(selected) : "")}
-                    </span>
-                    <span style={{ color: "rgba(255,255,255,0.35)", fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", flexShrink: 0 }}>
-                      expand ↑
+                    </h2>
+                    <span
+                      className="flex-shrink-0 text-xs"
+                      style={{ color: "rgba(255,255,255,0.30)" }}
+                    >
+                      {displayedTracks.length} tracks
                     </span>
                   </div>
-                )}
 
-                {/* ── MID / EXPANDED content ─────────────────────────────────── */}
-                {sheetSnap >= 2 && (
-                  <>
-                    {/* Header — genre name + track count inline, close button */}
-                    <div className="flex-shrink-0 px-6 pt-4 pb-3 flex items-center justify-between gap-3">
-                      <div className="flex items-baseline gap-3 min-w-0 flex-1">
-                        <h2
-                          className="text-xl font-bold leading-tight truncate"
-                          style={{ color: selectedColor }}
-                        >
-                          {focusedSubgenre ?? (selected ? shortLabel(selected) : "")}
-                        </h2>
-                        <span
-                          className="flex-shrink-0 text-xs"
-                          style={{ color: "rgba(255,255,255,0.30)" }}
-                        >
-                          {displayedTracks.length} tracks
-                        </span>
-                      </div>
-                      {/* Close: dismisses sheet only — sphere stays selected */}
-                      <button
-                        onClick={() => setSheetSnap(0)}
-                        style={{ flexShrink: 0, color: "rgba(255,255,255,0.28)", fontSize: 20, padding: "2px 4px", lineHeight: 1 }}
-                      >✕</button>
-                    </div>
+                  {/* Arrow toggle: ↑ expands to fullscreen, ↓ collapses to peek */}
+                  <button
+                    onClick={() => setSheetSnap(sheetSnap === 1 ? 2 : 1)}
+                    aria-label={sheetSnap === 1 ? "Expand to fullscreen" : "Collapse to preview"}
+                    style={{
+                      flexShrink:      0,
+                      width:           36,
+                      height:          36,
+                      display:         "flex",
+                      alignItems:      "center",
+                      justifyContent:  "center",
+                      borderRadius:    "50%",
+                      background:      "rgba(255,255,255,0.07)",
+                      color:           "rgba(255,255,255,0.60)",
+                      fontSize:        16,
+                      lineHeight:      1,
+                    }}
+                  >
+                    {sheetSnap === 1 ? "↑" : "↓"}
+                  </button>
 
-                    <div className="flex-shrink-0 mx-6" style={{ height: 1, background: "rgba(255,255,255,0.05)" }} />
+                  {/* Close — intentional dismiss, always available */}
+                  <button
+                    onClick={() => setSheetSnap(0)}
+                    aria-label="Close"
+                    style={{
+                      flexShrink: 0,
+                      width:      36,
+                      height:     36,
+                      display:    "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color:      "rgba(255,255,255,0.28)",
+                      fontSize:   18,
+                      lineHeight: 1,
+                    }}
+                  >✕</button>
+                </div>
 
-                    {/* Track list — maximises available space, navigate subgenres via sphere */}
-                    <div className="overflow-y-auto flex-1" style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" } as React.CSSProperties}>
-                      {displayedTracks.length === 0 ? (
-                        <p className="text-zinc-700 text-xs px-6 py-8 text-center">No tracks</p>
-                      ) : (
-                        <div className="flex flex-col pt-1 pb-8">
-                          {displayedTracks.map((t, idx) => (
-                            <div key={t.id} className="flex items-center gap-3 px-6 py-2.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                              <span className="text-xs font-mono w-5 text-right flex-shrink-0" style={{ color: "rgba(255,255,255,0.13)" }}>{idx + 1}</span>
-                              {/* Album art */}
-                              <div className="flex-shrink-0" style={{ width: 36, height: 36, borderRadius: 4, overflow: "hidden", background: `rgba(${sr},${sg},${sb},0.10)` }}>
-                                {t.imageUrl && (
-                                  <img
-                                    src={t.imageUrl}
-                                    alt=""
-                                    width={36}
-                                    height={36}
-                                    style={{ width: 36, height: 36, objectFit: "cover", display: "block" }}
-                                    onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-                                  />
-                                )}
-                              </div>
-                              <div className="flex flex-col min-w-0 flex-1">
-                                <span className="text-white text-sm font-medium truncate leading-snug">{t.name}</span>
-                                <span className="text-zinc-500 text-xs truncate">{t.artist}</span>
-                              </div>
-                            </div>
-                          ))}
+                {/* Divider */}
+                <div className="flex-shrink-0 mx-5" style={{ height: 1, background: "rgba(255,255,255,0.05)" }} />
+
+                {/* ── Track list — scrollable, shared between peek + fullscreen ─ */}
+                <div
+                  className="overflow-y-auto flex-1"
+                  style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" } as React.CSSProperties}
+                >
+                  {displayedTracks.length === 0 ? (
+                    <p className="text-zinc-700 text-xs px-6 py-8 text-center">No tracks</p>
+                  ) : (
+                    <div className="flex flex-col pt-1 pb-8">
+                      {displayedTracks.map((t, idx) => (
+                        <div key={t.id} className="flex items-center gap-3 px-5 py-2.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                          <span className="text-xs font-mono w-5 text-right flex-shrink-0" style={{ color: "rgba(255,255,255,0.13)" }}>{idx + 1}</span>
+                          {/* Album art */}
+                          <div className="flex-shrink-0" style={{ width: 36, height: 36, borderRadius: 4, overflow: "hidden", background: `rgba(${sr},${sg},${sb},0.10)` }}>
+                            {t.imageUrl && (
+                              <img
+                                src={t.imageUrl}
+                                alt=""
+                                width={36}
+                                height={36}
+                                style={{ width: 36, height: 36, objectFit: "cover", display: "block" }}
+                                onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                              />
+                            )}
+                          </div>
+                          <div className="flex flex-col min-w-0 flex-1">
+                            <span className="text-white text-sm font-medium truncate leading-snug">{t.name}</span>
+                            <span className="text-zinc-500 text-xs truncate">{t.artist}</span>
+                          </div>
                         </div>
-                      )}
+                      ))}
                     </div>
-                  </>
-                )}
+                  )}
+                </div>
               </div>
             );
           })()}
