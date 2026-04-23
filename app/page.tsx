@@ -868,7 +868,9 @@ export default function LandingPage() {
           if(!subAcc[si])subAcc[si]={sx:0,sy:0,n:0}; subAcc[si].sx+=lx;subAcc[si].sy+=ly;subAcc[si].n++;
         }
         for (const [siStr,a] of Object.entries(subAcc)) {
-          if(a.n<2)continue;
+          // Previous threshold was n<2, which silently dropped every single-triangle
+          // subgenre region. Now we label every region that has at least 1 visible face.
+          if(a.n<1)continue;
           const si=Number(siStr), sub=activeSubsRef.current[si]; if(!sub)continue;
           const lx=a.sx/a.n, ly=a.sy/a.n;
           const n2=activeSubsRef.current.length;
@@ -879,9 +881,14 @@ export default function LandingPage() {
           const isActiveSub=selectedSubgenreRef.current===sub.name;
           const isHovSub=hoveredSubName===sub.name;
           const subLit=isActiveSub||isHovSub;
-          const fs2=subLit?12:11;
+          // Scale font and padding down for tiny regions so the pill can still fit
+          // inside a 1- or 2-triangle face without overflowing into a neighbour.
+          const isTiny = a.n <= 1;
+          const fs2  = isTiny ? 8  : subLit ? 12 : 11;
+          const pad2 = isTiny ? 3  : 6;
+          const rad2 = isTiny ? 3  : 6;
           ctx.font=`${subLit?700:600} ${fs2}px system-ui, sans-serif`;
-          const tw2=ctx.measureText(sub.name).width,pad2=6,rad2=6;
+          const tw2=ctx.measureText(sub.name).width;
           const bx2=lx-tw2/2-pad2,by2=ly-fs2/2-pad2,bw2=tw2+pad2*2,bh2=fs2+pad2*2;
           ctx.save();
           ctx.shadowColor=isHovSub?`rgba(${cr},${cg},${cb},0.45)`:"rgba(0,0,0,0.55)";
