@@ -1526,18 +1526,16 @@ export default function LandingPage() {
             }}
           >
             <h1
-              className="text-[24px] md:text-[52px] lg:text-[56px] font-semibold leading-[1.06] text-white mb-3"
-              style={{ letterSpacing: "-0.02em" }}
+              className="md:text-[52px] lg:text-[56px] font-semibold leading-[1.06] text-white mb-3"
+              style={{ letterSpacing: "-0.02em", fontSize: isMobile ? 19 : undefined }}
             >
               {isMobile
-                ? "this is what a music taste looks like"
+                ? "This is what a music taste looks like"
                 : "This is what a music taste looks like."}
             </h1>
-            {!isMobile && (
-              <p className="text-xs tracking-[0.22em] uppercase" style={{ color: "rgba(255,255,255,0.62)" }}>
-                Click. Zoom. Discover.
-              </p>
-            )}
+            <p className="text-xs tracking-[0.22em] uppercase" style={{ color: "rgba(255,255,255,0.62)" }}>
+              Click. Zoom. Discover.
+            </p>
           </div>
 
           {/* Stats row — bottom-right, desktop only */}
