@@ -31,7 +31,18 @@
       "Bash(npm install:*)",
       "Bash(npm list:*)",
       "Bash(curl -sI \"https://api.deezer.com/search?q=test&limit=1\")",
-      "Bash(curl -sI \"https://cdnt-preview.dzcdn.net/api/1/1/0/d/1/0/0d1e424d62504\")"
+      "Bash(curl -sI \"https://cdnt-preview.dzcdn.net/api/1/1/0/d/1/0/0d1e424d62504\")",
+      "Bash(curl -s \"https://api.deezer.com/search?q=track:%22Song+on+the+Beach%22+artist:%22Arcade+Fire%22&limit=1\")",
+      "Bash(python3 -m json.tool)",
+      "Bash(curl -s \"https://api.deezer.com/search?q=track:%22Mr.+Blue+Sky%22+artist:%22Electric+Light+Orchestra%22&limit=1\")",
+      "Bash(curl -sI \"https://api.deezer.com/search?q=track:%22Mr.+Blue+Sky%22+artist:%22Electric+Light+Orchestra%22&limit=1\")",
+      "Bash(curl -s \"http://localhost:3000/api/preview?track=Mr.+Blue+Sky&artist=Electric+Light+Orchestra\")",
+      "Bash(npm run *)",
+      "Bash(echo \"PID: $!\")",
+      "Bash(curl -s \"http://localhost:3000/api/preview?track=Song+on+the+Beach&artist=Arcade+Fire\")",
+      "Bash(curl -s \"http://localhost:3000/api/preview?track=Like+a+Rolling+Stone&artist=Bob+Dylan\")",
+      "Bash(curl -s \"http://localhost:3000/api/preview?track=Maybellene&artist=Chuck+Berry\")",
+      "Bash(curl -sI \"https://cdnt-preview.dzcdn.net/api/1/1/f/0/f/0/f0fc31e524543feefc9901f8d5f6bb03.mp3?hdnea=exp=1776981142~acl=/api/1/1/f/0/f/0/f0fc31e524543feefc9901f8d5f6bb03.mp3*~data=user_id=0,application_id=42~hmac=ad2fd95af77f92079e66168441e9b24953df1bf5d4ae377b391c1a2197aa1c70\")"
     ]
   }
 }

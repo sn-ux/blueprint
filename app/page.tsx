@@ -531,8 +531,7 @@ export default function LandingPage() {
     setSelectedSubgenre(null); selectedSubgenreRef.current = null;
     setZoomSubgenre(null);     zoomSubgenreRef.current = null;
 
-    // Clear stale Deezer URLs immediately so previous genre's previews
-    // don't flash for new genre rows while background fetch runs.
+    // Reset preview cache when genre changes
     deezerPreviewsRef.current = {};
     setDeezerPreviews({});
 
@@ -543,22 +542,26 @@ export default function LandingPage() {
         const loadedTracks: TrackItem[] = d?.tracks ?? [];
         setTracks(loadedTracks);
 
-        // Background-fetch 30-second Deezer preview URLs for each track.
-        // Deezer public search is free, requires no auth, and sends
-        // Access-Control-Allow-Origin: * so it works from the browser.
-        loadedTracks.forEach((t: TrackItem) => {
-          const q = encodeURIComponent(`track:"${t.name}" artist:"${t.artist}"`);
-          fetch(`https://api.deezer.com/search?q=${q}&limit=1`)
+        // Fetch preview URLs via our server-side proxy route (avoids CORS).
+        // Fire requests in batches of 5 to avoid hammering Deezer.
+        const batchSize = 5;
+        const fetchPreview = (t: TrackItem) =>
+          fetch(`/api/preview?track=${encodeURIComponent(t.name)}&artist=${encodeURIComponent(t.artist)}`)
             .then(r => r.json())
-            .then(data => {
-              const url: string | undefined = data?.data?.[0]?.preview;
-              if (url) {
-                deezerPreviewsRef.current = { ...deezerPreviewsRef.current, [t.id]: url };
-                setDeezerPreviews(prev => ({ ...prev, [t.id]: url }));
+            .then((data: { previewUrl: string | null }) => {
+              if (data.previewUrl) {
+                deezerPreviewsRef.current[t.id] = data.previewUrl;
+                setDeezerPreviews(prev => ({ ...prev, [t.id]: data.previewUrl! }));
               }
             })
             .catch(() => {});
-        });
+
+        const runBatch = async (tracks: TrackItem[]) => {
+          for (let i = 0; i < tracks.length; i += batchSize) {
+            await Promise.all(tracks.slice(i, i + batchSize).map(fetchPreview));
+          }
+        };
+        runBatch(loadedTracks);
       })
       .catch(() => setTracks([]));
 
@@ -1486,96 +1489,52 @@ export default function LandingPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [worlds, selected, subgenres]);
 
-  // ── Audio playback ────────────────────────────────────────────────────────
-  // Tier 1: HTML5 preview (30 s clip, no login required, works whenever
-  //         track.previewUrl is non-null).
-  // Tier 2: Full Spotify track via Web Playback SDK (logged-in Premium users).
-  //
-  // Calling playTrack() a second time on the same track toggles play/pause.
-  // Calling it on a different track always starts that track from the top.
-
-  // ── playTrack: SYNCHRONOUS — must stay non-async so audio.play() fires
-  //   directly within the browser's user-gesture activation context.
-  //   Making it async breaks the gesture chain in Chrome and Safari and
-  //   causes play() to be rejected as "not user-initiated".
+  // ── playTrack ─────────────────────────────────────────────────────────────
+  // Must stay synchronous — calling audio.play() inside an async function
+  // breaks the browser user-gesture activation context.
   const playTrack = (t: TrackItem) => {
-    // ── Diagnostics (visible in DevTools console) ─────────────────────────
-    console.log("[Blueprint] track clicked:", t.name, "—", t.artist);
-    console.log("[Blueprint]   previewUrl :", t.previewUrl ?? "(null — no preview)");
-    console.log("[Blueprint]   spotifyId  :", t.spotifyId  ?? "(null)");
-
-    // ── Full Spotify path (SDK + Premium required) ────────────────────────
-    const canSpotify = spotifyReady && !notPremium && !!t.spotifyId;
-    if (canSpotify) {
-      // Stop any running HTML5 preview
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-        audioRef.current = null;
-      }
-      setNowPlayingId(t.id);
-      setSpotifyMode(true);
-      setAudioPlaying(true);
-      // Fire-and-forget — no await so the function stays synchronous
-      fetch(
-        `https://api.spotify.com/v1/me/player/play?device_id=${spotifyDeviceIdRef.current}`,
-        {
-          method:  "PUT",
-          headers: {
-            Authorization:  `Bearer ${spotifyTokenRef.current}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ uris: [`spotify:track:${t.spotifyId}`] }),
-        }
-      ).catch(() => { setSpotifyMode(false); setAudioPlaying(false); });
-      return;
-    }
-
-    // ── Preview path (HTML5 Audio — no login needed) ──────────────────────
-    // Prefer a Deezer 30-second preview (fetched in background after tracks
-    // load); fall back to the stored Spotify previewUrl if present.
     const previewUrl = deezerPreviewsRef.current[t.id] ?? t.previewUrl ?? null;
-    console.log("[Blueprint]   deezerUrl  :", deezerPreviewsRef.current[t.id] ?? "(not yet fetched)");
-    if (!previewUrl) {
-      console.log("[Blueprint]   → no preview URL, nothing to play");
-      return;
-    }
+    console.log("[play] clicked:", t.name, "/", t.artist);
+    console.log("[play] previewUrl:", previewUrl ?? "NONE — preview not ready yet");
 
-    // Same track → toggle play / pause
+    if (!previewUrl) return;
+
+    // Toggle same track
     if (nowPlayingId === t.id && audioRef.current) {
       if (audioRef.current.paused) {
-        console.log("[Blueprint]   → resuming");
         audioRef.current.play()
           .then(() => setAudioPlaying(true))
-          .catch(err => { console.error("[Blueprint]   resume failed:", err); setAudioPlaying(false); });
+          .catch(err => console.error("[play] resume failed:", err));
       } else {
-        console.log("[Blueprint]   → pausing");
         audioRef.current.pause();
         setAudioPlaying(false);
       }
       return;
     }
 
-    // New track — stop the previous one, start fresh
+    // Stop previous
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
     }
 
-    console.log("[Blueprint]   → creating Audio and calling play()");
     const audio = new Audio(previewUrl);
     audio.volume = 0.8;
-    audio.addEventListener("ended",  () => { console.log("[Blueprint]   preview ended"); setAudioPlaying(false); });
-    audio.addEventListener("error",  (e) => { console.error("[Blueprint]   audio error:", e); setAudioPlaying(false); });
+    audio.addEventListener("ended", () => setAudioPlaying(false));
+    audio.addEventListener("error", (e) => {
+      console.error("[play] audio error:", e);
+      setAudioPlaying(false);
+    });
     audioRef.current = audio;
     setNowPlayingId(t.id);
     setAudioPlaying(true);
 
-    const p = audio.play();
-    if (p !== undefined) {
-      p.then(()  => console.log("[Blueprint]   ✓ preview playing"))
-       .catch(err => { console.error("[Blueprint]   play() rejected:", err); setAudioPlaying(false); });
-    }
+    audio.play()
+      .then(() => console.log("[play] ✓ playing:", t.name))
+      .catch(err => {
+        console.error("[play] play() rejected:", err);
+        setAudioPlaying(false);
+      });
   };
 
   // ── Mouse handlers ────────────────────────────────────────────────────────
@@ -1950,6 +1909,23 @@ export default function LandingPage() {
                   <p className="text-zinc-700 text-xs px-7 py-8 text-center">No tracks</p>
                 ) : (
                   <div className="flex flex-col pt-1 pb-6">
+                    {/* ── AUDIO TEST BUTTON — remove after confirming playback works ── */}
+                    <div style={{ padding: "6px 28px" }}>
+                      <button
+                        style={{ fontSize: 10, color: "#22d3ee", background: "none", border: "1px solid #22d3ee", borderRadius: 4, padding: "2px 8px", cursor: "pointer" }}
+                        onClick={() => {
+                          const url = "https://cdnt-preview.dzcdn.net/api/1/1/f/0/f/0/f0fc31e524543feefc9901f8d5f6bb03.mp3";
+                          console.log("[test] playing hardcoded URL:", url);
+                          const a = new Audio(url);
+                          a.volume = 0.8;
+                          a.play()
+                            .then(() => console.log("[test] ✓ hardcoded audio playing"))
+                            .catch(err => console.error("[test] hardcoded play() rejected:", err));
+                        }}
+                      >
+                        ▶ test audio
+                      </button>
+                    </div>
                     {displayedTracks.map((t, idx) => {
                       const canPlay = !!(deezerPreviews[t.id] || t.previewUrl || (spotifyReady && !notPremium && t.spotifyId));
                       const isPlaying = nowPlayingId === t.id && audioPlaying;
