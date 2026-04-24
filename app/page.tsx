@@ -515,6 +515,10 @@ export default function LandingPage() {
   const sheetSnapRef              = useRef<0|1|2>(0);
   sheetSnapRef.current            = sheetSnap;
 
+  // Ref to the mobile tracklist scroll container — used to ignore
+  // touch events that originate inside the list (internal scroll).
+  const mobileTracklistRef = useRef<HTMLDivElement | null>(null);
+
   // ── Interaction refs ──────────────────────────────────────────────────────
   const zoomRef          = useRef(1);       // visual zoom — lerped each RAF frame
   const zoomTargetRef    = useRef(1);       // intended zoom — updated immediately by wheel
@@ -557,13 +561,38 @@ export default function LandingPage() {
     ).then(arrays => setAllTracksData(arrays.flat()));
   }, [worlds]);
 
-  // ── Blueprint logo reset — scroll to top + clear all selection state ────────
+  // ── Blueprint logo reset — scroll to top + restore default sphere state ─────
+  // Triggered by clicking the logo in Navbar (dispatches "blueprint-reset").
+  // Works identically on desktop and mobile.
+  //
+  // Zoom animation: setting zoomTargetRef to 1 lets the existing RAF lerp
+  // (factor 0.10/frame) smoothly animate the sphere back to its default size
+  // over ~25 frames (~0.4 s) — gentle, not a hard snap.
   useEffect(() => {
     const onReset = () => {
-      setSelected(null);
-      setSelectedSubgenre(null); selectedSubgenreRef.current = null;
-      setZoomSubgenre(null);     zoomSubgenreRef.current     = null;
-      autoSelectedRef.current = false;
+      // ── Sphere zoom ─────────────────────────────────────────────────────────
+      // Set the target; the render loop lerps zoomRef toward it each frame.
+      zoomTargetRef.current = 1;
+
+      // ── Genre / subgenre selection ───────────────────────────────────────────
+      autoSelectedRef.current     = false;
+      selectedSubgenreRef.current = null; setSelectedSubgenre(null);
+      zoomSubgenreRef.current     = null; setZoomSubgenre(null);
+      setSelected(null); // also triggers sheet-close via the sync effect
+
+      // ── Mobile sheet ─────────────────────────────────────────────────────────
+      // Collapse immediately rather than waiting for the selected→null sync tick.
+      setSheetSnap(0);
+
+      // ── Preview audio ────────────────────────────────────────────────────────
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      setNowPlayingId(null);
+      setAudioPlaying(false);
+
+      // ── Scroll to top ────────────────────────────────────────────────────────
       window.scrollTo({ top: 0, behavior: "smooth" });
     };
     window.addEventListener("blueprint-reset", onReset);
@@ -665,6 +694,91 @@ export default function LandingPage() {
       setSheetSnap(0);
     }
   }, [selected, isMobile]);
+
+  // ── Mobile scroll-down reset (mobile only) ───────────────────────────────
+  // When the user is on page 1 (scrollY ≈ 0) and swipes downward, AND the
+  // sphere is zoomed in or a genre/sheet is open, clear all exploration state
+  // so normal page scrolling can continue to page 2+.
+  //
+  // Design constraints:
+  //   • passive:true — we never call preventDefault, so scroll is never blocked.
+  //   • resetFired — one reset per gesture; avoids repeated state flushes.
+  //   • tracklist guard — ignore touches that begin inside the sheet's scroll
+  //     list so the user can scroll through tracks without triggering a reset.
+  //   • Desktop untouched — early return if !isMobile.
+  useEffect(() => {
+    if (!isMobile) return;
+
+    let touchStartY   = 0;
+    let touchStartTarget: EventTarget | null = null;
+    let resetFired    = false;
+
+    const onStart = (e: TouchEvent) => {
+      touchStartY      = e.touches[0].clientY;
+      touchStartTarget = e.touches[0].target;
+      resetFired       = false;
+    };
+
+    const onMove = (e: TouchEvent) => {
+      if (resetFired) return;
+
+      const deltaY = e.touches[0].clientY - touchStartY;
+      if (deltaY <= 20) return;                                 // not a downward swipe yet
+
+      // Only act when near the top of the page (page 1 visible)
+      if (window.scrollY > 80) return;
+
+      // Ignore touches that started inside the tracklist scroll container
+      if (
+        mobileTracklistRef.current &&
+        touchStartTarget instanceof Node &&
+        mobileTracklistRef.current.contains(touchStartTarget)
+      ) return;
+
+      // Check whether there is any exploration state to clear
+      const needsReset =
+        zoomTargetRef.current > 1.05 ||
+        selectedRef.current !== null ||
+        sheetSnapRef.current > 0;
+
+      if (!needsReset) return;
+
+      resetFired = true; // run once per gesture
+
+      // Reset zoom
+      zoomTargetRef.current = 1;
+      zoomRef.current       = 1;
+
+      // Clear genre / subgenre selection
+      autoSelectedRef.current     = false;
+      selectedSubgenreRef.current = null; setSelectedSubgenre(null);
+      zoomSubgenreRef.current     = null; setZoomSubgenre(null);
+      setSelected(null);
+
+      // Close the sheet (sheetSnap ↔ selected sync will also fire, but
+      // calling setSheetSnap(0) directly ensures it collapses immediately)
+      setSheetSnap(0);
+
+      // Stop preview audio so a disembodied track doesn't keep playing
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      setNowPlayingId(null);
+      setAudioPlaying(false);
+
+      // NOTE: we do NOT call e.preventDefault() — the scroll must be allowed
+      // through so the page continues scrolling to section 2.
+    };
+
+    window.addEventListener("touchstart", onStart, { passive: true });
+    window.addEventListener("touchmove",  onMove,  { passive: true });
+    return () => {
+      window.removeEventListener("touchstart", onStart);
+      window.removeEventListener("touchmove",  onMove);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMobile]);
 
   // ── Spotify Web Playback SDK — initialize when user logs in ──────────────
   useEffect(() => {
@@ -2217,6 +2331,7 @@ export default function LandingPage() {
 
                 {/* ── Track list — scrollable, shared between peek + fullscreen ─ */}
                 <div
+                  ref={mobileTracklistRef}
                   className="overflow-y-auto flex-1"
                   style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" } as React.CSSProperties}
                 >
