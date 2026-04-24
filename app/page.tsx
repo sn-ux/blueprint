@@ -570,6 +570,8 @@ export default function LandingPage() {
   // over ~25 frames (~0.4 s) — gentle, not a hard snap.
   useEffect(() => {
     const onReset = () => {
+      console.log("[blueprint-reset] logo tap — resetting sphere state");
+
       // ── Sphere zoom ─────────────────────────────────────────────────────────
       // Set the target; the render loop lerps zoomRef toward it each frame.
       zoomTargetRef.current = 1;
@@ -728,6 +730,18 @@ export default function LandingPage() {
       // Only act when near the top of the page (page 1 visible)
       if (window.scrollY > 80) return;
 
+      // Ignore touches that started on the sphere canvas — that's a sphere
+      // drag/rotate gesture, not a page-scroll-down intent.  Without this guard
+      // any downward sphere drag > 20px would wrongly fire the reset.
+      if (
+        canvasRef.current &&
+        touchStartTarget instanceof Node &&
+        canvasRef.current.contains(touchStartTarget)
+      ) {
+        console.log("[scroll-reset] skipped — touch started on sphere canvas");
+        return;
+      }
+
       // Ignore touches that started inside the tracklist scroll container
       if (
         mobileTracklistRef.current &&
@@ -744,6 +758,7 @@ export default function LandingPage() {
       if (!needsReset) return;
 
       resetFired = true; // run once per gesture
+      console.log("[scroll-reset] downward page-swipe detected — resetting exploration state");
 
       // Reset zoom
       zoomTargetRef.current = 1;
