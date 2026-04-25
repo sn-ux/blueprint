@@ -270,6 +270,168 @@ function CardArrow() {
   );
 }
 
+// ── Icosphere equation ────────────────────────────────────────────────────
+
+const ICO_DATA = (() => {
+  const φ = (1 + Math.sqrt(5)) / 2;
+  const normalize = (x: number, y: number, z: number): [number, number, number] => {
+    const l = Math.sqrt(x * x + y * y + z * z);
+    return [x / l, y / l, z / l];
+  };
+  const verts: [number, number, number][] = [
+    [-1, φ, 0], [1, φ, 0], [-1, -φ, 0], [1, -φ, 0],
+    [0, -1, φ], [0, 1, φ], [0, -1, -φ], [0, 1, -φ],
+    [φ, 0, -1], [φ, 0, 1], [-φ, 0, -1], [-φ, 0, 1],
+  ].map(([x, y, z]) => normalize(x, y, z));
+  let faces: [number, number, number][] = [
+    [0,11,5],[0,5,1],[0,1,7],[0,7,10],[0,10,11],
+    [1,5,9],[5,11,4],[11,10,2],[10,7,6],[7,1,8],
+    [3,9,4],[3,4,2],[3,2,6],[3,6,8],[3,8,9],
+    [4,9,5],[2,4,11],[6,2,10],[8,6,7],[9,8,1],
+  ];
+  const midCache = new Map<string, number>();
+  const subFaces: [number, number, number][] = [];
+  const getMid = (a: number, b: number): number => {
+    const key = `${Math.min(a, b)}_${Math.max(a, b)}`;
+    if (midCache.has(key)) return midCache.get(key)!;
+    const va = verts[a], vb = verts[b];
+    const idx = verts.length;
+    verts.push(normalize((va[0]+vb[0])/2,(va[1]+vb[1])/2,(va[2]+vb[2])/2));
+    midCache.set(key, idx);
+    return idx;
+  };
+  for (const [a, b, c] of faces) {
+    const ab = getMid(a,b), bc = getMid(b,c), ca = getMid(c,a);
+    subFaces.push([a,ab,ca],[b,bc,ab],[c,ca,bc],[ab,bc,ca]);
+  }
+  faces = subFaces;
+  const edgeSet = new Set<string>();
+  const edges: [number, number][] = [];
+  for (const [a, b, c] of faces) {
+    for (const [x, y] of [[a,b],[b,c],[c,a]] as [number,number][]) {
+      const k = `${Math.min(x,y)}_${Math.max(x,y)}`;
+      if (!edgeSet.has(k)) { edgeSet.add(k); edges.push([x, y]); }
+    }
+  }
+  return { verts, edges };
+})();
+
+function IcoSphere({ size, speed = 0.006 }: { size: number; speed?: number }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    if (size < 10) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width  = Math.round(size * dpr);
+    canvas.height = Math.round(size * dpr);
+    canvas.style.width  = `${size}px`;
+    canvas.style.height = `${size}px`;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.scale(dpr, dpr);
+    const { verts, edges } = ICO_DATA;
+    const cx = size / 2, cy = size / 2, R = size * 0.40, FOV = 4;
+    const RX = 0.30, cosX = Math.cos(RX), sinX = Math.sin(RX);
+    let t = Math.random() * Math.PI * 2;
+    let cancelled = false, rafId = 0;
+    const frame = () => {
+      if (cancelled) return;
+      t += speed;
+      ctx.clearRect(0, 0, size, size);
+      const cosY = Math.cos(t), sinY = Math.sin(t);
+      const proj = verts.map(([x, y, z]) => {
+        const x1 = x*cosY + z*sinY, z1 = -x*sinY + z*cosY;
+        const y2 = y*cosX - z1*sinX, z2 = y*sinX + z1*cosX;
+        const s  = FOV / (FOV + z2 + 1);
+        return { px: cx + x1*R*s, py: cy + y2*R*s, z: z2 };
+      });
+      ctx.lineWidth = size > 100 ? 0.85 : 0.65;
+      for (const [a, b] of edges) {
+        const pa = proj[a], pb = proj[b];
+        const va = verts[a], vb = verts[b];
+        const mx = (va[0]+vb[0])/2, mz = (va[2]+vb[2])/2;
+        const mx1 = mx*cosY + mz*sinY, mz1 = -mx*sinY + mz*cosY;
+        const hue  = ((Math.atan2(mz1, mx1) / (Math.PI*2) + 0.5) * 360 + t*18) % 360;
+        const depth = ((pa.z + pb.z) / 2 + 1.5) / 3;
+        const alpha = (0.15 + depth * 0.85).toFixed(2);
+        ctx.beginPath();
+        ctx.moveTo(pa.px, pa.py);
+        ctx.lineTo(pb.px, pb.py);
+        ctx.strokeStyle = `hsla(${hue | 0},100%,65%,${alpha})`;
+        ctx.shadowColor = `hsla(${hue | 0},100%,72%,0.4)`;
+        ctx.shadowBlur  = 2;
+        ctx.stroke();
+      }
+      rafId = requestAnimationFrame(frame);
+    };
+    frame();
+    return () => { cancelled = true; cancelAnimationFrame(rafId); };
+  }, [size, speed]);
+  return <canvas ref={canvasRef} width={size} height={size} style={{ display: "block" }} />;
+}
+
+function PhilosophyEquation() {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [cw, setCw] = useState(760);
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const update = () => setCw(el.offsetWidth);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const sc    = Math.min(1, cw / 680);
+  const world = Math.max(52, Math.round(180 * sc));
+  const you   = Math.max(26, Math.round(70  * sc));
+  const every = Math.max(40, Math.round(130 * sc));
+  const gap   = Math.max(8,  Math.round(24  * sc));
+  const opSz  = Math.max(20, Math.round(42  * sc));
+  const lblSz = Math.max(10, Math.round(13  * sc));
+  const lblMt = Math.max(4,  Math.round(8   * sc));
+  const opPt  = Math.max(0,  Math.round((world - opSz) / 2));
+
+  const sphereCol = (size: number, labelText: string, spd: number) => (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
+      <IcoSphere size={size} speed={spd} />
+      <p style={{
+        fontSize: `${lblSz}px`, color: "rgba(255,255,255,0.50)", textAlign: "center",
+        margin: 0, marginTop: `${lblMt}px`, lineHeight: 1.3,
+        maxWidth: `${Math.round(size * 1.4)}px`, userSelect: "none",
+      }}>
+        {labelText}
+      </p>
+    </div>
+  );
+
+  const operator = (sym: string) => (
+    <span style={{
+      fontSize: `${opSz}px`, fontWeight: 200, color: "rgba(255,255,255,0.40)",
+      lineHeight: 1, flexShrink: 0, alignSelf: "flex-start",
+      paddingTop: `${opPt}px`, userSelect: "none",
+    }}>
+      {sym}
+    </span>
+  );
+
+  return (
+    <div ref={wrapRef} style={{ width: "100%" }}>
+      <div style={{
+        display: "flex", flexDirection: "row", alignItems: "flex-start",
+        justifyContent: "center", gap: `${gap}px`, flexWrap: "nowrap",
+      }}>
+        {sphereCol(world, "World", 0.005)}
+        {operator("−")}
+        {sphereCol(you, "You", 0.009)}
+        {operator("=")}
+        {sphereCol(every, "Everything you\u00a0don\u2019t know", 0.004)}
+      </div>
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────
 
 export default function PhilosophyPage() {
@@ -558,6 +720,14 @@ export default function PhilosophyPage() {
         </FadeIn>
       </section>
 
+      {/* ══ EQUATION ══════════════════════════════════════════════════════════ */}
+      <section style={{ ...FB, borderTop: "1px solid rgba(255,255,255,0.05)", padding: "80px 24px 100px" }}>
+        <div style={{ maxWidth: 760, margin: "0 auto" }}>
+          <FadeIn>
+            <PhilosophyEquation />
+          </FadeIn>
+        </div>
+      </section>
 
     </div>
   );
