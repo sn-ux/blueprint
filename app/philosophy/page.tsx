@@ -226,6 +226,40 @@ export default function PhilosophyPage() {
   return (
     <div className="bg-black text-white" style={{ overflowX: "hidden" }}>
 
+      {/* ══ OPENING INTRO ════════════════════════════════════════════════════ */}
+      <section
+        style={{
+          ...FB,
+          padding: "120px 24px 80px",
+        }}
+      >
+        <FadeIn style={{ maxWidth: 760, margin: "0 auto" }}>
+          {[
+            "An open society places an enormous intellectual responsibility on ordinary people.",
+            "Through democracy, we govern ourselves by means of our opinions. We count them in votes to choose our politicians, who in turn determine the quality of our society.",
+            "This means that the quality of our opinions—and by extension, the quality of our opinion formation—determines the quality of our society.",
+            "The internet has become the machinery of opinion formation. As the quantity of information increases while the way we navigate it remains unchanged, the process by which we form opinions begins to collapse under its own weight. In the United States and across the world, we are already seeing the consequences of that collapse.",
+            "Blueprint is an attempt to solve the problem of opinion formation at scale.",
+          ].map((text, i) => (
+            <p
+              key={i}
+              style={{
+                fontSize:     "clamp(15px, 1.5vw, 18px)",
+                fontWeight:   400,
+                lineHeight:   1.8,
+                color:        i === 4
+                  ? "rgba(255,255,255,0.88)"   // last line slightly brighter
+                  : "rgba(255,255,255,0.68)",
+                margin:       0,
+                marginBottom: i < 4 ? "1.5em" : 0,
+              }}
+            >
+              {text}
+            </p>
+          ))}
+        </FadeIn>
+      </section>
+
       {/* ══ PHILOSOPHER SECTIONS ═════════════════════════════════════════════ */}
       {PHILOSOPHERS.map((p, idx) => (
         <section
@@ -233,7 +267,7 @@ export default function PhilosophyPage() {
           style={{
             ...FB,
             borderTop: "1px solid rgba(255,255,255,0.05)",
-            padding:   idx === 0 ? "120px 24px 88px" : "80px 24px 88px",
+            padding:   idx === 0 ? "80px 24px 88px" : "80px 24px 88px",
           }}
         >
           <FadeIn style={{ maxWidth: 760, margin: "0 auto" }}>

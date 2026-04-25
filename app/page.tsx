@@ -1497,18 +1497,6 @@ export default function LandingPage() {
     let lastTapTime = 0;
     let lastTapX    = 0;
     let lastTapY    = 0;
-    // Arcball state: the 3-D trackball vector recorded at the start of each
-    // single-finger drag segment.  Reset on touchstart / pinch-to-single transition.
-    let arcV0: [number, number, number] | null = null;
-
-    // Map a touch client position to a unit vector on the virtual trackball sphere.
-    const getArcVec = (clientX: number, clientY: number): [number, number, number] => {
-      const rect = canvas.getBoundingClientRect();
-      const r    = Math.min(canvas.clientWidth, canvas.clientHeight) * 0.5;
-      return arcballVec(clientX - rect.left, clientY - rect.top,
-                        canvas.clientWidth / 2, canvas.clientHeight / 2, r);
-    };
-
     // Returns true if a touch point is within the (slightly enlarged) sphere area.
     // The enlarged radius makes touch easier without changing the visual.
     const touchOverSphere = (clientX: number, clientY: number) => {
@@ -1528,7 +1516,6 @@ export default function LandingPage() {
         if (!touchOverSphere(t.clientX, t.clientY)) return; // outside sphere → let page scroll
         e.preventDefault();
         touchDrag = { active: true, lx: t.clientX, ly: t.clientY, moved: false };
-        arcV0 = getArcVec(t.clientX, t.clientY);
 
         // Double-tap detection: second tap within 320 ms and 55 px → zoom in
         const now = performance.now();
@@ -1545,7 +1532,6 @@ export default function LandingPage() {
         pinchDist0       = Math.sqrt(dx * dx + dy * dy);
         pinchZoom0       = zoomTargetRef.current;
         touchDrag.active = false; // cancel any single-finger drag in progress
-        arcV0 = null;             // discard arcball state during pinch
       }
     };
 
@@ -1558,18 +1544,38 @@ export default function LandingPage() {
         const dx = t.clientX - touchDrag.lx;
         const dy = t.clientY - touchDrag.ly;
 
-        // ── Arcball rotation (mobile only) ──────────────────────────────────
-        // Map previous and current touch positions onto the virtual trackball
-        // sphere, compute the quaternion between the two 3-D vectors, then
-        // pre-multiply it into the orientation matrix.  This naturally handles
-        // every orientation including the poles without any gimbal-lock issues.
-        const arcV1 = getArcVec(t.clientX, t.clientY);
-        if (arcV0) {
-          const q  = quatFromTo(arcV0, arcV1);
-          const dR = matFromQuat(q);
-          rotMatRef.current = mat3Ortho(mat3Premul(dR, rotMatRef.current));
+        // ── Euler-based drag with pole fix (mobile only) ────────────────────
+        // Horizontal (dx): rotate around world Y-axis so horizontal swipes
+        // always spin left/right regardless of pole proximity (no gimbal roll).
+        // Vertical   (dy): rotate around the camera's current right-axis
+        // (matrix row 0) so up/down swipes always tilt the sphere naturally.
+        // Also update rotRef.x for any code that reads it (e.g. yDir was used
+        // in the old path; we keep it updated for compat but don't clamp it).
+        if (Math.abs(dx) > 0 || Math.abs(dy) > 0) {
+          const yawAngle   = dx * 0.005;
+          const pitchAngle = dy * 0.005;
+
+          // World-Y rotation quaternion: [cos(a/2), 0, sin(a/2), 0]
+          const cy2 = Math.cos(yawAngle / 2);
+          const sy2 = Math.sin(yawAngle / 2);
+          const qYaw = [cy2, 0, sy2, 0] as [number,number,number,number];
+
+          // Camera-right axis = row 0 of current rotation matrix
+          const [rm0, rm1, rm2] = rotMatRef.current;
+          const rlen = Math.sqrt(rm0*rm0 + rm1*rm1 + rm2*rm2) || 1;
+          const rx0 = rm0/rlen, ry0 = rm1/rlen, rz0 = rm2/rlen;
+          const cp2 = Math.cos(-pitchAngle / 2);
+          const sp2 = Math.sin(-pitchAngle / 2);
+          const qPitch = [cp2, rx0*sp2, ry0*sp2, rz0*sp2] as [number,number,number,number];
+
+          // Apply: yaw first (world Y), then pitch around camera right
+          const dRyaw   = matFromQuat(qYaw);
+          const dRpitch = matFromQuat(qPitch);
+          rotMatRef.current = mat3Ortho(mat3Premul(dRpitch, mat3Premul(dRyaw, rotMatRef.current)));
+
+          // Keep rotRef.x loosely in sync (unclamped) for any residual readers
+          rotRef.current.x -= pitchAngle;
         }
-        arcV0 = arcV1;
 
         touchDrag.lx = t.clientX;
         touchDrag.ly = t.clientY;
@@ -1736,7 +1742,7 @@ export default function LandingPage() {
         snapZoom    = true;
         const t = e.touches[0];
         touchDrag = { active: true, lx: t.clientX, ly: t.clientY, moved: false };
-        arcV0 = getArcVec(t.clientX, t.clientY); // restart arcball from new single finger
+        // single-finger drag resumes; no extra state needed
       }
     };
 
