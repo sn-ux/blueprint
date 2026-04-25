@@ -390,7 +390,7 @@ function arcballVec(
   px: number, py: number, cx: number, cy: number, r: number,
 ): [number, number, number] {
   const nx = (px - cx) / r;
-  const ny = -(py - cy) / r;   // flip Y so up-on-screen = +Y on sphere
+  const ny = (py - cy) / r;   // screen Y increases downward, matching view-space Y convention
   const d2 = nx * nx + ny * ny;
   if (d2 <= 1) return [nx, ny, Math.sqrt(1 - d2)];
   const d = Math.sqrt(d2);
