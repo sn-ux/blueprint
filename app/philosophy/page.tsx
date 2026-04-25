@@ -541,6 +541,29 @@ export default function PhilosophyPage() {
         </div>
       </section>
 
+      {/* ══ CONCLUDING PARAGRAPH ════════════════════════════════════════════ */}
+      <section
+        style={{
+          ...FB,
+          borderTop: "1px solid rgba(255,255,255,0.05)",
+          padding:   "80px 24px 80px",
+        }}
+      >
+        <FadeIn style={{ maxWidth: 760, margin: "0 auto" }}>
+          <p
+            style={{
+              fontSize:   "clamp(15px, 1.5vw, 18px)",
+              fontWeight: 400,
+              lineHeight: 1.8,
+              color:      "rgba(255,255,255,0.68)",
+              margin:     0,
+            }}
+          >
+            By engaging with this lineage of philosophical thought, we arrive at a different way of interacting with information. The search bar shows you what you know to ask for, and the feed shows you what it predicts you will engage with. Both are constrained by your prior knowledge, your past behavior, and what has been paid to reach you. If what people search for and save is a rough approximation of what they know, then the difference between what everyone searches for and saves and what you have searched for and saved approximates what you do not know. Blueprint is built around that difference. It organizes what people know into something you can explore, giving you access to what you do not yet know to search for.
+          </p>
+        </FadeIn>
+      </section>
+
       {/* ══ FINAL SECTION ════════════════════════════════════════════════════ */}
       <section
         style={{
