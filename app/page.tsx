@@ -538,6 +538,18 @@ export default function LandingPage() {
   const nowPlayingIdRef = useRef<string | null>(null);
   nowPlayingIdRef.current = nowPlayingId;
 
+  // ── Stable playing-track metadata ────────────────────────────────────────────
+  // Decoupled from `tracks` (the visible tracklist). Set when audio begins and
+  // cleared only when audio ends, errors, or the user explicitly stops it.
+  // Changing genre/subgenre does NOT clear this — the Spotify icon stays lit and
+  // keeps its target for as long as the preview is actually playing.
+  const [playingTrack, setPlayingTrack] = useState<{
+    id: string;
+    name: string;
+    artist: string;
+    spotifyId?: string | null;
+  } | null>(null);
+
   // ── Real data (same path as /world — starts empty, filled from API) ─────────
   const [worlds,   setWorlds]   = useState<Record<string, number>>({});
   const [subgenres, setSubgenres] = useState<SubItem[]>([]);
@@ -704,6 +716,7 @@ export default function LandingPage() {
       }
       setNowPlayingId(null);
       setAudioPlaying(false);
+      setPlayingTrack(null);
 
       // ── Scroll to top ────────────────────────────────────────────────────────
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -936,6 +949,7 @@ export default function LandingPage() {
       }
       setNowPlayingId(null);
       setAudioPlaying(false);
+      setPlayingTrack(null);
 
       // NOTE: we do NOT call e.preventDefault() — the scroll must be allowed
       // through so the page continues scrolling to section 2.
@@ -1945,6 +1959,7 @@ export default function LandingPage() {
       }
       setAudioPlaying(false);
       setNowPlayingId(null);
+      setPlayingTrack(null);
       return;
     }
 
@@ -1964,6 +1979,7 @@ export default function LandingPage() {
       console.log("[play] ← audio ended naturally");
       setAudioPlaying(false);
       setNowPlayingId(null);
+      setPlayingTrack(null);
     });
 
     audio.addEventListener("error", () => {
@@ -1974,11 +1990,13 @@ export default function LandingPage() {
       setDeezerPreviews(prev => { const n = { ...prev }; delete n[t.id]; return n; });
       setAudioPlaying(false);
       setNowPlayingId(null);
+      setPlayingTrack(null);
     });
 
     // ── Step 6: wire state BEFORE calling play() ─────────────────────────
     audioRef.current = audio;
     setNowPlayingId(t.id);
+    setPlayingTrack({ id: t.id, name: t.name, artist: t.artist, spotifyId: t.spotifyId ?? null });
     setAudioPlaying(true);
 
     // ── Step 7 + 8: call play() and log outcome ──────────────────────────
@@ -2000,6 +2018,7 @@ export default function LandingPage() {
           setDeezerPreviews(prev => { const n = { ...prev }; delete n[t.id]; return n; });
           setNowPlayingId(null);
           setAudioPlaying(false);
+          setPlayingTrack(null);
         }
       });
     } else {
@@ -2243,9 +2262,6 @@ export default function LandingPage() {
   // zoomSubgenre is intentionally excluded — zoom never drives the panel.
   const focusedSubgenre = hoveredSubgenre ?? selectedSubgenre;
   const displayedTracks = focusedSubgenre ? tracks.filter(t => t.blueprintSubgenre === focusedSubgenre) : tracks;
-  // Track currently selected/playing (may not be in displayedTracks if filtered by subgenre)
-  const nowPlayingTrack = nowPlayingId ? (tracks.find(t => t.id === nowPlayingId) ?? null) : null;
-
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -2377,7 +2393,7 @@ export default function LandingPage() {
                     >← {selected ? shortLabel(selected) : ""}</button>
                     <div className="flex items-center justify-between gap-4">
                       <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{focusedSubgenre}</h2>
-                      <SpotifyLogoButton track={nowPlayingTrack} />
+                      <SpotifyLogoButton track={playingTrack} />
                     </div>
                   </>
                 ) : (
@@ -2385,7 +2401,7 @@ export default function LandingPage() {
                     <p className="text-xs tracking-widest uppercase mb-2" style={{ color: `rgba(${sr},${sg},${sb},0.38)` }}>Now exploring</p>
                     <div className="flex items-center justify-between gap-4">
                       <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{selected ? shortLabel(selected) : ""}</h2>
-                      <SpotifyLogoButton track={nowPlayingTrack} />
+                      <SpotifyLogoButton track={playingTrack} />
                     </div>
                   </>
                 )}
@@ -2586,7 +2602,7 @@ export default function LandingPage() {
                   {/* gap: 32px so horizontal Spotify↔arrow distance = 68px = vertical pill↔arrow distance */}
                   <div style={{ display: "flex", alignItems: "center", gap: 32, flexShrink: 0 }}>
                     {/* Spotify logo — lights up when a track is selected */}
-                    <SpotifyLogoButton track={nowPlayingTrack} size={36} />
+                    <SpotifyLogoButton track={playingTrack} size={36} />
 
                     {/* Arrow toggle: ↑ expands to fullscreen, ↓ collapses to peek */}
                     <button
