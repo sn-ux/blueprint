@@ -2584,61 +2584,68 @@ export default function LandingPage() {
           })()}
 
           {/* ── Mobile zoom pill ──────────────────────────────────────────── */}
-          {/* Shown on mobile only, in stages 1 (genre) and 2 (subgenre).     */}
-          {/* Floats bottom-right, slides up when the tracklist sheet peeks.  */}
+          {/* Fixed-position so it stays viewport-anchored above the sheet.   */}
+          {/* Stage 1 (genre): vertical pill with + and −.                    */}
+          {/* Stage 2 (subgenre): collapses to a circle with only −.          */}
           {isMobile && selected !== null && sheetSnap !== 2 && (
             <div
               style={{
-                position:             "absolute",
+                position:             "fixed",
                 right:                16,
-                bottom:               sheetSnap === 1 ? 212 : 24,
-                zIndex:               110,
+                bottom:               sheetSnap === 1 ? 216 : 84,
+                zIndex:               120,
                 display:              "flex",
                 flexDirection:        "column",
                 alignItems:           "center",
-                borderRadius:         24,
+                // Circle at stage 2, pill at stage 1
+                borderRadius:         zoomAbove2 ? "50%" : 24,
+                width:                zoomAbove2 ? 44 : undefined,
+                height:               zoomAbove2 ? 44 : undefined,
                 overflow:             "hidden",
                 background:           "rgba(0,0,0,0.80)",
                 border:               "1px solid rgba(255,255,255,0.10)",
                 backdropFilter:       "blur(8px)",
                 WebkitBackdropFilter: "blur(8px)",
-                transition:           "bottom 0.3s ease",
+                transition:           "bottom 0.3s ease, border-radius 0.2s ease, width 0.2s ease, height 0.2s ease",
                 pointerEvents:        "auto",
               }}
             >
-              {/* + button — disabled at subgenre stage */}
-              <button
-                onPointerDown={e => e.stopPropagation()}
-                onClick={e => { e.stopPropagation(); handleZoomPlus(); }}
-                disabled={zoomAbove2}
-                style={{
-                  width:           44,
-                  height:          46,
-                  background:      "none",
-                  border:          "none",
-                  color:           zoomAbove2 ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.88)",
-                  fontSize:        22,
-                  fontWeight:      300,
-                  cursor:          zoomAbove2 ? "default" : "pointer",
-                  display:         "flex",
-                  alignItems:      "center",
-                  justifyContent:  "center",
-                  lineHeight:      1,
-                  userSelect:      "none",
-                }}
-                aria-label="Zoom in"
-              >+</button>
+              {/* + button — only shown at stage 1 */}
+              {!zoomAbove2 && (
+                <button
+                  onPointerDown={e => e.stopPropagation()}
+                  onClick={e => { e.stopPropagation(); handleZoomPlus(); }}
+                  style={{
+                    width:           44,
+                    height:          46,
+                    background:      "none",
+                    border:          "none",
+                    color:           "rgba(255,255,255,0.88)",
+                    fontSize:        22,
+                    fontWeight:      300,
+                    cursor:          "pointer",
+                    display:         "flex",
+                    alignItems:      "center",
+                    justifyContent:  "center",
+                    lineHeight:      1,
+                    userSelect:      "none",
+                  }}
+                  aria-label="Zoom in"
+                >+</button>
+              )}
 
-              {/* Divider */}
-              <div style={{ width: 24, height: 1, background: "rgba(255,255,255,0.10)" }} />
+              {/* Divider — only between + and − at stage 1 */}
+              {!zoomAbove2 && (
+                <div style={{ width: 24, height: 1, background: "rgba(255,255,255,0.10)" }} />
+              )}
 
-              {/* − button — always enabled when pill is shown */}
+              {/* − button — always shown */}
               <button
                 onPointerDown={e => e.stopPropagation()}
                 onClick={e => { e.stopPropagation(); handleZoomMinus(); }}
                 style={{
                   width:           44,
-                  height:          46,
+                  height:          zoomAbove2 ? 44 : 46,
                   background:      "none",
                   border:          "none",
                   color:           "rgba(255,255,255,0.88)",
