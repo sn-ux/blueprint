@@ -1891,6 +1891,20 @@ export default function LandingPage() {
     console.log("[play] 2 previewUrl at click time:", previewUrl ? previewUrl.slice(0, 80) + "…" : "null");
 
     if (!previewUrl) {
+      // ── Same no-preview track clicked again → deselect ──────────────────
+      // Without this check the branch below always calls setNowPlayingId(t.id)
+      // (re-select) and returns, so the Spotify logo never goes dark.
+      if (nowPlayingIdRef.current === t.id) {
+        console.log("[play] 2 same no-preview track → deselect");
+        if (audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current = null;
+        }
+        setNowPlayingId(null);
+        setAudioPlaying(false);
+        return;
+      }
+
       // No preview URL yet — select the track (lights up Spotify logo) and
       // fire an on-demand fetch in case the batch hasn't reached this track yet.
       // We do NOT attempt audio playback since there's nothing to play.
@@ -1916,29 +1930,21 @@ export default function LandingPage() {
       return;
     }
 
-    // ── Step 3: toggle check (same track) ───────────────────────────────
+    // ── Step 3: same track clicked again → deselect completely ─────────
+    // Previously this toggled pause/resume and kept nowPlayingId on pause
+    // so the track stayed highlighted. The new requirement is a clean
+    // toggle-off: second click always stops audio and clears selection,
+    // returning the Spotify logo to inactive and removing the highlight.
     console.log("[play] 3 nowPlayingIdRef:", nowPlayingIdRef.current ?? "null");
-    if (nowPlayingIdRef.current === t.id && audioRef.current) {
-      if (!audioRef.current.paused) {
-        console.log("[play] 3a same track playing → pause");
+    if (nowPlayingIdRef.current === t.id) {
+      console.log("[play] 3 same track → stop + deselect");
+      if (audioRef.current) {
         audioRef.current.pause();
-        setAudioPlaying(false);
-        // Keep nowPlayingId so track stays highlighted as "paused"
-      } else {
-        console.log("[play] 3b same track paused → resume");
-        const p = audioRef.current.play();
-        if (p !== undefined) {
-          p.then(() => { console.log("[play] 3c ✓ resumed"); setAudioPlaying(true); })
-           .catch(err => {
-             console.error("[play] 3d resume rejected:", err.name, err.message);
-             // Stale URL — purge so next click re-fetches
-             delete deezerPreviewsRef.current[t.id];
-             setDeezerPreviews(prev => { const n = { ...prev }; delete n[t.id]; return n; });
-             setAudioPlaying(false);
-             setNowPlayingId(null);
-           });
-        }
+        audioRef.current.currentTime = 0;
+        audioRef.current = null;
       }
+      setAudioPlaying(false);
+      setNowPlayingId(null);
       return;
     }
 
