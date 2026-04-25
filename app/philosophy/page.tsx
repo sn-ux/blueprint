@@ -78,7 +78,7 @@ function BlueprintMark() {
 const IMG_SIZE      = 88;   // px — portrait image (noticeably larger)
 const IMG_GAP       = 20;   // px — between image and name
 const INDENT        = IMG_SIZE + IMG_GAP; // 108 px
-const LOGO_LEFT     = -(36 + 12);         // −48 px — logo in gutter
+// LOGO_LEFT removed — logo now lives in a flex column under the portrait.
 
 // ── Philosopher data ───────────────────────────────────────────────────────
 // Al-Farabi and Avicenna are now separate entries.
@@ -283,27 +283,41 @@ export default function PhilosophyPage() {
         >
           <FadeIn style={{ maxWidth: 760, margin: "0 auto" }}>
 
-            {/* ── Header: portrait + name ──────────────────────────────── */}
-            <div style={{ display: "flex", alignItems: "center", gap: IMG_GAP, marginBottom: 28 }}>
+            {/* ── Header: portrait column + name ──────────────────────── */}
+            {/* alignItems: flex-start so the h2 doesn't shift when the     */}
+            {/* logo column is taller than the image alone.                  */}
+            <div style={{ display: "flex", alignItems: "flex-start", gap: IMG_GAP, marginBottom: 28 }}>
 
-              {/* B&W portrait — gray background shows through if image fails */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={p.image}
-                alt={p.name}
-                onError={e => { (e.currentTarget as HTMLImageElement).style.opacity = "0"; }}
-                style={{
-                  width:          IMG_SIZE,
-                  height:         IMG_SIZE,
-                  objectFit:      "cover",
-                  objectPosition: "center top",
-                  filter:         "grayscale(100%) contrast(1.55) brightness(1.12)",
-                  background:     "rgba(255,255,255,0.07)",
-                  flexShrink:     0,
-                  display:        "block",
-                }}
-              />
+              {/* Column: portrait on top, Blueprint logo centered below */}
+              <div style={{
+                display:        "flex",
+                flexDirection:  "column",
+                alignItems:     "center",
+                gap:            10,
+                flexShrink:     0,
+              }}>
+                {/* B&W portrait — gray background shows through if image fails */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={p.image}
+                  alt={p.name}
+                  onError={e => { (e.currentTarget as HTMLImageElement).style.opacity = "0"; }}
+                  style={{
+                    width:          IMG_SIZE,
+                    height:         IMG_SIZE,
+                    objectFit:      "cover",
+                    objectPosition: "center top",
+                    filter:         "grayscale(100%) contrast(1.55) brightness(1.12)",
+                    background:     "rgba(255,255,255,0.07)",
+                    display:        "block",
+                  }}
+                />
+                {/* Blueprint logo — only for sections that have an internet paragraph */}
+                {p.internet && <BlueprintMark />}
+              </div>
 
+              {/* Name — minHeight keeps it vertically centered with the image */}
+              {/* regardless of whether the logo column extends below it.      */}
               <h2
                 style={{
                   fontSize:      "clamp(18px, 1.8vw, 22px)",
@@ -312,6 +326,9 @@ export default function PhilosophyPage() {
                   letterSpacing: "-0.01em",
                   color:         "rgba(255,255,255,0.92)",
                   margin:        0,
+                  minHeight:     IMG_SIZE,
+                  display:       "flex",
+                  alignItems:    "center",
                 }}
               >
                 {p.name}
@@ -361,22 +378,9 @@ export default function PhilosophyPage() {
                 <p style={{ ...bodyStyle, marginBottom: 28 }}>{p.adds}</p>
               )}
 
-              {/* Internet — Blueprint mark sits in the 72 px gutter to the left.
-                  Text is flush with saying/adds (no additional indent).       */}
+              {/* Internet paragraph — Blueprint logo moved to portrait column above */}
               {p.internet && (
-                <div style={{ position: "relative" }}>
-                  <div
-                    style={{
-                      position:  "absolute",
-                      left:      LOGO_LEFT,
-                      top:       "50%",
-                      transform: "translateY(-50%)",
-                    }}
-                  >
-                    <BlueprintMark />
-                  </div>
-                  <p style={bodyStyle}>{p.internet}</p>
-                </div>
+                <p style={bodyStyle}>{p.internet}</p>
               )}
 
             </div>
