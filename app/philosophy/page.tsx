@@ -356,28 +356,29 @@ export default function PhilosophyPage() {
                 <p style={{ ...bodyStyle, marginBottom: 28 }}>{p.saying}</p>
               )}
 
-              {/* Adds — if internet follows, keep bottom margin; otherwise it's last */}
-              {p.adds && (
-                <p style={{ ...bodyStyle, marginBottom: p.internet ? 28 : 0 }}>{p.adds}</p>
+              {/* Adds — only render here when internet follows (it is not the last paragraph).
+                  When internet is null, adds moves to the logo row below instead.       */}
+              {p.adds && p.internet && (
+                <p style={{ ...bodyStyle, marginBottom: 28 }}>{p.adds}</p>
               )}
 
             </div>
 
-            {/* ── Last paragraph row: [logo | internet text] ───────────────── */}
-            {/* The logo div is IMG_SIZE wide (matching the image column above) */}
-            {/* so the logo stays horizontally under the portrait.              */}
-            {/* flex align-items: center vertically centres logo with the text. */}
-            {p.internet && (
+            {/* ── Last paragraph row: [logo | text] ────────────────────────── */}
+            {/* Uses internet if present, otherwise falls back to adds.         */}
+            {/* This ensures every section that has a final paragraph gets the  */}
+            {/* logo — including Al-Farabi, whose last paragraph is adds.       */}
+            {(p.internet ?? p.adds) && (
               <div style={{ display: "flex", alignItems: "center", gap: IMG_GAP }}>
                 <div style={{
-                  width:      IMG_SIZE,
-                  flexShrink: 0,
-                  display:    "flex",
+                  width:          IMG_SIZE,
+                  flexShrink:     0,
+                  display:        "flex",
                   justifyContent: "center",
                 }}>
                   <BlueprintMark />
                 </div>
-                <p style={{ ...bodyStyle, flex: 1 }}>{p.internet}</p>
+                <p style={{ ...bodyStyle, flex: 1 }}>{p.internet ?? p.adds}</p>
               </div>
             )}
           </FadeIn>
