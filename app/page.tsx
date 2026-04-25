@@ -2468,27 +2468,6 @@ export default function LandingPage() {
                   </button>
                 </div>
 
-                {/* Divider */}
-                <div className="flex-shrink-0 mx-5" style={{ height: 1, background: "rgba(255,255,255,0.05)" }} />
-
-                {/* Spotify upsell — visible only when not logged in */}
-                {!session?.user && (
-                  <div className="flex-shrink-0 px-5 py-2">
-                    <button
-                      onClick={() => signIn("spotify")}
-                      style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: "rgba(255,255,255,0.28)", fontSize: 11, letterSpacing: "0.03em" }}
-                    >
-                      <span style={{ color: "#1DB954" }}>♪</span> Log in with Spotify to hear full tracks
-                    </button>
-                  </div>
-                )}
-                {/* Non-premium notice */}
-                {session?.user && notPremium && (
-                  <div className="flex-shrink-0 px-5 py-2">
-                    <span style={{ fontSize: 11, color: "rgba(255,255,255,0.25)" }}>Full playback requires Spotify Premium</span>
-                  </div>
-                )}
-
                 {/* ── Track list — scrollable, shared between peek + fullscreen ─ */}
                 <div
                   ref={mobileTracklistRef}
