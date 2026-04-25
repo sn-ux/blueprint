@@ -605,6 +605,11 @@ export default function LandingPage() {
   // Arcball grab vector — the 3-D point on the unit sphere where the drag started.
   // Updated every pointer-move frame so each step is a small incremental rotation.
   const grabVecRef       = useRef<[number, number, number] | null>(null);
+  // Pinch state persisted across effect re-runs.  When setSelected() fires mid-pinch
+  // it causes [worlds, selected, subgenres] effect to restart, resetting all local
+  // closure vars.  Storing pinch state here lets the new closure restore it so the
+  // gesture continues without a freeze.
+  const pinchStateRef    = useRef({ active: false, dist0: 0, zoom0: 1 });
   const rafRef           = useRef<number>(0);
   const labelHitsRef     = useRef<{ name: string; subgenre?: string; x1: number; y1: number; x2: number; y2: number }[]>([]);
   const regionPolesRef   = useRef<{ name: string; pole: V3 }[]>([]);
@@ -1494,9 +1499,10 @@ export default function LandingPage() {
     // handlers rebuild their stale closures.
     let touchDrag    = { active: false, lx: 0, ly: 0, moved: false };
     let touchGrabVec: [number, number, number] | null = null;
-    let pinchActive  = false;
-    let pinchDist0   = 0;
-    let pinchZoom0   = 1;
+    // Restore pinch state so a mid-pinch effect re-run doesn't freeze the gesture.
+    let pinchActive  = pinchStateRef.current.active;
+    let pinchDist0   = pinchStateRef.current.dist0;
+    let pinchZoom0   = pinchStateRef.current.zoom0;
     let lastTapTime  = 0;
     let lastTapX     = 0;
     let lastTapY     = 0;
@@ -1542,6 +1548,8 @@ export default function LandingPage() {
         pinchDist0       = Math.sqrt(dx * dx + dy * dy);
         pinchZoom0       = zoomTargetRef.current;
         touchDrag.active = false; // cancel any single-finger drag in progress
+        // Persist so the gesture survives a mid-pinch effect re-run
+        pinchStateRef.current = { active: true, dist0: pinchDist0, zoom0: pinchZoom0 };
       }
     };
 
@@ -1634,8 +1642,9 @@ export default function LandingPage() {
         // All fingers lifted
         // On mobile: snap zoom immediately when pinch ends (no post-pinch glide)
         if (wasPinching) snapZoom = true;
-        pinchActive      = false;
-        touchDrag.active = false;
+        pinchActive                  = false;
+        pinchStateRef.current.active = false;  // clear so restored closures know pinch is done
+        touchDrag.active             = false;
 
         // A stationary single-finger tap → treat as click
         if (!wasPinching && wasDragging && !wasMoved) {
@@ -1741,8 +1750,9 @@ export default function LandingPage() {
       } else if (remaining === 1 && wasPinching) {
         // Transition 2 → 1 fingers: stop pinch, snap zoom, hand off to drag.
         // Without snapZoom here the lerp would keep running after one finger lifts.
-        pinchActive = false;
-        snapZoom    = true;
+        pinchActive                  = false;
+        pinchStateRef.current.active = false;
+        snapZoom                     = true;
         const t = e.touches[0];
         touchDrag = { active: true, lx: t.clientX, ly: t.clientY, moved: false };
         // Re-establish arcball grab point for the remaining finger
@@ -1755,7 +1765,7 @@ export default function LandingPage() {
       }
     };
 
-    const onTouchCancel = () => { touchDrag.active = false; touchGrabVec = null; pinchActive = false; };
+    const onTouchCancel = () => { touchDrag.active = false; touchGrabVec = null; pinchActive = false; pinchStateRef.current.active = false; };
 
     canvas.addEventListener("touchstart",  onTouchStart,  { passive: false });
     canvas.addEventListener("touchmove",   onTouchMove,   { passive: false });
