@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 
 // ── Scroll-reveal hook ─────────────────────────────────────────────────────
 function useInView(threshold = 0.08) {
@@ -365,8 +366,16 @@ function IcoSphere({ size, speed = 0.006 }: { size: number; speed?: number }) {
       }
       rafId = requestAnimationFrame(frame);
     };
-    frame();
-    return () => { cancelled = true; cancelAnimationFrame(rafId); };
+    // ── Defer animation start until canvas is visible ─────────────────────
+    // The equation section sits at the bottom of the page. Without this gate,
+    // three RAF loops run from page-load even before the user scrolls there.
+    // IntersectionObserver fires once on first intersection, then disconnects.
+    const io = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { io.disconnect(); frame(); } },
+      { threshold: 0 },
+    );
+    io.observe(canvas);
+    return () => { cancelled = true; cancelAnimationFrame(rafId); io.disconnect(); };
   }, [size, speed]);
   return <canvas ref={canvasRef} width={size} height={size} style={{ display: "block" }} />;
 }
@@ -540,15 +549,18 @@ export default function PhilosophyPage() {
                       padding:    "20px",
                     }}>
 
-                      {/* Portrait */}
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
+                      {/* Portrait — Next/Image for lazy loading, WebP conversion,
+                          and CLS-free layout (width/height reserve exact space). */}
+                      <Image
                         src={p.image}
                         alt={p.name}
+                        width={IMG_SIZE}
+                        height={IMG_SIZE}
+                        // First card is above the fold; load it eagerly so it
+                        // appears without delay. All others lazy-load on scroll.
+                        priority={idx === 0}
                         onError={e => { (e.currentTarget as HTMLImageElement).style.opacity = "0"; }}
                         style={{
-                          width:          IMG_SIZE,
-                          height:         IMG_SIZE,
                           objectFit:      "cover",
                           objectPosition: "center top",
                           filter:         "grayscale(100%) contrast(1.55) brightness(1.12)",
