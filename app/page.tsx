@@ -490,7 +490,6 @@ function SpotifyLogoButton({
         flexShrink:      0,
         background:      "none",
         border:          "none",
-        marginLeft:      8,
         padding:         0,
         cursor:          canOpen ? "pointer" : "default",
         color:           active ? "#1DB954" : "rgba(255,255,255,0.20)",
@@ -2473,7 +2472,7 @@ export default function LandingPage() {
 
                 {/* ── Header — genre name · track count · arrow toggle · close ── */}
                 <div
-                  className="flex-shrink-0 px-5 pt-3 pb-2.5 flex items-center gap-2"
+                  className="flex-shrink-0 pl-5 pr-4 pt-3 pb-2.5 flex items-center gap-2"
                   style={{ minHeight: 56 }}
                 >
                   {/* Genre / subgenre name + track count */}
@@ -2492,29 +2491,33 @@ export default function LandingPage() {
                     </span>
                   </div>
 
-                  {/* Spotify logo — lights up when a track is selected */}
-                  <SpotifyLogoButton track={nowPlayingTrack} size={20} />
+                  {/* Spotify logo + arrow toggle — evenly spaced sub-group */}
+                  {/* gap: 12px between the two icons; right-edge aligns with zoom pill (right: 16) */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+                    {/* Spotify logo — lights up when a track is selected */}
+                    <SpotifyLogoButton track={nowPlayingTrack} size={36} />
 
-                  {/* Arrow toggle: ↑ expands to fullscreen, ↓ collapses to peek */}
-                  <button
-                    onClick={() => setSheetSnap(sheetSnap === 1 ? 2 : 1)}
-                    aria-label={sheetSnap === 1 ? "Expand to fullscreen" : "Collapse to preview"}
-                    style={{
-                      flexShrink:      0,
-                      width:           36,
-                      height:          36,
-                      display:         "flex",
-                      alignItems:      "center",
-                      justifyContent:  "center",
-                      borderRadius:    "50%",
-                      background:      "rgba(255,255,255,0.07)",
-                      color:           "rgba(255,255,255,0.60)",
-                      fontSize:        16,
-                      lineHeight:      1,
-                    }}
-                  >
-                    {sheetSnap === 1 ? "↑" : "↓"}
-                  </button>
+                    {/* Arrow toggle: ↑ expands to fullscreen, ↓ collapses to peek */}
+                    <button
+                      onClick={() => setSheetSnap(sheetSnap === 1 ? 2 : 1)}
+                      aria-label={sheetSnap === 1 ? "Expand to fullscreen" : "Collapse to preview"}
+                      style={{
+                        flexShrink:      0,
+                        width:           36,
+                        height:          36,
+                        display:         "flex",
+                        alignItems:      "center",
+                        justifyContent:  "center",
+                        borderRadius:    "50%",
+                        background:      "rgba(255,255,255,0.07)",
+                        color:           "rgba(255,255,255,0.60)",
+                        fontSize:        16,
+                        lineHeight:      1,
+                      }}
+                    >
+                      {sheetSnap === 1 ? "↑" : "↓"}
+                    </button>
+                  </div>
                 </div>
 
                 {/* ── Track list — scrollable, shared between peek + fullscreen ─ */}
