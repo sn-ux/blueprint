@@ -558,6 +558,12 @@ export default function LandingPage() {
   const [textVisible, setTextVisible] = useState(true);
   const textVisibleRef = useRef(true);
 
+  // ── Mobile zoom stage — polled from zoomRef; drives the zoom pill ────────────
+  // true  = zoom ≥ 2.0  →  subgenre stage (stage 2)
+  // false = zoom <  2.0  →  genre stage    (stage 1), combined with selected state
+  const [zoomAbove2, setZoomAbove2] = useState(false);
+  const zoomAbove2Ref = useRef(false);
+
   // ── Company carousel ────────────────────────────────────────────────────────
   const [carouselIdx,   setCarouselIdx]   = useState(0);
   // discoveryIdx trails carouselIdx by 250ms so the right-side visual leads
@@ -1001,6 +1007,19 @@ export default function LandingPage() {
     }, 100);
     return () => clearInterval(id);
   }, []);
+
+  // ── Poll zoomRef → zoomAbove2 (mobile zoom pill stage) ───────────────────
+  useEffect(() => {
+    if (!isMobile) return;
+    const id = setInterval(() => {
+      const above = zoomRef.current >= 2.0;
+      if (above !== zoomAbove2Ref.current) {
+        zoomAbove2Ref.current = above;
+        setZoomAbove2(above);
+      }
+    }, 100);
+    return () => clearInterval(id);
+  }, [isMobile]);
 
   // ── Canvas render loop ────────────────────────────────────────────────────
   useEffect(() => {
@@ -1933,6 +1952,34 @@ export default function LandingPage() {
     }
   };
 
+  // ── Mobile zoom pill handlers ─────────────────────────────────────────────
+  // The pill cycles through 3 discrete stages (full sphere → genre → subgenre).
+  // Stage is derived from selected (React state) + zoomAbove2Ref (polled ref).
+
+  const handleZoomPlus = () => {
+    if (!selectedRef.current) return;          // stage 0 — pill not shown anyway
+    if (zoomAbove2Ref.current) return;          // already stage 2 — do nothing
+    // Stage 1 → 2: zoom into subgenres
+    zoomTargetRef.current = 2.5;
+  };
+
+  const handleZoomMinus = () => {
+    if (!selectedRef.current) return;          // stage 0 — pill not shown anyway
+    if (zoomAbove2Ref.current) {
+      // Stage 2 → 1: back to main-genre view
+      zoomTargetRef.current              = 1.5;
+      selectedSubgenreRef.current        = null; setSelectedSubgenre(null);
+      zoomSubgenreRef.current            = null; setZoomSubgenre(null);
+    } else {
+      // Stage 1 → 0: back to full sphere
+      zoomTargetRef.current              = 1;
+      autoSelectedRef.current            = false;
+      selectedSubgenreRef.current        = null; setSelectedSubgenre(null);
+      zoomSubgenreRef.current            = null; setZoomSubgenre(null);
+      setSelected(null);
+    }
+  };
+
   // ── Mouse handlers ────────────────────────────────────────────────────────
 
   const onMouseDown = (e: React.MouseEvent) => {
@@ -2535,6 +2582,79 @@ export default function LandingPage() {
               </div>
             );
           })()}
+
+          {/* ── Mobile zoom pill ──────────────────────────────────────────── */}
+          {/* Shown on mobile only, in stages 1 (genre) and 2 (subgenre).     */}
+          {/* Floats bottom-right, slides up when the tracklist sheet peeks.  */}
+          {isMobile && selected !== null && sheetSnap !== 2 && (
+            <div
+              style={{
+                position:             "absolute",
+                right:                16,
+                bottom:               sheetSnap === 1 ? 212 : 24,
+                zIndex:               110,
+                display:              "flex",
+                flexDirection:        "column",
+                alignItems:           "center",
+                borderRadius:         24,
+                overflow:             "hidden",
+                background:           "rgba(0,0,0,0.80)",
+                border:               "1px solid rgba(255,255,255,0.10)",
+                backdropFilter:       "blur(8px)",
+                WebkitBackdropFilter: "blur(8px)",
+                transition:           "bottom 0.3s ease",
+                pointerEvents:        "auto",
+              }}
+            >
+              {/* + button — disabled at subgenre stage */}
+              <button
+                onPointerDown={e => e.stopPropagation()}
+                onClick={e => { e.stopPropagation(); handleZoomPlus(); }}
+                disabled={zoomAbove2}
+                style={{
+                  width:           44,
+                  height:          46,
+                  background:      "none",
+                  border:          "none",
+                  color:           zoomAbove2 ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.88)",
+                  fontSize:        22,
+                  fontWeight:      300,
+                  cursor:          zoomAbove2 ? "default" : "pointer",
+                  display:         "flex",
+                  alignItems:      "center",
+                  justifyContent:  "center",
+                  lineHeight:      1,
+                  userSelect:      "none",
+                }}
+                aria-label="Zoom in"
+              >+</button>
+
+              {/* Divider */}
+              <div style={{ width: 24, height: 1, background: "rgba(255,255,255,0.10)" }} />
+
+              {/* − button — always enabled when pill is shown */}
+              <button
+                onPointerDown={e => e.stopPropagation()}
+                onClick={e => { e.stopPropagation(); handleZoomMinus(); }}
+                style={{
+                  width:           44,
+                  height:          46,
+                  background:      "none",
+                  border:          "none",
+                  color:           "rgba(255,255,255,0.88)",
+                  fontSize:        22,
+                  fontWeight:      300,
+                  cursor:          "pointer",
+                  display:         "flex",
+                  alignItems:      "center",
+                  justifyContent:  "center",
+                  lineHeight:      1,
+                  userSelect:      "none",
+                }}
+                aria-label="Zoom out"
+              >−</button>
+            </div>
+          )}
 
         </div>
 
