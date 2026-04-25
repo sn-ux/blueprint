@@ -370,6 +370,78 @@ declare global {
   }
 }
 
+// ── Sphere rotation math (module-level, no allocations on hot path) ──────────
+// All matrices: flat 9-element row-major arrays, index = row*3+col.
+// Convention matches the draw code: first rotate around Y (yaw), then X (pitch).
+
+/** Build 3×3 rotation matrix from YX Euler angles (desktop sync). */
+function matFromEuler(rx: number, ry: number): number[] {
+  const cX = Math.cos(rx), sX = Math.sin(rx);
+  const cY = Math.cos(ry), sY = Math.sin(ry);
+  return [
+     cY,      0,   sY,
+     sX*sY,  cX,  -sX*cY,
+    -cX*sY,  sX,   cX*cY,
+  ];
+}
+
+/** Project a 2-D canvas point onto the unit arcball sphere (z faces the viewer). */
+function arcballVec(
+  px: number, py: number, cx: number, cy: number, r: number,
+): [number, number, number] {
+  const nx = (px - cx) / r;
+  const ny = -(py - cy) / r;   // flip Y so up-on-screen = +Y on sphere
+  const d2 = nx * nx + ny * ny;
+  if (d2 <= 1) return [nx, ny, Math.sqrt(1 - d2)];
+  const d = Math.sqrt(d2);
+  return [nx / d, ny / d, 0];  // clamp to equator outside the ball
+}
+
+/** Unit quaternion [w,x,y,z] rotating unit vector a → unit vector b. */
+function quatFromTo(
+  a: [number, number, number],
+  b: [number, number, number],
+): [number, number, number, number] {
+  const cx = a[1]*b[2] - a[2]*b[1];
+  const cy = a[2]*b[0] - a[0]*b[2];
+  const cz = a[0]*b[1] - a[1]*b[0];
+  const w  = 1 + a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+  const len = Math.sqrt(w*w + cx*cx + cy*cy + cz*cz);
+  if (len < 1e-10) return [1, 0, 0, 0];
+  return [w / len, cx / len, cy / len, cz / len];
+}
+
+/** 3×3 rotation matrix from unit quaternion [w,x,y,z]. */
+function matFromQuat([w, x, y, z]: [number, number, number, number]): number[] {
+  return [
+    1-2*(y*y+z*z),  2*(x*y-w*z),    2*(x*z+w*y),
+      2*(x*y+w*z),  1-2*(x*x+z*z),  2*(y*z-w*x),
+      2*(x*z-w*y),  2*(y*z+w*x),    1-2*(x*x+y*y),
+  ];
+}
+
+/** Pre-multiply: M_new = delta · M_cur  (apply a screen-space rotation delta). */
+function mat3Premul(d: number[], c: number[]): number[] {
+  return [
+    d[0]*c[0]+d[1]*c[3]+d[2]*c[6], d[0]*c[1]+d[1]*c[4]+d[2]*c[7], d[0]*c[2]+d[1]*c[5]+d[2]*c[8],
+    d[3]*c[0]+d[4]*c[3]+d[5]*c[6], d[3]*c[1]+d[4]*c[4]+d[5]*c[7], d[3]*c[2]+d[4]*c[5]+d[5]*c[8],
+    d[6]*c[0]+d[7]*c[3]+d[8]*c[6], d[6]*c[1]+d[7]*c[4]+d[8]*c[7], d[6]*c[2]+d[7]*c[5]+d[8]*c[8],
+  ];
+}
+
+/** Gram-Schmidt orthonormalize a 3×3 matrix to prevent floating-point drift. */
+function mat3Ortho(m: number[]): number[] {
+  let [a0,a1,a2, b0,b1,b2] = m;
+  let n = Math.sqrt(a0*a0+a1*a1+a2*a2);
+  a0/=n; a1/=n; a2/=n;
+  const dot = b0*a0+b1*a1+b2*a2;
+  b0-=dot*a0; b1-=dot*a1; b2-=dot*a2;
+  n = Math.sqrt(b0*b0+b1*b1+b2*b2);
+  b0/=n; b1/=n; b2/=n;
+  const c0=a1*b2-a2*b1, c1=a2*b0-a0*b2, c2=a0*b1-a1*b0;
+  return [a0,a1,a2, b0,b1,b2, c0,c1,c2];
+}
+
 // ── SpotifyLogoButton ─────────────────────────────────────────────────────────
 // Sits in the panel/sheet header next to the genre title.
 // Dims when no track is selected; lights up green and becomes clickable when
@@ -526,6 +598,10 @@ export default function LandingPage() {
   const activeSubsRef    = useRef<SubItem[]>([]);
   const subPolesRef      = useRef<{ name: string; pole: V3 }[]>([]);
   const rotRef           = useRef({ x: -0.49, y: -2.29 });
+  // Full 3×3 rotation matrix — single source of truth for rendering & hit-tests.
+  // Desktop drag writes via matFromEuler(rotRef) after each Euler update.
+  // Mobile drag writes directly via arcball (rotRef is not touched on mobile).
+  const rotMatRef        = useRef<number[]>(matFromEuler(-0.49, -2.29));
   const dragRef          = useRef({ active: false, lx: 0, ly: 0, moved: false });
   const rafRef           = useRef<number>(0);
   const labelHitsRef     = useRef<{ name: string; subgenre?: string; x1: number; y1: number; x2: number; y2: number }[]>([]);
@@ -1058,7 +1134,7 @@ export default function LandingPage() {
 
       const R   = Math.min(W, H) * 0.34 * zoomRef.current;
       const cx  = W / 2, cy = H / 2;
-      const rx  = rotRef.current.x, ry = rotRef.current.y;
+      const [m0,m1,m2,m3,m4,m5,m6,m7,m8] = rotMatRef.current;
       labelHitsRef.current = [];
       ctx.clearRect(0, 0, W, H);
 
@@ -1069,10 +1145,11 @@ export default function LandingPage() {
       ctx.fillStyle = atmo; ctx.fill();
 
       const pv = verts.map(([x, y, z]) => {
-        const x1=x*Math.cos(ry)+z*Math.sin(ry), z1=-x*Math.sin(ry)+z*Math.cos(ry);
-        const y2=y*Math.cos(rx)-z1*Math.sin(rx), z2=y*Math.sin(rx)+z1*Math.cos(rx);
-        const s = FOV/(FOV+z2);
-        return { sx: cx+x1*R*s, sy: cy+y2*R*s, z: z2 };
+        const xs = m0*x + m1*y + m2*z;
+        const ys = m3*x + m4*y + m5*z;
+        const zs = m6*x + m7*y + m8*z;
+        const s  = FOV / (FOV + zs);
+        return { sx: cx + xs*R*s, sy: cy + ys*R*s, z: zs };
       });
 
       const fd = faces.map((tri, i) => ({
@@ -1302,10 +1379,10 @@ export default function LandingPage() {
       zoomTargetRef.current = newTarget;
 
       if (newTarget >= 1.2 && selectedRef.current === null && regionPolesRef.current.length > 0) {
-        const rx = rotRef.current.x, ry = rotRef.current.y;
+        const [,,,,,,rm6,rm7,rm8] = rotMatRef.current;
         let bestName = regionPolesRef.current[0].name, bestZ = -Infinity;
         for (const { name, pole: [px, py, pz] } of regionPolesRef.current) {
-          const z2 = py*Math.sin(rx) + (-px*Math.sin(ry) + pz*Math.cos(ry))*Math.cos(rx);
+          const z2 = rm6*px + rm7*py + rm8*pz;
           if (z2 > bestZ) { bestZ = z2; bestName = name; }
         }
         autoSelectedRef.current = true;
@@ -1420,6 +1497,17 @@ export default function LandingPage() {
     let lastTapTime = 0;
     let lastTapX    = 0;
     let lastTapY    = 0;
+    // Arcball state: the 3-D trackball vector recorded at the start of each
+    // single-finger drag segment.  Reset on touchstart / pinch-to-single transition.
+    let arcV0: [number, number, number] | null = null;
+
+    // Map a touch client position to a unit vector on the virtual trackball sphere.
+    const getArcVec = (clientX: number, clientY: number): [number, number, number] => {
+      const rect = canvas.getBoundingClientRect();
+      const r    = Math.min(canvas.clientWidth, canvas.clientHeight) * 0.5;
+      return arcballVec(clientX - rect.left, clientY - rect.top,
+                        canvas.clientWidth / 2, canvas.clientHeight / 2, r);
+    };
 
     // Returns true if a touch point is within the (slightly enlarged) sphere area.
     // The enlarged radius makes touch easier without changing the visual.
@@ -1440,6 +1528,7 @@ export default function LandingPage() {
         if (!touchOverSphere(t.clientX, t.clientY)) return; // outside sphere → let page scroll
         e.preventDefault();
         touchDrag = { active: true, lx: t.clientX, ly: t.clientY, moved: false };
+        arcV0 = getArcVec(t.clientX, t.clientY);
 
         // Double-tap detection: second tap within 320 ms and 55 px → zoom in
         const now = performance.now();
@@ -1456,6 +1545,7 @@ export default function LandingPage() {
         pinchDist0       = Math.sqrt(dx * dx + dy * dy);
         pinchZoom0       = zoomTargetRef.current;
         touchDrag.active = false; // cancel any single-finger drag in progress
+        arcV0 = null;             // discard arcball state during pinch
       }
     };
 
@@ -1467,32 +1557,33 @@ export default function LandingPage() {
         const t  = touches[0];
         const dx = t.clientX - touchDrag.lx;
         const dy = t.clientY - touchDrag.ly;
-        // On mobile, full vertical rotation is allowed, which means the sphere
-        // can flip past ±90°. Once flipped, cos(rotX) goes negative — from the
-        // user's perspective the sphere is "upside down" and a naive +dx rotates
-        // the Y axis in the visually-backwards direction. Multiplying by the sign
-        // of cos(rotX) flips the horizontal direction exactly when needed, keeping
-        // left=left and right=right from every vertical orientation.
-        const yDir = isMobileRef.current ? (Math.cos(rotRef.current.x) < 0 ? -1 : 1) : 1;
-        rotRef.current.y += dx * 0.005 * yDir;
-        rotRef.current.x -= dy * 0.005;
-        // Desktop only: clamp vertical tilt. Mobile allows full vertical rotation.
-        if (!isMobileRef.current) {
-          rotRef.current.x = Math.max(-1.2, Math.min(1.2, rotRef.current.x));
+
+        // ── Arcball rotation (mobile only) ──────────────────────────────────
+        // Map previous and current touch positions onto the virtual trackball
+        // sphere, compute the quaternion between the two 3-D vectors, then
+        // pre-multiply it into the orientation matrix.  This naturally handles
+        // every orientation including the poles without any gimbal-lock issues.
+        const arcV1 = getArcVec(t.clientX, t.clientY);
+        if (arcV0) {
+          const q  = quatFromTo(arcV0, arcV1);
+          const dR = matFromQuat(q);
+          rotMatRef.current = mat3Ortho(mat3Premul(dR, rotMatRef.current));
         }
+        arcV0 = arcV1;
+
         touchDrag.lx = t.clientX;
-        touchDrag.ly      = t.clientY;
+        touchDrag.ly = t.clientY;
         if (Math.abs(dx) > 3 || Math.abs(dy) > 3) touchDrag.moved = true;
         hoveredRef.current = null;
 
-        // Auto-deselect when selected genre rotates to the back hemisphere
+        // Auto-deselect when selected genre rotates to the back hemisphere.
+        // Uses matrix row-2 (depth row) dotted with the pole — no Euler needed.
         if (selected !== null && zoomRef.current >= 1.1 && regionPolesRef.current.length > 0) {
           const selEntry = regionPolesRef.current.find(r => r.name === selected);
           if (selEntry) {
             const [px, py, pz] = selEntry.pole;
-            const rx = rotRef.current.x, ry = rotRef.current.y;
-            const sz2 = py * Math.sin(rx) + (-px * Math.sin(ry) + pz * Math.cos(ry)) * Math.cos(rx);
-            if (sz2 < 0) {
+            const [,,,,,,sm6,sm7,sm8] = rotMatRef.current;
+            if (sm6*px + sm7*py + sm8*pz < 0) {
               autoSelectedRef.current     = false;
               selectedSubgenreRef.current = null; setSelectedSubgenre(null);
               zoomSubgenreRef.current     = null; setZoomSubgenre(null);
@@ -1512,12 +1603,12 @@ export default function LandingPage() {
         zoomTargetRef.current = newZoom;
         zoomRef.current       = newZoom;
 
-        // Same auto-select logic as applyZoomDelta
+        // Same auto-select logic as applyZoomDelta — use matrix depth row
         if (newZoom >= 1.2 && selectedRef.current === null && regionPolesRef.current.length > 0) {
-          const rx = rotRef.current.x, ry = rotRef.current.y;
+          const [,,,,,,pm6,pm7,pm8] = rotMatRef.current;
           let bestName = regionPolesRef.current[0].name, bestZ = -Infinity;
           for (const { name, pole: [px, py, pz] } of regionPolesRef.current) {
-            const z2 = py * Math.sin(rx) + (-px * Math.sin(ry) + pz * Math.cos(ry)) * Math.cos(rx);
+            const z2 = pm6*px + pm7*py + pm8*pz;
             if (z2 > bestZ) { bestZ = z2; bestName = name; }
           }
           autoSelectedRef.current = true;
@@ -1589,11 +1680,11 @@ export default function LandingPage() {
             setSelected(null);
           } else {
             const nz3 = Math.sqrt(Math.max(0, 1 - nx3 * nx3 - ny3 * ny3));
-            const rx   = rotRef.current.x, ry = rotRef.current.y;
-            const y_w  = ny3 * Math.cos(rx) + nz3 * Math.sin(rx);
-            const z1   = -ny3 * Math.sin(rx) + nz3 * Math.cos(rx);
-            const x_w  = nx3 * Math.cos(ry) - z1 * Math.sin(ry);
-            const z_w  = nx3 * Math.sin(ry) + z1 * Math.cos(ry);
+            // Unproject screen-space normal through M^T (transpose = inverse for rotation)
+            const [tm0,tm1,tm2,tm3,tm4,tm5,tm6,tm7,tm8] = rotMatRef.current;
+            const x_w = tm0*nx3 + tm3*ny3 + tm6*nz3;
+            const y_w = tm1*nx3 + tm4*ny3 + tm7*nz3;
+            const z_w = tm2*nx3 + tm5*ny3 + tm8*nz3;
             if (regionPolesRef.current.length === 0) return;
 
             // Per-face genre lookup for accurate boundary resolution
@@ -1645,6 +1736,7 @@ export default function LandingPage() {
         snapZoom    = true;
         const t = e.touches[0];
         touchDrag = { active: true, lx: t.clientX, ly: t.clientY, moved: false };
+        arcV0 = getArcVec(t.clientX, t.clientY); // restart arcball from new single finger
       }
     };
 
@@ -1818,11 +1910,10 @@ export default function LandingPage() {
     const nx = (mx - cx) / R, ny = (my - cy) / R;
     if (nx * nx + ny * ny > 1) return null;
     const nz  = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
-    const rx  = rotRef.current.x, ry = rotRef.current.y;
-    const y_w =  ny * Math.cos(rx) + nz * Math.sin(rx);
-    const z1  = -ny * Math.sin(rx) + nz * Math.cos(rx);
-    const x_w =  nx * Math.cos(ry) - z1 * Math.sin(ry);
-    const z_w =  nx * Math.sin(ry) + z1 * Math.cos(ry);
+    const [hm0,hm1,hm2,hm3,hm4,hm5,hm6,hm7,hm8] = rotMatRef.current;
+    const x_w = hm0*nx + hm3*ny + hm6*nz;
+    const y_w = hm1*nx + hm4*ny + hm7*nz;
+    const z_w = hm2*nx + hm5*ny + hm8*nz;
     // Per-face lookup: 320 face centroids → exact region ownership
     const fCents  = faceCentsRef.current;
     const fRegion = faceRegionRef.current;
@@ -1848,15 +1939,16 @@ export default function LandingPage() {
       rotRef.current.y += (e.clientX-dragRef.current.lx)*0.005;
       rotRef.current.x -= (e.clientY-dragRef.current.ly)*0.005;
       rotRef.current.x  = Math.max(-1.2, Math.min(1.2, rotRef.current.x));
+      // Sync rotation matrix from Euler (desktop drag stays Euler-based)
+      rotMatRef.current = matFromEuler(rotRef.current.x, rotRef.current.y);
       dragRef.current.lx=e.clientX; dragRef.current.ly=e.clientY; dragRef.current.moved=true;
       hoveredRef.current=null;
       if (selected !== null && zoomRef.current >= 1.1 && regionPolesRef.current.length > 0) {
         const selEntry = regionPolesRef.current.find(r => r.name === selected);
         if (selEntry) {
           const [px,py,pz]=selEntry.pole;
-          const drx=rotRef.current.x, dry=rotRef.current.y;
-          const sz2=py*Math.sin(drx)+(-px*Math.sin(dry)+pz*Math.cos(dry))*Math.cos(drx);
-          if (sz2 < 0) {
+          const [,,,,,,dm6,dm7,dm8] = rotMatRef.current;
+          if (dm6*px + dm7*py + dm8*pz < 0) {
             autoSelectedRef.current=false;
             selectedSubgenreRef.current=null; setSelectedSubgenre(null);
             zoomSubgenreRef.current=null; setZoomSubgenre(null);
@@ -1883,11 +1975,10 @@ export default function LandingPage() {
       const nx2=(mx-W2/2)/R2, ny2=(my-H2/2)/R2;
       if (nx2*nx2+ny2*ny2<=1) {
         const nz2=Math.sqrt(Math.max(0,1-nx2*nx2-ny2*ny2));
-        const rx2=rotRef.current.x, ry2=rotRef.current.y;
-        const y_w=ny2*Math.cos(rx2)+nz2*Math.sin(rx2);
-        const z1=-ny2*Math.sin(rx2)+nz2*Math.cos(rx2);
-        const x_w=nx2*Math.cos(ry2)-z1*Math.sin(ry2);
-        const z_w=nx2*Math.sin(ry2)+z1*Math.cos(ry2);
+        const [mm0,mm1,mm2,mm3,mm4,mm5,mm6,mm7,mm8] = rotMatRef.current;
+        const x_w=mm0*nx2+mm3*ny2+mm6*nz2;
+        const y_w=mm1*nx2+mm4*ny2+mm7*nz2;
+        const z_w=mm2*nx2+mm5*ny2+mm8*nz2;
         // Per-face subgenre lookup: find nearest owned face, resolve its subgenre
         const subFacesHov = [...subRegionRef.current.keys()];
         let bestSFHov = subFacesHov[0] ?? -1, bestSDHov = -Infinity;
@@ -1939,11 +2030,10 @@ export default function LandingPage() {
       setSelected(null); return;
     }
     const nz=Math.sqrt(Math.max(0,1-nx*nx-ny*ny));
-    const rx=rotRef.current.x, ry=rotRef.current.y;
-    const y_w=ny*Math.cos(rx)+nz*Math.sin(rx);
-    const z1=-ny*Math.sin(rx)+nz*Math.cos(rx);
-    const x_w=nx*Math.cos(ry)-z1*Math.sin(ry);
-    const z_w=nx*Math.sin(ry)+z1*Math.cos(ry);
+    const [cm0,cm1,cm2,cm3,cm4,cm5,cm6,cm7,cm8] = rotMatRef.current;
+    const x_w=cm0*nx+cm3*ny+cm6*nz;
+    const y_w=cm1*nx+cm4*ny+cm7*nz;
+    const z_w=cm2*nx+cm5*ny+cm8*nz;
     if (regionPolesRef.current.length===0) return;
     // Per-face genre lookup: find nearest face centroid → resolve region index → genre name
     const fCentsC  = faceCentsRef.current;
