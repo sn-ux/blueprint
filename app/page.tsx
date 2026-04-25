@@ -895,6 +895,15 @@ export default function LandingPage() {
         mobileTracklistRef.current.contains(touchStartTarget)
       ) return;
 
+      // When the tracklist sheet is EXPANDED (state 2), a downward swipe means
+      // "collapse the sheet to peek" — not "exit exploration entirely".
+      // The sheet's own onTouchEnd handler (on the sheet container div) already
+      // handles the 2 → 1 snap.  We must not also fire the full sphere reset here,
+      // or the sphere zooms out and the genre selection is lost.
+      // Only once the sheet is back at peek (state 1) does a further downward
+      // swipe fall through to the reset path below.
+      if (sheetSnapRef.current === 2) return;
+
       // Check whether there is any exploration state to clear
       const needsReset =
         zoomTargetRef.current > 1.05 ||
