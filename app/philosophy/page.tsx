@@ -89,6 +89,7 @@ type Entry = {
   id:          string;
   name:        string;
   image:       string;
+  year:        string;
   quote:       string;
   attribution: string | null;
   saying:      string | null;
@@ -106,6 +107,7 @@ const PHILOSOPHERS: Entry[] = [
     id:          "socrates-meno",
     name:        "Socrates / Meno",
     image:       WM("Socrate_du_Louvre.jpg"),
+    year:        "c. 470–399 BC",
     quote:       "And how will you enquire, Socrates, into that which you do not know?",
     attribution: "— Meno",
     saying:      "You cannot search for something if you do not know it exists. Inquiry requires a starting point, and without that, discovery collapses.",
@@ -116,6 +118,7 @@ const PHILOSOPHERS: Entry[] = [
     id:          "plato",
     name:        "Plato",
     image:       WM("Plato_Silanion_Musei_Capitolini_MC1377.jpg"),
+    year:        "c. 428–348 BC",
     quote:       "The soul, then, as being immortal, and having been born many times, and having seen all things both here and in the other world, has learned everything.",
     attribution: "— Meno",
     saying:      "Plato argues that knowledge already exists within the soul, and discovery is the act of remembering.",
@@ -126,6 +129,7 @@ const PHILOSOPHERS: Entry[] = [
     id:          "aristotle",
     name:        "Aristotle",
     image:       WM("Aristotle_Altemps_Inv8575.jpg"),
+    year:        "384–322 BC",
     quote:       "From perception there comes memory, and from memory experience; and from experience the universal.",
     attribution: "— Posterior Analytics",
     saying:      "Aristotle believed we discover new knowledge by observing many different things and extracting patterns from them.",
@@ -136,6 +140,7 @@ const PHILOSOPHERS: Entry[] = [
     id:          "al-farabi",
     name:        "Al-Farabi",
     image:       WM("Alpharabius_in_Liber_Chronicarum_1493_AD.png"),
+    year:        "c. 872–950",
     quote:       "Happiness consists in the assimilation of the human soul to the active intellect.",
     attribution: null,
     saying:      "Al-Farabi argues that discovery requires connection to something beyond the individual mind, a broader source of knowledge not limited by personal experience.",
@@ -146,6 +151,7 @@ const PHILOSOPHERS: Entry[] = [
     id:          "avicenna",
     name:        "Avicenna",
     image:       WM("Portrait_of_Avicenna_Wellcome_M0000768.jpg"),
+    year:        "980–1037",
     quote:       "The Agent Intellect makes knowledge exist by conferring forms upon prepared souls.",
     attribution: null,
     saying:      "Avicenna describes knowledge as something received rather than constructed.",
@@ -156,6 +162,7 @@ const PHILOSOPHERS: Entry[] = [
     id:          "averroes",
     name:        "Averroes",
     image:       WM("Averroes_closeup.jpg"),
+    year:        "1126–1198",
     quote:       "To think abstractly is to participate in the intellect.",
     attribution: null,
     saying:      "Averroes argues that knowledge emerges from participation in a shared intellectual system.",
@@ -166,6 +173,7 @@ const PHILOSOPHERS: Entry[] = [
     id:          "kant",
     name:        "Kant",
     image:       WM("Immanuel_Kant_by_Johann_Christoph_Frisch.jpg"),
+    year:        "1724–1804",
     quote:       "Thoughts without content are empty, intuitions without concepts are blind.",
     attribution: "— Critique of Pure Reason (1781)",
     saying:      "The mind structures reality. You do not perceive the world directly. You perceive it through your own cognitive framework.",
@@ -176,6 +184,7 @@ const PHILOSOPHERS: Entry[] = [
     id:          "wittgenstein",
     name:        "Wittgenstein",
     image:       WM("Ludwig_Wittgenstein.jpg"),
+    year:        "1889–1951",
     quote:       "The limits of my language mean the limits of my world.",
     attribution: "— Tractatus Logico-Philosophicus (1921)",
     saying:      "You cannot think beyond the words you have. Language defines the boundary of what you can understand.",
@@ -186,6 +195,7 @@ const PHILOSOPHERS: Entry[] = [
     id:          "gadamer",
     name:        "Gadamer",
     image:       WM("Hans-Georg_Gadamer.jpg"),
+    year:        "1900–2002",
     quote:       "Understanding is not a mere reproductive activity but a genuine event.",
     attribution: "— Truth and Method (1960)",
     saying:      "Discovery happens through interaction with other perspectives. New understanding emerges when different viewpoints meet.",
@@ -196,6 +206,7 @@ const PHILOSOPHERS: Entry[] = [
     id:          "foucault",
     name:        "Foucault",
     image:       WM("Michel_Foucault_1974_Brasil.jpg"),
+    year:        "1926–1984",
     quote:       "Knowledge is not for knowing: knowledge is for cutting.",
     attribution: "— Discipline and Punish (1975)",
     saying:      "What you are able to know is shaped by the structure of the system you are in.",
@@ -213,9 +224,58 @@ const bodyStyle: React.CSSProperties = {
   margin:       0,
 };
 
+// ── Card sub-components ────────────────────────────────────────────────────
+
+function ChevronDown({ open }: { open: boolean }) {
+  return (
+    <svg
+      width={18} height={18} viewBox="0 0 18 18" fill="none"
+      style={{
+        transform:  open ? "rotate(180deg)" : "none",
+        transition: "transform 0.35s ease",
+        flexShrink: 0,
+      }}
+      aria-hidden="true"
+    >
+      <path
+        d="M4 6.5L9 11.5L14 6.5"
+        stroke="rgba(255,255,255,0.45)"
+        strokeWidth={1.6}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function CardArrow() {
+  return (
+    <div style={{ display: "flex", justifyContent: "center", padding: "10px 0" }}>
+      <svg width={18} height={32} viewBox="0 0 18 32" fill="none" aria-hidden="true">
+        <line
+          x1="9" y1="0" x2="9" y2="22"
+          stroke="rgba(255,255,255,0.15)"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
+        <path
+          d="M3 16L9 22L15 16"
+          stroke="rgba(255,255,255,0.15)"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────
 
 export default function PhilosophyPage() {
+
+  // Which philosopher card is currently open (only one at a time)
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Equation animation: 0 = hidden, 1 = first eq, 2 = transformed
   const { ref: eqRef, inView: eqInView } = useInView(0.25);
@@ -271,119 +331,215 @@ export default function PhilosophyPage() {
         </FadeIn>
       </section>
 
-      {/* ══ PHILOSOPHER SECTIONS ═════════════════════════════════════════════ */}
-      {PHILOSOPHERS.map((p, idx) => (
-        <section
-          key={p.id}
-          style={{
-            ...FB,
-            borderTop: "1px solid rgba(255,255,255,0.05)",
-            padding:   idx === 0 ? "80px 24px 88px" : "80px 24px 88px",
-          }}
-        >
-          <FadeIn style={{ maxWidth: 760, margin: "0 auto" }}>
+      {/* ══ PHILOSOPHER CARDS ════════════════════════════════════════════════ */}
+      <section
+        style={{
+          ...FB,
+          borderTop: "1px solid rgba(255,255,255,0.05)",
+          padding:   "48px 24px 80px",
+        }}
+      >
+        <div style={{ maxWidth: 760, margin: "0 auto" }}>
+          {PHILOSOPHERS.map((p, idx) => {
+            const isOpen  = expandedId === p.id;
+            const TRUNC   = 90;
+            const preview = p.quote.length > TRUNC
+              ? p.quote.slice(0, TRUNC - 1).trimEnd() + "\u2026"
+              : p.quote;
 
-            {/* ── Header: portrait + name ──────────────────────────────── */}
-            <div style={{ display: "flex", alignItems: "center", gap: IMG_GAP, marginBottom: 28 }}>
+            return (
+              <div key={p.id}>
+                <FadeIn>
 
-              {/* B&W portrait — gray background shows through if image fails */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={p.image}
-                alt={p.name}
-                onError={e => { (e.currentTarget as HTMLImageElement).style.opacity = "0"; }}
-                style={{
-                  width:          IMG_SIZE,
-                  height:         IMG_SIZE,
-                  objectFit:      "cover",
-                  objectPosition: "center top",
-                  filter:         "grayscale(100%) contrast(1.55) brightness(1.12)",
-                  background:     "rgba(255,255,255,0.07)",
-                  flexShrink:     0,
-                  display:        "block",
-                }}
-              />
+                  {/* ── Card ─────────────────────────────────────────── */}
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={isOpen}
+                    onClick={() => setExpandedId(isOpen ? null : p.id)}
+                    onKeyDown={e => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setExpandedId(isOpen ? null : p.id);
+                      }
+                    }}
+                    style={{
+                      background:   "rgba(255,255,255,0.025)",
+                      border:       `1px solid ${isOpen ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.06)"}`,
+                      borderRadius: 10,
+                      cursor:       "pointer",
+                      userSelect:   "none",
+                      outline:      "none",
+                      overflow:     "hidden",
+                      transition:   "border-color 0.25s ease",
+                    }}
+                  >
 
-              <h2
-                style={{
-                  fontSize:      "clamp(18px, 1.8vw, 22px)",
-                  fontWeight:    600,
-                  lineHeight:    1.2,
-                  letterSpacing: "-0.01em",
-                  color:         "rgba(255,255,255,0.92)",
-                  margin:        0,
-                }}
-              >
-                {p.name}
-              </h2>
-            </div>
+                    {/* ── Always-visible header ────────────────────── */}
+                    <div style={{
+                      display:    "flex",
+                      alignItems: "flex-start",
+                      gap:        IMG_GAP,
+                      padding:    "20px",
+                    }}>
 
-            {/* ── Body: earlier paragraphs indented to align with name ─────── */}
-            <div style={{ paddingLeft: INDENT }}>
+                      {/* Portrait */}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={p.image}
+                        alt={p.name}
+                        onError={e => { (e.currentTarget as HTMLImageElement).style.opacity = "0"; }}
+                        style={{
+                          width:          IMG_SIZE,
+                          height:         IMG_SIZE,
+                          objectFit:      "cover",
+                          objectPosition: "center top",
+                          filter:         "grayscale(100%) contrast(1.55) brightness(1.12)",
+                          background:     "rgba(255,255,255,0.07)",
+                          flexShrink:     0,
+                          display:        "block",
+                        }}
+                      />
 
-              {/* Quote */}
-              <p
-                style={{
-                  fontSize:     "clamp(16px, 1.7vw, 20px)",
-                  fontWeight:   400,
-                  lineHeight:   1.55,
-                  fontStyle:    "italic",
-                  color:        "rgba(255,255,255,0.78)",
-                  marginBottom: p.attribution ? 10 : 36,
-                }}
-              >
-                &ldquo;{p.quote}&rdquo;
-              </p>
+                      {/* Name / year / preview */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
 
-              {/* Attribution — source line below the quote */}
-              {p.attribution && (
-                <p
-                  style={{
-                    fontSize:     "clamp(11px, 1vw, 12px)",
-                    fontWeight:   400,
-                    lineHeight:   1.5,
-                    fontStyle:    "italic",
-                    color:        "rgba(255,255,255,0.38)",
-                    marginBottom: 36,
-                  }}
-                >
-                  {p.attribution}
-                </p>
-              )}
+                        {/* Name row + chevron */}
+                        <div style={{
+                          display:        "flex",
+                          alignItems:     "center",
+                          justifyContent: "space-between",
+                          gap:            12,
+                          marginBottom:   4,
+                        }}>
+                          <h2 style={{
+                            fontSize:      "clamp(16px, 1.6vw, 20px)",
+                            fontWeight:    600,
+                            lineHeight:    1.2,
+                            letterSpacing: "-0.01em",
+                            color:         "rgba(255,255,255,0.92)",
+                            margin:        0,
+                          }}>
+                            {p.name}
+                          </h2>
+                          <ChevronDown open={isOpen} />
+                        </div>
 
-              {/* Saying */}
-              {p.saying && (
-                <p style={{ ...bodyStyle, marginBottom: 28 }}>{p.saying}</p>
-              )}
+                        {/* Year */}
+                        <p style={{
+                          fontSize: "clamp(11px, 1vw, 12px)",
+                          color:    "rgba(255,255,255,0.35)",
+                          margin:   "0 0 10px",
+                        }}>
+                          {p.year}
+                        </p>
 
-              {/* Adds — only render here when internet follows (it is not the last paragraph).
-                  When internet is null, adds moves to the logo row below instead.       */}
-              {p.adds && p.internet && (
-                <p style={{ ...bodyStyle, marginBottom: 28 }}>{p.adds}</p>
-              )}
+                        {/* Quote preview — animates out when card opens */}
+                        <div style={{
+                          display:          "grid",
+                          gridTemplateRows: isOpen ? "0fr" : "1fr",
+                          transition:       "grid-template-rows 0.35s ease",
+                        }}>
+                          <div style={{ overflow: "hidden" }}>
+                            <p style={{
+                              fontSize:   "clamp(13px, 1.3vw, 15px)",
+                              fontStyle:  "italic",
+                              lineHeight: 1.55,
+                              color:      "rgba(255,255,255,0.50)",
+                              margin:     0,
+                            }}>
+                              &ldquo;{preview}&rdquo;
+                            </p>
+                          </div>
+                        </div>
 
-            </div>
+                      </div>
+                    </div>{/* /header */}
 
-            {/* ── Last paragraph row: [logo | text] ────────────────────────── */}
-            {/* Uses internet if present, otherwise falls back to adds.         */}
-            {/* This ensures every section that has a final paragraph gets the  */}
-            {/* logo — including Al-Farabi, whose last paragraph is adds.       */}
-            {(p.internet ?? p.adds) && (
-              <div style={{ display: "flex", alignItems: "center", gap: IMG_GAP }}>
-                <div style={{
-                  width:          IMG_SIZE,
-                  flexShrink:     0,
-                  display:        "flex",
-                  justifyContent: "center",
-                }}>
-                  <BlueprintMark />
-                </div>
-                <p style={{ ...bodyStyle, flex: 1 }}>{p.internet ?? p.adds}</p>
+                    {/* ── Expandable content ───────────────────────── */}
+                    <div style={{
+                      display:          "grid",
+                      gridTemplateRows: isOpen ? "1fr" : "0fr",
+                      transition:       "grid-template-rows 0.4s ease",
+                    }}>
+                      <div style={{ overflow: "hidden" }}>
+                        <div style={{ padding: "0 20px 28px" }}>
+
+                          {/* Divider */}
+                          <div style={{
+                            height:       1,
+                            background:   "rgba(255,255,255,0.07)",
+                            marginBottom: 24,
+                          }} />
+
+                          {/* Quote + attribution + earlier paragraphs */}
+                          <div style={{ paddingLeft: INDENT }}>
+
+                            <p style={{
+                              fontSize:     "clamp(16px, 1.7vw, 20px)",
+                              fontWeight:   400,
+                              lineHeight:   1.55,
+                              fontStyle:    "italic",
+                              color:        "rgba(255,255,255,0.78)",
+                              marginBottom: p.attribution ? 10 : 36,
+                            }}>
+                              &ldquo;{p.quote}&rdquo;
+                            </p>
+
+                            {p.attribution && (
+                              <p style={{
+                                fontSize:     "clamp(11px, 1vw, 12px)",
+                                fontWeight:   400,
+                                lineHeight:   1.5,
+                                fontStyle:    "italic",
+                                color:        "rgba(255,255,255,0.38)",
+                                marginBottom: 36,
+                              }}>
+                                {p.attribution}
+                              </p>
+                            )}
+
+                            {p.saying && (
+                              <p style={{ ...bodyStyle, marginBottom: 28 }}>{p.saying}</p>
+                            )}
+
+                            {/* Adds only rendered here when internet follows */}
+                            {p.adds && p.internet && (
+                              <p style={{ ...bodyStyle, marginBottom: 28 }}>{p.adds}</p>
+                            )}
+
+                          </div>
+
+                          {/* Last paragraph: Blueprint logo + text */}
+                          {(p.internet ?? p.adds) && (
+                            <div style={{ display: "flex", alignItems: "center", gap: IMG_GAP }}>
+                              <div style={{
+                                width:          IMG_SIZE,
+                                flexShrink:     0,
+                                display:        "flex",
+                                justifyContent: "center",
+                              }}>
+                                <BlueprintMark />
+                              </div>
+                              <p style={{ ...bodyStyle, flex: 1 }}>{p.internet ?? p.adds}</p>
+                            </div>
+                          )}
+
+                        </div>
+                      </div>
+                    </div>{/* /expandable */}
+
+                  </div>{/* /card */}
+                </FadeIn>
+
+                {/* Downward arrow connector — not after the last card */}
+                {idx < PHILOSOPHERS.length - 1 && <CardArrow />}
+
               </div>
-            )}
-          </FadeIn>
-        </section>
-      ))}
+            );
+          })}
+        </div>
+      </section>
 
       {/* ══ FINAL SECTION ════════════════════════════════════════════════════ */}
       <section
