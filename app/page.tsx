@@ -1655,10 +1655,15 @@ export default function LandingPage() {
                 const next = selectedSubgenreRef.current === h.subgenre ? null : h.subgenre;
                 selectedSubgenreRef.current = next; setSelectedSubgenre(next);
               } else {
+                const isDeselectLabel = selectedRef.current === h.name;
                 autoSelectedRef.current     = false;
                 selectedSubgenreRef.current = null; setSelectedSubgenre(null);
                 zoomSubgenreRef.current     = null; setZoomSubgenre(null);
                 setSelected(prev => prev === h.name ? null : h.name);
+                // Drive zoom to subgenre-reveal level in one continuous animation
+                if (!isDeselectLabel) {
+                  zoomTargetRef.current = Math.max(zoomTargetRef.current, 2.5);
+                }
               }
               return;
             }
