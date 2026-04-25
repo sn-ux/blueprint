@@ -2880,7 +2880,7 @@ export default function LandingPage() {
         {/* ── LEFT: problem copy ──────────────────────────────────────────────── */}
         {/* Mobile: order-3 — appears below the carousel. Desktop: order-1 (left). */}
         <div
-          className="flex flex-col order-3 md:order-1 px-6 md:px-12 pt-4 md:pt-[10vh] pb-[8vh] overflow-hidden"
+          className="flex flex-col order-3 md:order-1 px-6 md:px-12 pt-0 md:pt-[10vh] pb-[8vh] overflow-hidden"
           style={{ width: isMobile ? "100%" : "54%", borderRight: isMobile ? "none" : "1px solid rgba(255,255,255,0.05)" }}
         >
 
@@ -2897,7 +2897,7 @@ export default function LandingPage() {
           {/* ── Group 2: SEARCH / FEED — primary supporting argument ────────────
               Increased to 19/21px (+20%) to feel like thesis-level copy,
               not secondary footnotes.                                       */}
-          <div className="mt-[6vh]" style={{ maxWidth: 600 }}>
+          <div className="mt-[3vh] md:mt-[6vh]" style={{ maxWidth: 600 }}>
             <div className="flex flex-col gap-2">
               {/* CSS grid: col1 = fixed-width label, col2 = arrow, col3 = description.
                   Guarantees → sits on exactly the same vertical axis for both rows. */}
@@ -2971,7 +2971,7 @@ export default function LandingPage() {
 
         {/* ── RIGHT: rotating company showcase ─────────────────────────────── */}
         {/* Mobile: order-2 — sits between the headline (order-1) and copy (order-3). */}
-        <div className="flex flex-col order-2 md:order-2 py-8 px-6 md:px-7 overflow-hidden"
+        <div className="flex flex-col order-2 md:order-2 pt-4 pb-2 md:py-8 px-6 md:px-7 overflow-hidden"
           style={{ width: isMobile ? "100%" : "46%", minHeight: isMobile ? "52vh" : undefined }}>
 
           {/* "Different content. Same model." — desktop only; redundant on mobile  */}
