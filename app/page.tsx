@@ -3619,33 +3619,33 @@ export default function LandingPage() {
 
             {/* Headline */}
             <h2 className="text-[24px] md:text-[42px] font-semibold leading-[1.07] text-white" style={{ letterSpacing: "-0.02em" }}>
-              Turn your network into your algorithm
+              Turn your network into your algorithm.
             </h2>
 
-            {/* Sub-head — matches body copy exactly */}
+            {/* Sub-head */}
             <p className="text-[15px] leading-[1.65] md:text-[22px] md:leading-[1.45] font-normal"
               style={{ color: "rgba(255,255,255,0.75)", marginTop: isMobile ? 20 : 40 }}>
-              The tastes of people you trust
+              The people you trust surface what you would never think to search for.
             </p>
 
             {/* Body line 1 */}
             <p className="text-[15px] leading-[1.65] md:text-[22px] md:leading-[1.45] font-normal"
               style={{ color: "rgba(255,255,255,0.75)", marginTop: isMobile ? 14 : 32 }}>
-              show you what you never thought to look for.
+              Not what you already engage with.<br />
+              Not what companies pay to promote.
             </p>
 
             {/* Body line 2 */}
             <p className="text-[15px] leading-[1.65] md:text-[22px] md:leading-[1.45] font-normal"
               style={{ color: "rgba(255,255,255,0.75)", marginTop: isMobile ? 14 : 24 }}>
-              show you what you don&apos;t engage with<br />
-              &amp; what companies don&apos;t pay to promote.
+              See more of what&apos;s out there.<br />
+              Get closer in the process.
             </p>
 
             {/* Final lines — payoff */}
             <p className="text-[18px] md:text-[28px] font-semibold leading-[1.15] text-white"
               style={{ letterSpacing: "-0.01em", marginTop: isMobile ? 24 : 48 }}>
-              Trusted recommendations give you better starting points<br />
-              to explore the unknown.
+              A wider, reliable view of the internet.
             </p>
 
           </div>
