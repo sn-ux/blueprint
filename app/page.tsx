@@ -599,10 +599,12 @@ export default function LandingPage() {
   const subPolesRef      = useRef<{ name: string; pole: V3 }[]>([]);
   const rotRef           = useRef({ x: -0.49, y: -2.29 });
   // Full 3×3 rotation matrix — single source of truth for rendering & hit-tests.
-  // Desktop drag writes via matFromEuler(rotRef) after each Euler update.
-  // Mobile drag writes directly via arcball (rotRef is not touched on mobile).
+  // Both desktop and mobile drag update this via the shared arcball model.
   const rotMatRef        = useRef<number[]>(matFromEuler(-0.49, -2.29));
   const dragRef          = useRef({ active: false, lx: 0, ly: 0, moved: false });
+  // Arcball grab vector — the 3-D point on the unit sphere where the drag started.
+  // Updated every pointer-move frame so each step is a small incremental rotation.
+  const grabVecRef       = useRef<[number, number, number] | null>(null);
   const rafRef           = useRef<number>(0);
   const labelHitsRef     = useRef<{ name: string; subgenre?: string; x1: number; y1: number; x2: number; y2: number }[]>([]);
   const regionPolesRef   = useRef<{ name: string; pole: V3 }[]>([]);
@@ -1490,13 +1492,14 @@ export default function LandingPage() {
     // Touch state is local to this effect instance. Re-created on every effect run
     // (which happens when worlds/selected/subgenres change), matching how the mouse
     // handlers rebuild their stale closures.
-    let touchDrag   = { active: false, lx: 0, ly: 0, moved: false };
-    let pinchActive = false;
-    let pinchDist0  = 0;
-    let pinchZoom0  = 1;
-    let lastTapTime = 0;
-    let lastTapX    = 0;
-    let lastTapY    = 0;
+    let touchDrag    = { active: false, lx: 0, ly: 0, moved: false };
+    let touchGrabVec: [number, number, number] | null = null;
+    let pinchActive  = false;
+    let pinchDist0   = 0;
+    let pinchZoom0   = 1;
+    let lastTapTime  = 0;
+    let lastTapX     = 0;
+    let lastTapY     = 0;
     // Returns true if a touch point is within the (slightly enlarged) sphere area.
     // The enlarged radius makes touch easier without changing the visual.
     const touchOverSphere = (clientX: number, clientY: number) => {
@@ -1516,6 +1519,13 @@ export default function LandingPage() {
         if (!touchOverSphere(t.clientX, t.clientY)) return; // outside sphere → let page scroll
         e.preventDefault();
         touchDrag = { active: true, lx: t.clientX, ly: t.clientY, moved: false };
+        // Compute the 3-D grab point for arcball rotation
+        {
+          const rect2 = canvas.getBoundingClientRect();
+          const W2 = canvas.clientWidth, H2 = canvas.clientHeight;
+          const R2 = Math.min(W2, H2) * 0.35 * zoomRef.current;
+          touchGrabVec = arcballVec(t.clientX - rect2.left, t.clientY - rect2.top, W2 / 2, H2 / 2, R2);
+        }
 
         // Double-tap detection: second tap within 320 ms and 55 px → zoom in
         const now = performance.now();
@@ -1540,43 +1550,24 @@ export default function LandingPage() {
 
       if (touches.length === 1 && touchDrag.active) {
         e.preventDefault();
-        const t  = touches[0];
-        const dx = t.clientX - touchDrag.lx;
-        const dy = t.clientY - touchDrag.ly;
+        const t = touches[0];
 
-        // ── Euler-based drag with pole fix (mobile only) ────────────────────
-        // Horizontal (dx): rotate around world Y-axis so horizontal swipes
-        // always spin left/right regardless of pole proximity (no gimbal roll).
-        // Vertical   (dy): rotate around the camera's current right-axis
-        // (matrix row 0) so up/down swipes always tilt the sphere naturally.
-        // Also update rotRef.x for any code that reads it (e.g. yDir was used
-        // in the old path; we keep it updated for compat but don't clamp it).
-        if (Math.abs(dx) > 0 || Math.abs(dy) > 0) {
-          const yawAngle   = dx * 0.005;
-          const pitchAngle = dy * 0.005;
-
-          // World-Y rotation quaternion: [cos(a/2), 0, sin(a/2), 0]
-          const cy2 = Math.cos(yawAngle / 2);
-          const sy2 = Math.sin(yawAngle / 2);
-          const qYaw = [cy2, 0, sy2, 0] as [number,number,number,number];
-
-          // Camera-right axis = row 0 of current rotation matrix
-          const [rm0, rm1, rm2] = rotMatRef.current;
-          const rlen = Math.sqrt(rm0*rm0 + rm1*rm1 + rm2*rm2) || 1;
-          const rx0 = rm0/rlen, ry0 = rm1/rlen, rz0 = rm2/rlen;
-          const cp2 = Math.cos(-pitchAngle / 2);
-          const sp2 = Math.sin(-pitchAngle / 2);
-          const qPitch = [cp2, rx0*sp2, ry0*sp2, rz0*sp2] as [number,number,number,number];
-
-          // Apply: yaw first (world Y), then pitch around camera right
-          const dRyaw   = matFromQuat(qYaw);
-          const dRpitch = matFromQuat(qPitch);
-          rotMatRef.current = mat3Ortho(mat3Premul(dRpitch, mat3Premul(dRyaw, rotMatRef.current)));
-
-          // Keep rotRef.x loosely in sync (unclamped) for any residual readers
-          rotRef.current.x -= pitchAngle;
+        // ── Shared arcball model (same math as desktop) ─────────────────────
+        // Project the new finger position onto the unit sphere and rotate
+        // from the previous grab point to this new position.  No fixed
+        // sensitivity constant — works equally well at any zoom level.
+        if (touchGrabVec) {
+          const rect2 = canvas.getBoundingClientRect();
+          const W2 = canvas.clientWidth, H2 = canvas.clientHeight;
+          const R2 = Math.min(W2, H2) * 0.35 * zoomRef.current;
+          const newVec2 = arcballVec(t.clientX - rect2.left, t.clientY - rect2.top, W2 / 2, H2 / 2, R2);
+          const q2 = quatFromTo(touchGrabVec, newVec2);
+          rotMatRef.current = mat3Ortho(mat3Premul(matFromQuat(q2), rotMatRef.current));
+          touchGrabVec = newVec2;
         }
 
+        const dx = t.clientX - touchDrag.lx;
+        const dy = t.clientY - touchDrag.ly;
         touchDrag.lx = t.clientX;
         touchDrag.ly = t.clientY;
         if (Math.abs(dx) > 3 || Math.abs(dy) > 3) touchDrag.moved = true;
@@ -1742,11 +1733,17 @@ export default function LandingPage() {
         snapZoom    = true;
         const t = e.touches[0];
         touchDrag = { active: true, lx: t.clientX, ly: t.clientY, moved: false };
-        // single-finger drag resumes; no extra state needed
+        // Re-establish arcball grab point for the remaining finger
+        {
+          const rect2 = canvas.getBoundingClientRect();
+          const W2 = canvas.clientWidth, H2 = canvas.clientHeight;
+          const R2 = Math.min(W2, H2) * 0.35 * zoomRef.current;
+          touchGrabVec = arcballVec(t.clientX - rect2.left, t.clientY - rect2.top, W2 / 2, H2 / 2, R2);
+        }
       }
     };
 
-    const onTouchCancel = () => { touchDrag.active = false; pinchActive = false; };
+    const onTouchCancel = () => { touchDrag.active = false; touchGrabVec = null; pinchActive = false; };
 
     canvas.addEventListener("touchstart",  onTouchStart,  { passive: false });
     canvas.addEventListener("touchmove",   onTouchMove,   { passive: false });
@@ -1899,6 +1896,12 @@ export default function LandingPage() {
   // ── Mouse handlers ────────────────────────────────────────────────────────
 
   const onMouseDown = (e: React.MouseEvent) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const W = canvas.clientWidth, H = canvas.clientHeight;
+    const R = Math.min(W, H) * 0.35 * zoomRef.current;
+    grabVecRef.current = arcballVec(e.clientX - rect.left, e.clientY - rect.top, W / 2, H / 2, R);
     dragRef.current = { active: true, lx: e.clientX, ly: e.clientY, moved: false };
   };
 
@@ -1941,23 +1944,31 @@ export default function LandingPage() {
   };
 
   const onMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (dragRef.current.active) {
-      rotRef.current.y += (e.clientX-dragRef.current.lx)*0.005;
-      rotRef.current.x -= (e.clientY-dragRef.current.ly)*0.005;
-      rotRef.current.x  = Math.max(-1.2, Math.min(1.2, rotRef.current.x));
-      // Sync rotation matrix from Euler (desktop drag stays Euler-based)
-      rotMatRef.current = matFromEuler(rotRef.current.x, rotRef.current.y);
-      dragRef.current.lx=e.clientX; dragRef.current.ly=e.clientY; dragRef.current.moved=true;
-      hoveredRef.current=null;
+    if (dragRef.current.active && grabVecRef.current) {
+      // ── Shared arcball model (same math as mobile) ──────────────────────────
+      // Project the new pointer onto the unit sphere and compute the quaternion
+      // that rotates the original grab point to this new position.  No fixed
+      // sensitivity constant — the rotation follows the pointer exactly.
+      const canvas = canvasRef.current!;
+      const rect = canvas.getBoundingClientRect();
+      const W = canvas.clientWidth, H = canvas.clientHeight;
+      const R = Math.min(W, H) * 0.35 * zoomRef.current;
+      const newVec = arcballVec(e.clientX - rect.left, e.clientY - rect.top, W / 2, H / 2, R);
+      const q = quatFromTo(grabVecRef.current, newVec);
+      rotMatRef.current  = mat3Ortho(mat3Premul(matFromQuat(q), rotMatRef.current));
+      grabVecRef.current = newVec;   // advance grab point for next frame
+      dragRef.current.lx = e.clientX; dragRef.current.ly = e.clientY;
+      dragRef.current.moved = true;
+      hoveredRef.current = null;
       if (selected !== null && zoomRef.current >= 1.1 && regionPolesRef.current.length > 0) {
         const selEntry = regionPolesRef.current.find(r => r.name === selected);
         if (selEntry) {
-          const [px,py,pz]=selEntry.pole;
+          const [px,py,pz] = selEntry.pole;
           const [,,,,,,dm6,dm7,dm8] = rotMatRef.current;
           if (dm6*px + dm7*py + dm8*pz < 0) {
-            autoSelectedRef.current=false;
-            selectedSubgenreRef.current=null; setSelectedSubgenre(null);
-            zoomSubgenreRef.current=null; setZoomSubgenre(null);
+            autoSelectedRef.current = false;
+            selectedSubgenreRef.current = null; setSelectedSubgenre(null);
+            zoomSubgenreRef.current     = null; setZoomSubgenre(null);
             setSelected(null);
           }
         }
