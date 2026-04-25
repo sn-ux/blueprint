@@ -2492,8 +2492,8 @@ export default function LandingPage() {
                   </div>
 
                   {/* Spotify logo + arrow toggle — evenly spaced sub-group */}
-                  {/* gap: 12px between the two icons; right-edge aligns with zoom pill (right: 16) */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+                  {/* gap: 32px so horizontal Spotify↔arrow distance = 68px = vertical pill↔arrow distance */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 32, flexShrink: 0 }}>
                     {/* Spotify logo — lights up when a track is selected */}
                     <SpotifyLogoButton track={nowPlayingTrack} size={36} />
 
@@ -2594,7 +2594,7 @@ export default function LandingPage() {
             <div
               style={{
                 position:             "fixed",
-                right:                16,
+                right:                12,
                 bottom:               sheetSnap === 1 ? 216 : 84,
                 zIndex:               120,
                 display:              "flex",
