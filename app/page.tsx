@@ -1718,10 +1718,17 @@ export default function LandingPage() {
               const next = selectedSubgenreRef.current === sNameT ? null : sNameT;
               selectedSubgenreRef.current = next; setSelectedSubgenre(next);
             } else {
+              const isDeselect = selectedRef.current === bestTName;
               autoSelectedRef.current     = false;
               selectedSubgenreRef.current = null; setSelectedSubgenre(null);
               zoomSubgenreRef.current     = null; setZoomSubgenre(null);
               setSelected(prev => prev === bestTName ? null : bestTName);
+              // When selecting a genre, drive zoom deep enough to reveal subgenres
+              // in one continuous animation.  Math.max keeps us from zooming out if
+              // the user is already deeper than 2.5.
+              if (!isDeselect) {
+                zoomTargetRef.current = Math.max(zoomTargetRef.current, 2.5);
+              }
             }
           }
         }
