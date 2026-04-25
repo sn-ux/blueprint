@@ -808,6 +808,41 @@ export default function LandingPage() {
     }
   }, [selected, isMobile]);
 
+  // ── Mobile body-scroll lock ───────────────────────────────────────────────
+  // Locks the main page scroll whenever the user is in any exploration state
+  // (genre selected → tracklist open → zoomed in). Prevents the underlying
+  // homepage sections from scrolling beneath the fixed sphere and sheet.
+  //
+  // Condition: `selected !== null` — this is the single source of truth that
+  // drives all exploration sub-states (sheetSnap, zoom, subgenre focus, etc.).
+  //
+  // Mechanism: overflow:hidden on BOTH <html> and <body> is the most reliable
+  // cross-browser (including iOS Safari) way to suppress body scroll.
+  //
+  // The tracklist is position:fixed with its own overflow-y:auto — fixed
+  // elements scroll independently of the document body, so locking the body
+  // does NOT affect internal tracklist scrolling.
+  //
+  // On unlock (selected → null), both properties are cleared so the user can
+  // scroll to sections 2–4 again.
+  useEffect(() => {
+    if (!isMobile) return;
+
+    if (selected !== null) {
+      document.documentElement.style.overflow = "hidden";
+      document.body.style.overflow            = "hidden";
+    } else {
+      document.documentElement.style.overflow = "";
+      document.body.style.overflow            = "";
+    }
+
+    // Always clean up on unmount so we never leave the page stuck.
+    return () => {
+      document.documentElement.style.overflow = "";
+      document.body.style.overflow            = "";
+    };
+  }, [isMobile, selected]);
+
   // ── Mobile scroll-down reset (mobile only) ───────────────────────────────
   // When the user is on page 1 (scrollY ≈ 0) and swipes downward, AND the
   // sphere is zoomed in or a genre/sheet is open, clear all exploration state
