@@ -277,22 +277,6 @@ export default function PhilosophyPage() {
   // Which philosopher card is currently open (only one at a time)
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  // Equation animation: 0 = hidden, 1 = first eq, 2 = transformed
-  const { ref: eqRef, inView: eqInView } = useInView(0.25);
-  const [eqPhase, setEqPhase] = useState(0);
-
-  useEffect(() => {
-    if (!eqInView) return;
-    const t1 = setTimeout(() => setEqPhase(1), 300);
-    const t2 = setTimeout(() => setEqPhase(2), 3500);
-    return () => { clearTimeout(t1); clearTimeout(t2); };
-  }, [eqInView]);
-
-  const eqLineEnter = (delay: number): React.CSSProperties => ({
-    opacity:    eqPhase >= 1 ? 1 : 0,
-    transform:  eqPhase >= 1 ? "none" : "translateY(12px)",
-    transition: `opacity 0.7s ease ${delay}ms, transform 0.7s ease ${delay}ms`,
-  });
 
   return (
     <div className="bg-black text-white" style={{ overflowX: "hidden" }}>
@@ -574,105 +558,6 @@ export default function PhilosophyPage() {
         </FadeIn>
       </section>
 
-      {/* ══ FINAL SECTION ════════════════════════════════════════════════════ */}
-      <section
-        style={{
-          ...FB,
-          minHeight:      "100vh",
-          display:        "flex",
-          flexDirection:  "column",
-          alignItems:     "center",
-          justifyContent: "center",
-          padding:        "100px 24px",
-          textAlign:      "center",
-          borderTop:      "1px solid rgba(255,255,255,0.05)",
-        }}
-      >
-        <FadeIn style={{ marginBottom: 72 }}>
-          <h2
-            style={{
-              fontSize:      "clamp(24px, 3.2vw, 44px)",
-              fontWeight:    600,
-              lineHeight:    1.1,
-              letterSpacing: "-0.02em",
-              color:         "#fff",
-              maxWidth:      680,
-            }}
-          >
-            How do we find what we don&apos;t know to search for?
-          </h2>
-        </FadeIn>
-
-        {/* Equation — two versions overlap in same grid cell, cross-fade */}
-        <div
-          ref={eqRef}
-          style={{ display: "grid", width: "100%", maxWidth: 680, marginBottom: 72 }}
-        >
-          <div
-            style={{
-              gridArea:      "1 / 1",
-              opacity:       eqPhase === 1 ? 1 : 0,
-              transition:    "opacity 0.55s ease",
-              pointerEvents: eqPhase !== 1 ? "none" : undefined,
-            }}
-          >
-            {[
-              { text: "everything everyone knows",       delay:   0 },
-              { text: "− everything you know",            delay: 260 },
-              { text: "= everything you don\u2019t know", delay: 520 },
-            ].map(({ text, delay }) => (
-              <p key={text} style={{ fontSize: "clamp(18px, 2.4vw, 32px)", fontWeight: 300, lineHeight: 1.5, letterSpacing: "-0.01em", color: "#fff", ...eqLineEnter(delay) }}>
-                {text}
-              </p>
-            ))}
-          </div>
-
-          <div
-            style={{
-              gridArea:      "1 / 1",
-              opacity:       eqPhase >= 2 ? 1 : 0,
-              transition:    "opacity 0.7s ease 0.35s",
-              pointerEvents: eqPhase < 2 ? "none" : undefined,
-            }}
-          >
-            {[
-              { text: "everything everyone searches + saves",  delay: 350 },
-              { text: "− everything you search + save",         delay: 500 },
-              { text: "\u2248 everything you don\u2019t know",  delay: 650 },
-            ].map(({ text, delay }) => (
-              <p
-                key={text}
-                style={{
-                  fontSize:      "clamp(18px, 2.4vw, 32px)",
-                  fontWeight:    300,
-                  lineHeight:    1.5,
-                  letterSpacing: "-0.01em",
-                  color:         "#fff",
-                  opacity:       eqPhase >= 2 ? 1 : 0,
-                  transform:     eqPhase >= 2 ? "none" : "translateY(10px)",
-                  transition:    `opacity 0.65s ease ${delay}ms, transform 0.65s ease ${delay}ms`,
-                }}
-              >
-                {text}
-              </p>
-            ))}
-          </div>
-        </div>
-
-        <div
-          style={{
-            opacity:    eqPhase >= 2 ? 1 : 0,
-            transform:  eqPhase >= 2 ? "none" : "translateY(10px)",
-            transition: "opacity 0.8s ease 1.1s, transform 0.8s ease 1.1s",
-            maxWidth:   560,
-          }}
-        >
-          <p style={{ fontSize: "clamp(18px, 2vw, 26px)", fontWeight: 400, lineHeight: 1.5, color: "rgba(255,255,255,0.72)" }}>
-            The internet never solved discovery.<br />
-            It just made the loop faster.
-          </p>
-        </div>
-      </section>
 
     </div>
   );
