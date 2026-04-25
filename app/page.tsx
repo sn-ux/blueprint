@@ -385,16 +385,32 @@ function matFromEuler(rx: number, ry: number): number[] {
   ];
 }
 
-/** Project a 2-D canvas point onto the unit arcball sphere (z faces the viewer). */
+/**
+ * Project a 2-D canvas point onto the virtual trackball sphere.
+ *
+ * Uses the Shoemake hybrid model to eliminate edge snapping:
+ *   d² ≤ 0.5  →  spherical hemisphere  z = √(1 − d²)
+ *   d² > 0.5  →  hyperbolic sheet       z = 0.5 / d
+ *
+ * Both branches produce the same z at d² = 0.5 (= 1/√2) and the same
+ * derivative there, giving a C¹-continuous surface with no snap at the
+ * visible edge.  The old code hard-clamped z to 0 outside the unit circle,
+ * which caused a discontinuous jump exactly at the sphere's silhouette.
+ */
 function arcballVec(
   px: number, py: number, cx: number, cy: number, r: number,
 ): [number, number, number] {
   const nx = (px - cx) / r;
   const ny = (py - cy) / r;   // screen Y increases downward, matching view-space Y convention
   const d2 = nx * nx + ny * ny;
-  if (d2 <= 1) return [nx, ny, Math.sqrt(1 - d2)];
-  const d = Math.sqrt(d2);
-  return [nx / d, ny / d, 0];  // clamp to equator outside the ball
+  if (d2 <= 0.5) {
+    // Inside the hemisphere: exact sphere projection, already unit length.
+    return [nx, ny, Math.sqrt(1 - d2)];
+  }
+  // Outside the hemisphere midpoint: hyperbolic sheet, then normalize.
+  const z   = 0.5 / Math.sqrt(d2);
+  const len = Math.sqrt(d2 + z * z);
+  return [nx / len, ny / len, z / len];
 }
 
 /** Unit quaternion [w,x,y,z] rotating unit vector a → unit vector b. */
