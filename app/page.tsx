@@ -2921,7 +2921,8 @@ export default function LandingPage() {
           </div>
 
           {/* ── Bridge: structural consequence ───────────────────────────────── */}
-          <div className="mt-[6vh]" style={{ maxWidth: 600 }}>
+          {/* hidden on mobile — rendered in the mobile-only sibling below        */}
+          <div className="hidden md:block mt-[6vh]" style={{ maxWidth: 600 }}>
             <p
               className="text-[14px] leading-relaxed md:text-[19px] font-normal"
               style={{ color: "rgba(255,255,255,0.55)" }}
@@ -2931,17 +2932,14 @@ export default function LandingPage() {
           </div>
 
           {/* ── Group 3: SO YOU NEVER SEE + rotating line ────────────────────── */}
-          {/* minHeight covers label + gap + 2 lines of carousel at 25px max.
-              Container dimensions never change → nothing above/below shifts. */}
-          <div className="mt-[4vh]" style={{ maxWidth: 600, minHeight: isMobile ? 80 : 130 }}>
-            {/* "SO YOU NEVER SEE" — strong transition marker, not a whisper */}
+          {/* hidden on mobile — rendered in the mobile-only sibling below        */}
+          <div className="hidden md:block mt-[4vh]" style={{ maxWidth: 600, minHeight: 130 }}>
             <p
               className="text-[15px] font-semibold uppercase"
               style={{ letterSpacing: "0.22em", color: "rgba(255,255,255,1.0)" }}
             >
               So you never see
             </p>
-            {/* Carousel line — grown to feel like a key statement            */}
             <p
               key={discoveryIdx}
               className="text-[17px] md:text-[25px] font-semibold leading-snug mt-4"
@@ -2957,7 +2955,8 @@ export default function LandingPage() {
           </div>
 
           {/* ── Group 4: Final tagline ────────────────────────────────────────── */}
-          <div className="mt-8" style={{ maxWidth: 600 }}>
+          {/* hidden on mobile — rendered in the mobile-only sibling below        */}
+          <div className="hidden md:block mt-8" style={{ maxWidth: 600 }}>
             <p
               className="text-[14px] leading-relaxed md:text-[19px] font-normal"
               style={{ color: "rgba(255,255,255,0.55)" }}
@@ -3453,6 +3452,58 @@ export default function LandingPage() {
           </div>
 
         </div>
+
+        {/* ── MOBILE ONLY: lower copy — appears after carousel (order-4) ─────── */}
+        {/* Bridge, "So you never see", and final tagline are hidden inside the    */}
+        {/* desktop LEFT column above. This sibling renders them only on mobile,   */}
+        {/* after the carousel, completing the narrative sequence.                 */}
+        <div className="md:hidden order-4 px-6 pt-[4vh] pb-[8vh]" style={{ width: "100%" }}>
+
+          {/* Bridge */}
+          <div style={{ maxWidth: 600 }}>
+            <p
+              className="text-[14px] leading-relaxed font-normal"
+              style={{ color: "rgba(255,255,255,0.55)" }}
+            >
+              This structurally limits everything you see.
+            </p>
+          </div>
+
+          {/* So you never see */}
+          <div className="mt-[4vh]" style={{ maxWidth: 600, minHeight: 80 }}>
+            <p
+              className="text-[15px] font-semibold uppercase"
+              style={{ letterSpacing: "0.22em", color: "rgba(255,255,255,1.0)" }}
+            >
+              So you never see
+            </p>
+            <p
+              key={`mob-${discoveryIdx}`}
+              className="text-[17px] font-semibold leading-snug mt-4"
+              style={{
+                color: COMPANIES[discoveryIdx].accent,
+                animation: "fadeSlideUp 0.45s ease-out",
+                letterSpacing: "-0.01em",
+              }}
+            >
+              {DISCOVERY[discoveryIdx].line1}<br />
+              {DISCOVERY[discoveryIdx].line2}
+            </p>
+          </div>
+
+          {/* Final tagline */}
+          <div className="mt-8" style={{ maxWidth: 600 }}>
+            <p
+              className="text-[14px] leading-relaxed font-normal"
+              style={{ color: "rgba(255,255,255,0.55)" }}
+            >
+              We&apos;re living in algorithmic echo chambers.<br />
+              Do you feel it?
+            </p>
+          </div>
+
+        </div>
+
       </section>
 
       {/* ══ SECTION 3 — Friends ═══════════════════════════════════════════════ */}
