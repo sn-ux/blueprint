@@ -603,7 +603,7 @@ export default function LandingPage() {
 
   // ── 3-state bottom sheet (mobile only) ───────────────────────────────────
   // 0 = hidden, 1 = peek (200px visible), 2 = fullscreen (fills to nav)
-  // No free dragging — transitions are preset-only via arrow button or close.
+  // Transitions fire via arrow button OR swipe gesture on the sheet header.
   const [sheetSnap, setSheetSnap] = useState<0|1|2>(0);
   const sheetSnapRef              = useRef<0|1|2>(0);
   sheetSnapRef.current            = sheetSnap;
@@ -611,6 +611,13 @@ export default function LandingPage() {
   // Ref to the mobile tracklist scroll container — used to ignore
   // touch events that originate inside the list (internal scroll).
   const mobileTracklistRef = useRef<HTMLDivElement | null>(null);
+
+  // ── Sheet swipe detection (mobile only) ──────────────────────────────────
+  // Records the start Y and time of a touch on the sheet (not the tracklist).
+  // No live dragging — direction is evaluated only on touchend, then the sheet
+  // snaps to one of the two visible states (1 = peek, 2 = fullscreen).
+  const sheetSwipeStartY    = useRef<number | null>(null);
+  const sheetSwipeStartTime = useRef<number>(0);
 
   // ── Interaction refs ──────────────────────────────────────────────────────
   const zoomRef          = useRef(1);       // visual zoom — lerped each RAF frame
@@ -2443,6 +2450,40 @@ export default function LandingPage() {
 
             return (
               <div
+                // ── Swipe gesture detection ────────────────────────────────
+                // touchstart / touchend on the sheet container detect swipe
+                // direction. Touches that originate inside the scrollable
+                // tracklist are ignored so list scrolling is unaffected.
+                // No live translateY during the gesture — the sheet is
+                // stationary while the user swipes; it only snaps on lift.
+                onTouchStart={e => {
+                  // Ignore: touch started inside the scrollable track list
+                  if (mobileTracklistRef.current?.contains(e.target as Node)) return;
+                  sheetSwipeStartY.current    = e.touches[0].clientY;
+                  sheetSwipeStartTime.current = Date.now();
+                }}
+                onTouchEnd={e => {
+                  if (sheetSwipeStartY.current === null) return;
+                  const endY    = e.changedTouches[0].clientY;
+                  const deltaY  = endY - sheetSwipeStartY.current;
+                  const elapsed = Math.max(Date.now() - sheetSwipeStartTime.current, 1);
+                  const vel     = deltaY / elapsed; // px / ms — positive = downward
+
+                  sheetSwipeStartY.current = null;
+
+                  // Swipe UP — fast flick (vel < −0.3) or slow drag > 40 px up
+                  if (vel < -0.3 || deltaY < -40) {
+                    setSheetSnap(2);
+                    return;
+                  }
+                  // Swipe DOWN — snap to peek; never dismiss (state 0)
+                  if (vel > 0.3 || deltaY > 40) {
+                    if (sheetSnapRef.current === 2) setSheetSnap(1);
+                    // Already at peek (1) — stay there, no dismiss
+                    return;
+                  }
+                  // Sub-threshold movement — no snap change
+                }}
                 style={{
                   position:             "fixed",
                   bottom:               0,
