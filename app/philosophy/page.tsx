@@ -131,7 +131,7 @@ const PHILOSOPHERS: Entry[] = [
   {
     id:    "al-farabi",
     name:  "Al-Farabi",
-    image: WM("Al-Farabi.png"),
+    image: WM("Alpharabius_in_Liber_Chronicarum_1493_AD.png"),
     quote: "The intellect receives knowledge from a higher source.",
     saying:   "They argued that discovery requires connection to something beyond the individual mind — a broader intelligence that is not limited by personal experience.",
     adds:     "The self is not enough. To discover what you don't know, you need access to perspectives or knowledge outside your own history.",
@@ -140,7 +140,7 @@ const PHILOSOPHERS: Entry[] = [
   {
     id:    "avicenna",
     name:  "Avicenna",
-    image: WM("Avicenna-miniature.jpg"),
+    image: WM("Portrait_of_Avicenna_Wellcome_M0000768.jpg"),
     quote: "The soul perceives itself without the body.",
     saying:   null,
     adds:     null,
@@ -149,7 +149,7 @@ const PHILOSOPHERS: Entry[] = [
   {
     id:    "averroes",
     name:  "Averroes",
-    image: WM("Averroes_by_Giambattista_Tiepolo.jpg"),
+    image: WM("Averroes_closeup.jpg"),
     quote: "The intellect is shared.",
     saying:   "Knowledge emerges from participation in a shared system of reasoning across many minds.",
     adds:     "Discovery depends on a shared reality — a common set of inputs that people can reason from together.",
@@ -158,7 +158,7 @@ const PHILOSOPHERS: Entry[] = [
   {
     id:    "kant",
     name:  "Kant",
-    image: WM("Immanuel_Kant_(painted_portrait).jpg"),
+    image: WM("Immanuel_Kant_by_Johann_Christoph_Frisch.jpg"),
     quote: "You see the world not as it is, but as you are.",
     saying:   "The mind structures reality. You do not perceive the world directly — you perceive it through your own cognitive framework.",
     adds:     "You cannot discover what falls outside your framework of thought. Your ability to know is constrained by how you interpret the world.",
