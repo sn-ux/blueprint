@@ -283,18 +283,17 @@ export default function PhilosophyPage() {
         >
           <FadeIn style={{ maxWidth: 760, margin: "0 auto" }}>
 
-            {/* ── Header: portrait column + name ──────────────────────── */}
-            {/* alignItems: flex-start so the h2 doesn't shift when the     */}
-            {/* logo column is taller than the image alone.                  */}
-            <div style={{ display: "flex", alignItems: "flex-start", gap: IMG_GAP, marginBottom: 28 }}>
+            {/* ── Two-column layout: [image + logo] | [all text] ────────── */}
+            {/* The left column stretches to row height (flex default),        */}
+            {/* so top:50% on the absolutely-positioned logo always points      */}
+            {/* to the vertical midpoint of the full content block.             */}
+            <div style={{ display: "flex", flexDirection: "row", gap: IMG_GAP }}>
 
-              {/* Column: portrait on top, Blueprint logo centered below */}
+              {/* LEFT — portrait at top; logo absolutely centred in the column */}
               <div style={{
-                display:        "flex",
-                flexDirection:  "column",
-                alignItems:     "center",
-                gap:            10,
-                flexShrink:     0,
+                position:  "relative",
+                width:     IMG_SIZE,
+                flexShrink: 0,
               }}>
                 {/* B&W portrait — gray background shows through if image fails */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -312,77 +311,87 @@ export default function PhilosophyPage() {
                     display:        "block",
                   }}
                 />
-                {/* Blueprint logo — only for sections that have an internet paragraph */}
-                {p.internet && <BlueprintMark />}
+                {/* Blueprint logo — horizontally centred with the image;       */}
+                {/* vertically at the midpoint of the full left-column height.  */}
+                {p.internet && (
+                  <div style={{
+                    position:  "absolute",
+                    left:      "50%",
+                    top:       "50%",
+                    transform: "translate(-50%, -50%)",
+                  }}>
+                    <BlueprintMark />
+                  </div>
+                )}
               </div>
 
-              {/* Name — minHeight keeps it vertically centered with the image */}
-              {/* regardless of whether the logo column extends below it.      */}
-              <h2
-                style={{
-                  fontSize:      "clamp(18px, 1.8vw, 22px)",
-                  fontWeight:    600,
-                  lineHeight:    1.2,
-                  letterSpacing: "-0.01em",
-                  color:         "rgba(255,255,255,0.92)",
-                  margin:        0,
-                  minHeight:     IMG_SIZE,
-                  display:       "flex",
-                  alignItems:    "center",
-                }}
-              >
-                {p.name}
-              </h2>
-            </div>
+              {/* RIGHT — name then all paragraphs, no extra left indent needed */}
+              <div style={{ flex: 1, minWidth: 0 }}>
 
-            {/* ── All body content indented to align with name ─────────── */}
-            <div style={{ paddingLeft: INDENT }}>
-
-              {/* Quote */}
-              <p
-                style={{
-                  fontSize:     "clamp(16px, 1.7vw, 20px)",
-                  fontWeight:   400,
-                  lineHeight:   1.55,
-                  fontStyle:    "italic",
-                  color:        "rgba(255,255,255,0.78)",
-                  marginBottom: p.attribution ? 10 : 36,
-                }}
-              >
-                &ldquo;{p.quote}&rdquo;
-              </p>
-
-              {/* Attribution — source line below the quote */}
-              {p.attribution && (
-                <p
+                {/* Name — minHeight aligns it vertically with the image */}
+                <h2
                   style={{
-                    fontSize:     "clamp(11px, 1vw, 12px)",
-                    fontWeight:   400,
-                    lineHeight:   1.5,
-                    fontStyle:    "italic",
-                    color:        "rgba(255,255,255,0.38)",
-                    marginBottom: 36,
+                    fontSize:      "clamp(18px, 1.8vw, 22px)",
+                    fontWeight:    600,
+                    lineHeight:    1.2,
+                    letterSpacing: "-0.01em",
+                    color:         "rgba(255,255,255,0.92)",
+                    margin:        0,
+                    marginBottom:  28,
+                    minHeight:     IMG_SIZE,
+                    display:       "flex",
+                    alignItems:    "center",
                   }}
                 >
-                  {p.attribution}
+                  {p.name}
+                </h2>
+
+                {/* Quote */}
+                <p
+                  style={{
+                    fontSize:     "clamp(16px, 1.7vw, 20px)",
+                    fontWeight:   400,
+                    lineHeight:   1.55,
+                    fontStyle:    "italic",
+                    color:        "rgba(255,255,255,0.78)",
+                    marginBottom: p.attribution ? 10 : 36,
+                  }}
+                >
+                  &ldquo;{p.quote}&rdquo;
                 </p>
-              )}
 
-              {/* Saying */}
-              {p.saying && (
-                <p style={{ ...bodyStyle, marginBottom: 28 }}>{p.saying}</p>
-              )}
+                {/* Attribution — source line below the quote */}
+                {p.attribution && (
+                  <p
+                    style={{
+                      fontSize:     "clamp(11px, 1vw, 12px)",
+                      fontWeight:   400,
+                      lineHeight:   1.5,
+                      fontStyle:    "italic",
+                      color:        "rgba(255,255,255,0.38)",
+                      marginBottom: 36,
+                    }}
+                  >
+                    {p.attribution}
+                  </p>
+                )}
 
-              {/* Adds */}
-              {p.adds && (
-                <p style={{ ...bodyStyle, marginBottom: 28 }}>{p.adds}</p>
-              )}
+                {/* Saying */}
+                {p.saying && (
+                  <p style={{ ...bodyStyle, marginBottom: 28 }}>{p.saying}</p>
+                )}
 
-              {/* Internet paragraph — Blueprint logo moved to portrait column above */}
-              {p.internet && (
-                <p style={bodyStyle}>{p.internet}</p>
-              )}
+                {/* Adds */}
+                {p.adds && (
+                  <p style={{ ...bodyStyle, marginBottom: 28 }}>{p.adds}</p>
+                )}
 
+                {/* Internet */}
+                {p.internet && (
+                  <p style={bodyStyle}>{p.internet}</p>
+                )}
+
+              </div>
             </div>
           </FadeIn>
         </section>
