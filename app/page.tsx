@@ -550,6 +550,16 @@ export default function LandingPage() {
     spotifyId?: string | null;
   } | null>(null);
 
+  // ── Pending-playback state ────────────────────────────────────────────────────
+  // When the user clicks a track whose preview URL hasn't loaded yet we do NOT
+  // interrupt the current audio. Instead we record the intent here and fire an
+  // on-demand fetch. When the URL arrives we do a stale-check (requestedTrackRef)
+  // before starting playback, so rapid clicks never start the wrong track.
+  const [pendingTrackId,  setPendingTrackId]  = useState<string | null>(null);
+  const requestedTrackRef = useRef<string | null>(null);
+  requestedTrackRef.current = pendingTrackId;   // keep ref in sync each render
+  const pendingAudioRef   = useRef<HTMLAudioElement | null>(null);
+
   // ── Real data (same path as /world — starts empty, filled from API) ─────────
   const [worlds,   setWorlds]   = useState<Record<string, number>>({});
   const [subgenres, setSubgenres] = useState<SubItem[]>([]);
@@ -709,7 +719,9 @@ export default function LandingPage() {
       // Collapse immediately rather than waiting for the selected→null sync tick.
       setSheetSnap(0);
 
-      // ── Preview audio ────────────────────────────────────────────────────────
+      // ── Preview audio + pending state ───────────────────────────────────────
+      requestedTrackRef.current = null; setPendingTrackId(null);
+      if (pendingAudioRef.current) { pendingAudioRef.current.src = ""; pendingAudioRef.current = null; }
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current = null;
@@ -942,7 +954,9 @@ export default function LandingPage() {
       // calling setSheetSnap(0) directly ensures it collapses immediately)
       setSheetSnap(0);
 
-      // Stop preview audio so a disembodied track doesn't keep playing
+      // Stop preview audio + discard any pending fetch
+      requestedTrackRef.current = null; setPendingTrackId(null);
+      if (pendingAudioRef.current) { pendingAudioRef.current.src = ""; pendingAudioRef.current = null; }
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current = null;
@@ -1905,39 +1919,95 @@ export default function LandingPage() {
     console.log("[play] 2 previewUrl at click time:", previewUrl ? previewUrl.slice(0, 80) + "…" : "null");
 
     if (!previewUrl) {
-      // ── Same no-preview track clicked again → deselect ──────────────────
-      // Without this check the branch below always calls setNowPlayingId(t.id)
-      // (re-select) and returns, so the Spotify logo never goes dark.
+      // ── Same currently-playing track clicked → deselect ─────────────────
       if (nowPlayingIdRef.current === t.id) {
         console.log("[play] 2 same no-preview track → deselect");
-        if (audioRef.current) {
-          audioRef.current.pause();
-          audioRef.current = null;
-        }
+        if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
         setNowPlayingId(null);
         setAudioPlaying(false);
+        setPlayingTrack(null);
         return;
       }
 
-      // No preview URL yet — select the track (lights up Spotify logo) and
-      // fire an on-demand fetch in case the batch hasn't reached this track yet.
-      // We do NOT attempt audio playback since there's nothing to play.
-      console.log("[play] 2a no URL — selecting track + on-demand fetch for", t.name);
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
+      // ── Same track already pending → fetch already in flight, skip ──────
+      if (requestedTrackRef.current === t.id) {
+        console.log("[play] 2 same pending track — fetch already in flight, skip");
+        return;
       }
-      setNowPlayingId(t.id);
-      setAudioPlaying(false);
+
+      // ── Different track, no URL yet ──────────────────────────────────────
+      // Do NOT stop the currently playing audio — the user hasn't confirmed a
+      // playable track yet. Record intent, pre-create Audio in this gesture
+      // context (gives the browser the best chance of honouring autoplay later),
+      // then fire an on-demand URL fetch.
+      console.log("[play] 2a no URL — pending intent for", t.name, "(audio continues)");
+      requestedTrackRef.current = t.id;
+      setPendingTrackId(t.id);
+
+      if (pendingAudioRef.current) { pendingAudioRef.current.src = ""; pendingAudioRef.current = null; }
+      const pendingAudio = new Audio();
+      pendingAudio.volume = 0.8;
+      pendingAudioRef.current = pendingAudio;
+
       fetch(`/api/preview?track=${encodeURIComponent(t.name)}&artist=${encodeURIComponent(t.artist)}`)
         .then(r => r.json())
         .then((d: { previewUrl: string | null }) => {
-          if (d.previewUrl) {
-            console.log("[play] 2b on-demand result:", d.previewUrl.slice(0, 80) + "…");
-            deezerPreviewsRef.current[t.id] = d.previewUrl;
-            setDeezerPreviews(prev => ({ ...prev, [t.id]: d.previewUrl! }));
-          } else {
-            console.log("[play] 2b Deezer returned no preview for this track");
+          // ── Stale check — user may have clicked elsewhere since ──────────
+          if (requestedTrackRef.current !== t.id) {
+            console.log("[play] 2b stale — user moved on from", t.name, ", ignoring");
+            return;
+          }
+          requestedTrackRef.current = null;
+          setPendingTrackId(null);
+
+          if (!d.previewUrl) {
+            console.log("[play] 2b no preview available for", t.name);
+            return;
+          }
+          console.log("[play] 2b URL ready:", d.previewUrl.slice(0, 80) + "…");
+          deezerPreviewsRef.current[t.id] = d.previewUrl;
+          setDeezerPreviews(prev => ({ ...prev, [t.id]: d.previewUrl! }));
+
+          // Attempt auto-play using the pre-created Audio element. Setting src
+          // and calling play() from the async callback works on Chrome (MEI) and
+          // modern Safari when the page has recent user-gesture activation.
+          const audio = pendingAudioRef.current;
+          if (!audio) return;
+          audio.src = d.previewUrl;
+
+          // Only now — URL is confirmed — stop the old audio
+          if (audioRef.current) { audioRef.current.pause(); audioRef.current.currentTime = 0; }
+
+          audio.addEventListener("ended", () => {
+            console.log("[play] ← pending audio ended naturally");
+            setAudioPlaying(false); setNowPlayingId(null); setPlayingTrack(null);
+          });
+          audio.addEventListener("error", () => {
+            console.error("[play] ← pending audio error");
+            delete deezerPreviewsRef.current[t.id];
+            setDeezerPreviews(prev => { const n = { ...prev }; delete n[t.id]; return n; });
+            setAudioPlaying(false); setNowPlayingId(null); setPlayingTrack(null);
+          });
+
+          audioRef.current = audio;
+          pendingAudioRef.current = null;
+          setNowPlayingId(t.id);
+          setPlayingTrack({ id: t.id, name: t.name, artist: t.artist, spotifyId: t.spotifyId ?? null });
+          setAudioPlaying(true);
+
+          const p = audio.play();
+          if (p !== undefined) {
+            p.then(() => {
+              console.log("[play] 2b ✓ auto-play resolved for pending track");
+            }).catch(err => {
+              console.warn("[play] 2b auto-play blocked (browser policy):", err.name);
+              // URL is now cached — user can click the track to play it immediately.
+              // Undo state so nothing appears stuck.
+              if (audioRef.current === audio) audioRef.current = null;
+              setAudioPlaying(false);
+              setNowPlayingId(null);
+              setPlayingTrack(null);
+            });
           }
         })
         .catch(err => console.error("[play] 2b on-demand fetch error:", err));
@@ -1963,7 +2033,12 @@ export default function LandingPage() {
       return;
     }
 
-    // ── Step 4: stop current audio before switching tracks ───────────────
+    // ── Step 4: cancel any pending fetch and stop current audio ─────────
+    // Clicking a track that already has a URL is a confirmed choice — discard
+    // any in-flight fetch for a different pending track.
+    requestedTrackRef.current = null;
+    setPendingTrackId(null);
+    if (pendingAudioRef.current) { pendingAudioRef.current.src = ""; pendingAudioRef.current = null; }
     if (audioRef.current) {
       console.log("[play] 4 stopping previous audio");
       audioRef.current.pause();
@@ -2446,7 +2521,8 @@ export default function LandingPage() {
                   <div className="flex flex-col pt-1 pb-6">
                     {displayedTracks.map((t, idx) => {
                       const canPlay = !!(deezerPreviews[t.id] || t.previewUrl || (spotifyReady && !notPremium && t.spotifyId));
-                      const isActive = nowPlayingId === t.id;
+                      const isPending = pendingTrackId === t.id;
+                      const isActive  = nowPlayingId === t.id || isPending;
                       return (
                         <div
                           key={t.id}
@@ -2485,9 +2561,11 @@ export default function LandingPage() {
                             >{t.name}</span>
                             <span className="text-zinc-500 text-xs truncate">
                               {t.artist}
-                              {!canPlay && (
+                              {isPending ? (
+                                <span style={{ color: "rgba(255,255,255,0.32)", marginLeft: 4 }}>(Loading…)</span>
+                              ) : !canPlay ? (
                                 <span style={{ color: "rgba(255,255,255,0.22)", marginLeft: 4 }}>(No Preview)</span>
-                              )}
+                              ) : null}
                             </span>
                           </div>
                         </div>
@@ -2639,7 +2717,8 @@ export default function LandingPage() {
                     <div className="flex flex-col pt-1 pb-8">
                       {displayedTracks.map((t, idx) => {
                         const canPlay = !!(deezerPreviews[t.id] || t.previewUrl || (spotifyReady && !notPremium && t.spotifyId));
-                        const isActive = nowPlayingId === t.id;
+                        const isPending = pendingTrackId === t.id;
+                        const isActive  = nowPlayingId === t.id || isPending;
                         return (
                           <div
                             key={t.id}
@@ -2678,9 +2757,11 @@ export default function LandingPage() {
                               >{t.name}</span>
                               <span className="text-zinc-500 text-xs truncate">
                                 {t.artist}
-                                {!canPlay && (
+                                {isPending ? (
+                                  <span style={{ color: "rgba(255,255,255,0.32)", marginLeft: 4 }}>(Loading…)</span>
+                                ) : !canPlay ? (
                                   <span style={{ color: "rgba(255,255,255,0.22)", marginLeft: 4 }}>(No Preview)</span>
-                                )}
+                                ) : null}
                               </span>
                             </div>
                           </div>
