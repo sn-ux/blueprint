@@ -1303,7 +1303,7 @@ export default function LandingPage() {
         const [r,g,b]=rgbMap[ri];
         const isThisHov=ri===hoveredIdx;
         const labelDim=isSelG||isThisHov?1.0:selectedIdx>=0?0.28:0.75;
-        const fs=isSelG?15:13;
+        const fs=isMobileRef.current ? (isSelG?15:13) : (isSelG?18:15);
         ctx.globalAlpha=labelDim;
         ctx.font=`700 ${fs}px system-ui, sans-serif`;
         const tw=ctx.measureText(label).width, pad=8, rad=8;
@@ -1354,7 +1354,9 @@ export default function LandingPage() {
           // Scale font and padding down for tiny regions so the pill can still fit
           // inside a 1- or 2-triangle face without overflowing into a neighbour.
           const isTiny = a.n <= 1;
-          const fs2  = isTiny ? 8  : subLit ? 12 : 11;
+          const fs2  = isMobileRef.current
+            ? (isTiny ? 8  : subLit ? 12 : 11)
+            : (isTiny ? 9  : subLit ? 14 : 13);
           const pad2 = isTiny ? 3  : 6;
           const rad2 = isTiny ? 3  : 6;
           ctx.font=`${subLit?700:600} ${fs2}px system-ui, sans-serif`;
