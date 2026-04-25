@@ -2862,17 +2862,32 @@ export default function LandingPage() {
       <section className="min-h-screen bg-black flex flex-col md:flex-row overflow-hidden"
         style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
 
-        {/* ── LEFT: problem copy ──────────────────────────────────────────────── */}
-        {/* On mobile: order-2 so the carousel visual appears first (order-1).    */}
+        {/* ── MOBILE ONLY: headline comes before the carousel ────────────────── */}
+        {/* Rendered only on mobile (md:hidden). On desktop the heading lives      */}
+        {/* inside the LEFT column below, which is the single source of truth.     */}
         <div
-          className="flex flex-col order-2 md:order-1 px-6 md:px-12 pt-[8vh] md:pt-[10vh] pb-[8vh] overflow-hidden"
+          className="md:hidden order-1 px-6 pt-[8vh] pb-4"
+          style={{ width: "100%" }}
+        >
+          <h2
+            className="text-[28px] font-semibold leading-[1.05] text-white"
+            style={{ letterSpacing: "-0.02em", maxWidth: 600 }}
+          >
+            The internet runs on one bad model.
+          </h2>
+        </div>
+
+        {/* ── LEFT: problem copy ──────────────────────────────────────────────── */}
+        {/* Mobile: order-3 — appears below the carousel. Desktop: order-1 (left). */}
+        <div
+          className="flex flex-col order-3 md:order-1 px-6 md:px-12 pt-4 md:pt-[10vh] pb-[8vh] overflow-hidden"
           style={{ width: isMobile ? "100%" : "54%", borderRight: isMobile ? "none" : "1px solid rgba(255,255,255,0.05)" }}
         >
 
-          {/* ── Group 1: Headline ─────────────────────────────────────────────── */}
-          <div style={{ maxWidth: 600 }}>
+          {/* ── Group 1: Headline — desktop only (mobile version is above) ──────── */}
+          <div className="hidden md:block" style={{ maxWidth: 600 }}>
             <h2
-              className="text-[28px] md:text-[60px] lg:text-[64px] font-semibold leading-[1.05] text-white"
+              className="md:text-[60px] lg:text-[64px] font-semibold leading-[1.05] text-white"
               style={{ letterSpacing: "-0.02em" }}
             >
               The internet runs on one bad model.
@@ -2955,11 +2970,13 @@ export default function LandingPage() {
         </div>
 
         {/* ── RIGHT: rotating company showcase ─────────────────────────────── */}
-        {/* On mobile: order-1 so it appears above the copy text.               */}
-        <div className="flex flex-col order-1 md:order-2 py-8 px-6 md:px-7 overflow-hidden"
+        {/* Mobile: order-2 — sits between the headline (order-1) and copy (order-3). */}
+        <div className="flex flex-col order-2 md:order-2 py-8 px-6 md:px-7 overflow-hidden"
           style={{ width: isMobile ? "100%" : "46%", minHeight: isMobile ? "52vh" : undefined }}>
 
-          <p className="text-[11px] tracking-widest uppercase mb-4 select-none flex-shrink-0" style={{ color: "rgba(255,255,255,0.35)" }}>
+          {/* "Different content. Same model." — desktop only; redundant on mobile  */}
+          {/* since the headline is directly above and the carousel follows right after. */}
+          <p className="hidden md:block text-[11px] tracking-widest uppercase mb-4 select-none flex-shrink-0" style={{ color: "rgba(255,255,255,0.35)" }}>
             Different content.<br />Same model.
           </p>
 
