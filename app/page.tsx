@@ -2684,7 +2684,7 @@ export default function LandingPage() {
           {/* ── Group 1: Headline ─────────────────────────────────────────────── */}
           <div style={{ maxWidth: 600 }}>
             <h2
-              className="text-[52px] md:text-[60px] lg:text-[64px] font-semibold leading-[1.05] text-white"
+              className="text-[28px] md:text-[60px] lg:text-[64px] font-semibold leading-[1.05] text-white"
               style={{ letterSpacing: "-0.02em" }}
             >
               The internet runs on one bad model.
@@ -2699,7 +2699,7 @@ export default function LandingPage() {
               {/* CSS grid: col1 = fixed-width label, col2 = arrow, col3 = description.
                   Guarantees → sits on exactly the same vertical axis for both rows. */}
               <p
-                className="text-[20px] md:text-[22px] font-normal leading-[1.45]"
+                className="text-[15px] leading-[1.65] md:text-[22px] md:leading-[1.45] font-normal"
                 style={{ display: "grid", gridTemplateColumns: "5em 2em 1fr", alignItems: "baseline" }}
               >
                 <strong style={{ color: "rgba(255,255,255,0.97)", letterSpacing: "0.08em", fontFamily: "ui-monospace, monospace" }}>SEARCH</strong>
@@ -2707,7 +2707,7 @@ export default function LandingPage() {
                 <span style={{ color: "rgba(255,255,255,0.75)" }}>shows what you know to look for</span>
               </p>
               <p
-                className="text-[20px] md:text-[22px] font-normal leading-[1.45]"
+                className="text-[15px] leading-[1.65] md:text-[22px] md:leading-[1.45] font-normal"
                 style={{ display: "grid", gridTemplateColumns: "5em 2em 1fr", alignItems: "baseline" }}
               >
                 <strong style={{ color: "rgba(255,255,255,0.97)", letterSpacing: "0.08em", fontFamily: "ui-monospace, monospace" }}>FEED</strong>
@@ -2720,7 +2720,7 @@ export default function LandingPage() {
           {/* ── Bridge: structural consequence ───────────────────────────────── */}
           <div className="mt-[6vh]" style={{ maxWidth: 600 }}>
             <p
-              className="text-[18px] md:text-[19px] font-normal leading-relaxed"
+              className="text-[14px] leading-relaxed md:text-[19px] font-normal"
               style={{ color: "rgba(255,255,255,0.55)" }}
             >
               This structurally limits everything you see.
@@ -2730,7 +2730,7 @@ export default function LandingPage() {
           {/* ── Group 3: SO YOU NEVER SEE + rotating line ────────────────────── */}
           {/* minHeight covers label + gap + 2 lines of carousel at 25px max.
               Container dimensions never change → nothing above/below shifts. */}
-          <div className="mt-[4vh]" style={{ maxWidth: 600, minHeight: 130 }}>
+          <div className="mt-[4vh]" style={{ maxWidth: 600, minHeight: isMobile ? 80 : 130 }}>
             {/* "SO YOU NEVER SEE" — strong transition marker, not a whisper */}
             <p
               className="text-[15px] font-semibold uppercase"
@@ -2741,7 +2741,7 @@ export default function LandingPage() {
             {/* Carousel line — grown to feel like a key statement            */}
             <p
               key={discoveryIdx}
-              className="text-[22px] md:text-[25px] font-semibold leading-snug mt-4"
+              className="text-[17px] md:text-[25px] font-semibold leading-snug mt-4"
               style={{
                 color: COMPANIES[discoveryIdx].accent,
                 animation: "fadeSlideUp 0.45s ease-out",
@@ -2756,7 +2756,7 @@ export default function LandingPage() {
           {/* ── Group 4: Final tagline ────────────────────────────────────────── */}
           <div className="mt-8" style={{ maxWidth: 600 }}>
             <p
-              className="text-[18px] md:text-[19px] font-normal leading-relaxed"
+              className="text-[14px] leading-relaxed md:text-[19px] font-normal"
               style={{ color: "rgba(255,255,255,0.55)" }}
             >
               We&apos;re living in algorithmic echo chambers.<br />
@@ -3362,32 +3362,32 @@ export default function LandingPage() {
           <div style={{ maxWidth: 620 }}>
 
             {/* Headline */}
-            <h2 className="text-[38px] md:text-[42px] font-semibold leading-[1.07] text-white" style={{ letterSpacing: "-0.02em" }}>
+            <h2 className="text-[24px] md:text-[42px] font-semibold leading-[1.07] text-white" style={{ letterSpacing: "-0.02em" }}>
               Turn your network into your algorithm
             </h2>
 
             {/* Sub-head — matches body copy exactly */}
-            <p className="text-[20px] md:text-[22px] font-normal leading-[1.45]"
-              style={{ color: "rgba(255,255,255,0.75)", marginTop: 40 }}>
+            <p className="text-[15px] leading-[1.65] md:text-[22px] md:leading-[1.45] font-normal"
+              style={{ color: "rgba(255,255,255,0.75)", marginTop: isMobile ? 20 : 40 }}>
               The tastes of people you trust
             </p>
 
             {/* Body line 1 */}
-            <p className="text-[20px] md:text-[22px] font-normal leading-[1.45]"
-              style={{ color: "rgba(255,255,255,0.75)", marginTop: 32 }}>
+            <p className="text-[15px] leading-[1.65] md:text-[22px] md:leading-[1.45] font-normal"
+              style={{ color: "rgba(255,255,255,0.75)", marginTop: isMobile ? 14 : 32 }}>
               show you what you never thought to look for.
             </p>
 
             {/* Body line 2 */}
-            <p className="text-[20px] md:text-[22px] font-normal leading-[1.45]"
-              style={{ color: "rgba(255,255,255,0.75)", marginTop: 24 }}>
+            <p className="text-[15px] leading-[1.65] md:text-[22px] md:leading-[1.45] font-normal"
+              style={{ color: "rgba(255,255,255,0.75)", marginTop: isMobile ? 14 : 24 }}>
               show you what you don&apos;t engage with<br />
               &amp; what companies don&apos;t pay to promote.
             </p>
 
             {/* Final lines — payoff */}
-            <p className="text-[26px] md:text-[28px] font-semibold leading-[1.15] text-white"
-              style={{ letterSpacing: "-0.01em", marginTop: 48 }}>
+            <p className="text-[18px] md:text-[28px] font-semibold leading-[1.15] text-white"
+              style={{ letterSpacing: "-0.01em", marginTop: isMobile ? 24 : 48 }}>
               Trusted recommendations give you better starting points<br />
               to explore the unknown.
             </p>
@@ -3413,39 +3413,39 @@ export default function LandingPage() {
           <div style={{ maxWidth: isMobile ? "100%" : 540 }}>
 
             {/* Headline */}
-            <h2 className="text-[38px] md:text-[42px] font-semibold leading-[1.07] text-white" style={{ letterSpacing: "-0.02em" }}>
+            <h2 className="text-[24px] md:text-[42px] font-semibold leading-[1.07] text-white" style={{ letterSpacing: "-0.02em" }}>
               Every place has a taste.
             </h2>
 
             {/* Body line 1 */}
-            <p className="text-[20px] md:text-[22px] font-normal leading-[1.45]"
-              style={{ color: "rgba(255,255,255,0.75)", marginTop: 32 }}>
+            <p className="text-[15px] leading-[1.65] md:text-[22px] md:leading-[1.45] font-normal"
+              style={{ color: "rgba(255,255,255,0.75)", marginTop: isMobile ? 16 : 32 }}>
               Neighborhoods. Cities. Countries.<br />
               Each one surfaces something different.
             </p>
 
             {/* Body line 2 */}
-            <p className="text-[20px] md:text-[22px] font-normal leading-[1.45]"
-              style={{ color: "rgba(255,255,255,0.75)", marginTop: 24 }}>
+            <p className="text-[15px] leading-[1.65] md:text-[22px] md:leading-[1.45] font-normal"
+              style={{ color: "rgba(255,255,255,0.75)", marginTop: isMobile ? 12 : 24 }}>
               Each one sees what you don&apos;t.
             </p>
 
             {/* Body line 3 */}
-            <p className="text-[20px] md:text-[22px] font-normal leading-[1.45]"
-              style={{ color: "rgba(255,255,255,0.75)", marginTop: 24 }}>
+            <p className="text-[15px] leading-[1.65] md:text-[22px] md:leading-[1.45] font-normal"
+              style={{ color: "rgba(255,255,255,0.75)", marginTop: isMobile ? 12 : 24 }}>
               Step into them.
             </p>
 
             {/* Body line 4 */}
-            <p className="text-[20px] md:text-[22px] font-normal leading-[1.45]"
-              style={{ color: "rgba(255,255,255,0.75)", marginTop: 24 }}>
+            <p className="text-[15px] leading-[1.65] md:text-[22px] md:leading-[1.45] font-normal"
+              style={{ color: "rgba(255,255,255,0.75)", marginTop: isMobile ? 12 : 24 }}>
               You&apos;re no longer limited by what you know<br />
               or what you&apos;re shown.
             </p>
 
             {/* Final CTA — larger, semibold, full white */}
-            <p className="text-[26px] md:text-[28px] font-semibold leading-[1.15] text-white"
-              style={{ letterSpacing: "-0.01em", marginTop: 48 }}>
+            <p className="text-[18px] md:text-[28px] font-semibold leading-[1.15] text-white"
+              style={{ letterSpacing: "-0.01em", marginTop: isMobile ? 24 : 48 }}>
               Leave the limits of your algorithm behind.
             </p>
 
