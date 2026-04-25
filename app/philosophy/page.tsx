@@ -283,116 +283,103 @@ export default function PhilosophyPage() {
         >
           <FadeIn style={{ maxWidth: 760, margin: "0 auto" }}>
 
-            {/* ── Two-column layout: [image + logo] | [all text] ────────── */}
-            {/* The left column stretches to row height (flex default),        */}
-            {/* so top:50% on the absolutely-positioned logo always points      */}
-            {/* to the vertical midpoint of the full content block.             */}
-            <div style={{ display: "flex", flexDirection: "row", gap: IMG_GAP }}>
+            {/* ── Header: portrait + name ──────────────────────────────── */}
+            <div style={{ display: "flex", alignItems: "center", gap: IMG_GAP, marginBottom: 28 }}>
 
-              {/* LEFT — portrait at top; logo absolutely centred in the column */}
-              <div style={{
-                position:  "relative",
-                width:     IMG_SIZE,
-                flexShrink: 0,
-              }}>
-                {/* B&W portrait — gray background shows through if image fails */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={p.image}
-                  alt={p.name}
-                  onError={e => { (e.currentTarget as HTMLImageElement).style.opacity = "0"; }}
-                  style={{
-                    width:          IMG_SIZE,
-                    height:         IMG_SIZE,
-                    objectFit:      "cover",
-                    objectPosition: "center top",
-                    filter:         "grayscale(100%) contrast(1.55) brightness(1.12)",
-                    background:     "rgba(255,255,255,0.07)",
-                    display:        "block",
-                  }}
-                />
-                {/* Blueprint logo — horizontally centred with the image;       */}
-                {/* vertically at the midpoint of the full left-column height.  */}
-                {p.internet && (
-                  <div style={{
-                    position:  "absolute",
-                    left:      "50%",
-                    top:       "50%",
-                    transform: "translate(-50%, -50%)",
-                  }}>
-                    <BlueprintMark />
-                  </div>
-                )}
-              </div>
+              {/* B&W portrait — gray background shows through if image fails */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={p.image}
+                alt={p.name}
+                onError={e => { (e.currentTarget as HTMLImageElement).style.opacity = "0"; }}
+                style={{
+                  width:          IMG_SIZE,
+                  height:         IMG_SIZE,
+                  objectFit:      "cover",
+                  objectPosition: "center top",
+                  filter:         "grayscale(100%) contrast(1.55) brightness(1.12)",
+                  background:     "rgba(255,255,255,0.07)",
+                  flexShrink:     0,
+                  display:        "block",
+                }}
+              />
 
-              {/* RIGHT — name then all paragraphs, no extra left indent needed */}
-              <div style={{ flex: 1, minWidth: 0 }}>
+              <h2
+                style={{
+                  fontSize:      "clamp(18px, 1.8vw, 22px)",
+                  fontWeight:    600,
+                  lineHeight:    1.2,
+                  letterSpacing: "-0.01em",
+                  color:         "rgba(255,255,255,0.92)",
+                  margin:        0,
+                }}
+              >
+                {p.name}
+              </h2>
+            </div>
 
-                {/* Name — minHeight aligns it vertically with the image */}
-                <h2
-                  style={{
-                    fontSize:      "clamp(18px, 1.8vw, 22px)",
-                    fontWeight:    600,
-                    lineHeight:    1.2,
-                    letterSpacing: "-0.01em",
-                    color:         "rgba(255,255,255,0.92)",
-                    margin:        0,
-                    marginBottom:  28,
-                    minHeight:     IMG_SIZE,
-                    display:       "flex",
-                    alignItems:    "center",
-                  }}
-                >
-                  {p.name}
-                </h2>
+            {/* ── Body: earlier paragraphs indented to align with name ─────── */}
+            <div style={{ paddingLeft: INDENT }}>
 
-                {/* Quote */}
+              {/* Quote */}
+              <p
+                style={{
+                  fontSize:     "clamp(16px, 1.7vw, 20px)",
+                  fontWeight:   400,
+                  lineHeight:   1.55,
+                  fontStyle:    "italic",
+                  color:        "rgba(255,255,255,0.78)",
+                  marginBottom: p.attribution ? 10 : 36,
+                }}
+              >
+                &ldquo;{p.quote}&rdquo;
+              </p>
+
+              {/* Attribution — source line below the quote */}
+              {p.attribution && (
                 <p
                   style={{
-                    fontSize:     "clamp(16px, 1.7vw, 20px)",
+                    fontSize:     "clamp(11px, 1vw, 12px)",
                     fontWeight:   400,
-                    lineHeight:   1.55,
+                    lineHeight:   1.5,
                     fontStyle:    "italic",
-                    color:        "rgba(255,255,255,0.78)",
-                    marginBottom: p.attribution ? 10 : 36,
+                    color:        "rgba(255,255,255,0.38)",
+                    marginBottom: 36,
                   }}
                 >
-                  &ldquo;{p.quote}&rdquo;
+                  {p.attribution}
                 </p>
+              )}
 
-                {/* Attribution — source line below the quote */}
-                {p.attribution && (
-                  <p
-                    style={{
-                      fontSize:     "clamp(11px, 1vw, 12px)",
-                      fontWeight:   400,
-                      lineHeight:   1.5,
-                      fontStyle:    "italic",
-                      color:        "rgba(255,255,255,0.38)",
-                      marginBottom: 36,
-                    }}
-                  >
-                    {p.attribution}
-                  </p>
-                )}
+              {/* Saying */}
+              {p.saying && (
+                <p style={{ ...bodyStyle, marginBottom: 28 }}>{p.saying}</p>
+              )}
 
-                {/* Saying */}
-                {p.saying && (
-                  <p style={{ ...bodyStyle, marginBottom: 28 }}>{p.saying}</p>
-                )}
+              {/* Adds — if internet follows, keep bottom margin; otherwise it's last */}
+              {p.adds && (
+                <p style={{ ...bodyStyle, marginBottom: p.internet ? 28 : 0 }}>{p.adds}</p>
+              )}
 
-                {/* Adds */}
-                {p.adds && (
-                  <p style={{ ...bodyStyle, marginBottom: 28 }}>{p.adds}</p>
-                )}
-
-                {/* Internet */}
-                {p.internet && (
-                  <p style={bodyStyle}>{p.internet}</p>
-                )}
-
-              </div>
             </div>
+
+            {/* ── Last paragraph row: [logo | internet text] ───────────────── */}
+            {/* The logo div is IMG_SIZE wide (matching the image column above) */}
+            {/* so the logo stays horizontally under the portrait.              */}
+            {/* flex align-items: center vertically centres logo with the text. */}
+            {p.internet && (
+              <div style={{ display: "flex", alignItems: "center", gap: IMG_GAP }}>
+                <div style={{
+                  width:      IMG_SIZE,
+                  flexShrink: 0,
+                  display:    "flex",
+                  justifyContent: "center",
+                }}>
+                  <BlueprintMark />
+                </div>
+                <p style={{ ...bodyStyle, flex: 1 }}>{p.internet}</p>
+              </div>
+            )}
           </FadeIn>
         </section>
       ))}
