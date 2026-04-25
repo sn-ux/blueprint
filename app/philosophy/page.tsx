@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 // ── Scroll-reveal hook ─────────────────────────────────────────────────────
 function useInView(threshold = 0.08) {
@@ -383,50 +383,61 @@ function PhilosophyEquation() {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
   const sc    = Math.min(1, cw / 680);
   const world = Math.max(52, Math.round(180 * sc));
   const you   = Math.max(26, Math.round(70  * sc));
   const every = Math.max(40, Math.round(130 * sc));
-  const gap   = Math.max(8,  Math.round(24  * sc));
-  const opSz  = Math.max(20, Math.round(42  * sc));
+  const opCol = Math.max(20, Math.round(52  * sc));   // operator column width
+  const opSz  = Math.max(16, Math.round(38  * sc));   // operator font size
   const lblSz = Math.max(10, Math.round(13  * sc));
-  const lblMt = Math.max(4,  Math.round(8   * sc));
-  const opPt  = Math.max(0,  Math.round((world - opSz) / 2));
+  const lblMt = Math.max(4,  Math.round(10  * sc));
 
-  const sphereCol = (size: number, labelText: string, spd: number) => (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
-      <IcoSphere size={size} speed={spd} />
-      <p style={{
-        fontSize: `${lblSz}px`, color: "rgba(255,255,255,0.50)", textAlign: "center",
-        margin: 0, marginTop: `${lblMt}px`, lineHeight: 1.3,
-        maxWidth: `${Math.round(size * 1.4)}px`, userSelect: "none",
-      }}>
-        {labelText}
-      </p>
-    </div>
-  );
+  // 5-column grid: [world] [op] [you] [op] [every]
+  const cols = `${world}px ${opCol}px ${you}px ${opCol}px ${every}px`;
 
-  const operator = (sym: string) => (
-    <span style={{
-      fontSize: `${opSz}px`, fontWeight: 200, color: "rgba(255,255,255,0.40)",
-      lineHeight: 1, flexShrink: 0, alignSelf: "flex-start",
-      paddingTop: `${opPt}px`, userSelect: "none",
-    }}>
-      {sym}
-    </span>
-  );
+  // Shared cell style: centers content both axes
+  const cell = (col: number, row: number): React.CSSProperties => ({
+    gridColumn: col,
+    gridRow:    row,
+    display:    "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  });
 
   return (
     <div ref={wrapRef} style={{ width: "100%" }}>
-      <div style={{
-        display: "flex", flexDirection: "row", alignItems: "flex-start",
-        justifyContent: "center", gap: `${gap}px`, flexWrap: "nowrap",
-      }}>
-        {sphereCol(world, "World", 0.005)}
-        {operator("−")}
-        {sphereCol(you, "You", 0.009)}
-        {operator("=")}
-        {sphereCol(every, "Everything you\u00a0don\u2019t know", 0.004)}
+      {/* Outer flex just centers the fixed-width grid horizontally */}
+      <div style={{ display: "flex", justifyContent: "center" }}>
+        <div style={{
+          display:             "grid",
+          gridTemplateColumns: cols,
+          gridTemplateRows:    "auto auto",
+          // no column gap — operator columns carry their own width
+        }}>
+          {/* ── Row 1: spheres + operators, all vertically centered ── */}
+          <div style={cell(1, 1)}><IcoSphere size={world} speed={0.005} /></div>
+          <div style={cell(2, 1)}>
+            <span style={{ fontSize: opSz, fontWeight: 200, color: "rgba(255,255,255,0.40)", lineHeight: 1, userSelect: "none" }}>−</span>
+          </div>
+          <div style={cell(3, 1)}><IcoSphere size={you}   speed={0.009} /></div>
+          <div style={cell(4, 1)}>
+            <span style={{ fontSize: opSz, fontWeight: 200, color: "rgba(255,255,255,0.40)", lineHeight: 1, userSelect: "none" }}>=</span>
+          </div>
+          <div style={cell(5, 1)}><IcoSphere size={every} speed={0.004} /></div>
+
+          {/* ── Row 2: labels, shared baseline, operator columns left empty ── */}
+          <div style={{ ...cell(1, 2), paddingTop: lblMt }}>
+            <p style={{ fontSize: lblSz, color: "rgba(255,255,255,0.50)", textAlign: "center", margin: 0, lineHeight: 1.3, userSelect: "none" }}>World</p>
+          </div>
+          {/* columns 2 & 4 intentionally empty */}
+          <div style={{ ...cell(3, 2), paddingTop: lblMt }}>
+            <p style={{ fontSize: lblSz, color: "rgba(255,255,255,0.50)", textAlign: "center", margin: 0, lineHeight: 1.3, userSelect: "none" }}>You</p>
+          </div>
+          <div style={{ ...cell(5, 2), paddingTop: lblMt }}>
+            <p style={{ fontSize: lblSz, color: "rgba(255,255,255,0.50)", textAlign: "center", margin: 0, lineHeight: 1.3, userSelect: "none", maxWidth: `${Math.round(every * 1.4)}px` }}>Everything you&nbsp;don&rsquo;t know</p>
+          </div>
+        </div>
       </div>
     </div>
   );
