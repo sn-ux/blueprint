@@ -98,7 +98,7 @@ export default function Navbar() {
       <div style={{ display: "flex", alignItems: "center", gap: 36 }}>
         {[
           { label: "Philosophy", href: "/philosophy" },
-          { label: "Connect",    href: "#" },
+          { label: "Connect",    href: "/connect" },
         ].map(({ label, href }) => (
           <Link
             key={label}
