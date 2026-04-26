@@ -3526,7 +3526,9 @@ export default function LandingPage() {
         {/* On desktop: left column (54%).                                         */}
         <div className="relative flex flex-col items-center justify-center py-8 flex-shrink-0 order-2"
           style={{ width: isMobile ? "100%" : "54%", alignSelf: isMobile ? undefined : "stretch",
-                   paddingLeft: isMobile ? 16 : 24, paddingRight: isMobile ? 16 : 56 }}>
+                   paddingLeft: isMobile ? 16 : 24, paddingRight: isMobile ? 16 : 56,
+                   // Mobile: tighten gap below cluster — override py-8 bottom (32px→12px)
+                   paddingBottom: isMobile ? 12 : undefined }}>
 
           {/* Domain label */}
           {/* Mobile: left:24 matches px-6 (24px) of the headline above the sphere cluster,
