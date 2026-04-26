@@ -3510,10 +3510,17 @@ export default function LandingPage() {
       <section className="min-h-[90vh] bg-black flex flex-col md:flex-row md:items-center overflow-hidden"
         style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
 
+        {/* ── MOBILE ONLY: headline above the sphere cluster ──────────────────── */}
+        <div className="md:hidden order-1 px-6 pt-8 pb-2" style={{ width: "100%" }}>
+          <h2 className="text-[24px] font-semibold leading-[1.07] text-white" style={{ letterSpacing: "-0.02em" }}>
+            Turn your network into your algorithm.
+          </h2>
+        </div>
+
         {/* ── LEFT / TOP: spheres ─────────────────────────────────────────────── */}
-        {/* On mobile: full-width, stacked above the copy. Sphere cluster scales   */}
-        {/* down to fit the narrower viewport without overflowing.                 */}
-        <div className="relative flex flex-col items-center justify-center py-8 flex-shrink-0"
+        {/* On mobile: order-2, full-width, stacked below the headline.            */}
+        {/* On desktop: left column (54%).                                         */}
+        <div className="relative flex flex-col items-center justify-center py-8 flex-shrink-0 order-2"
           style={{ width: isMobile ? "100%" : "54%", alignSelf: isMobile ? undefined : "stretch",
                    paddingLeft: isMobile ? 16 : 24, paddingRight: isMobile ? 16 : 56 }}>
 
@@ -3606,7 +3613,9 @@ export default function LandingPage() {
         </div>
 
         {/* ── RIGHT / BOTTOM: copy ────────────────────────────────────────────── */}
-        <div className="flex flex-col justify-center overflow-hidden"
+        {/* Mobile: order-3 — appears below the sphere cluster.                   */}
+        {/* Desktop: right column (46%).                                           */}
+        <div className="flex flex-col justify-center overflow-hidden order-3"
           style={{
             width:       isMobile ? "100%" : "46%",
             borderLeft:  isMobile ? "none" : "1px solid rgba(255,255,255,0.05)",
@@ -3617,10 +3626,12 @@ export default function LandingPage() {
           {/* maxWidth 620 — wider than before so headline fits on one line */}
           <div style={{ maxWidth: 620 }}>
 
-            {/* Headline */}
-            <h2 className="text-[24px] md:text-[42px] font-semibold leading-[1.07] text-white" style={{ letterSpacing: "-0.02em" }}>
-              Turn your network into your algorithm.
-            </h2>
+            {/* Headline — desktop only; mobile version lives in the sibling above */}
+            <div className="hidden md:block">
+              <h2 className="md:text-[42px] font-semibold leading-[1.07] text-white" style={{ letterSpacing: "-0.02em" }}>
+                Turn your network into your algorithm.
+              </h2>
+            </div>
 
             {/* Sub-head */}
             <p className="text-[15px] leading-[1.65] md:text-[22px] md:leading-[1.45] font-normal"
