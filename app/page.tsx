@@ -2395,22 +2395,17 @@ export default function LandingPage() {
       <section
         className="overflow-hidden flex flex-col"
         style={{
-          // Mobile: JS-captured pixel height (window.innerHeight at mount) gives
-          // a stable fixed size that never recalculates during scroll. Safari
-          // toolbar animations cannot trigger a layout reflow that shifts the
-          // sphere or headline. Falls back to 100svh for the one render before
-          // the useEffect fires (imperceptible on device).
-          // Desktop: 94vh — keeps the peek that signals scroll to section 2.
-          height: isMobile ? (viewportH > 0 ? viewportH : "100svh") : "94vh",
+          // Mobile: 100svh = "small viewport height" — the viewport size when
+          // Safari's toolbar is FULLY VISIBLE. This is a static CSS unit; it
+          // does NOT change when the toolbar slides in or out during scroll.
+          // Using a JS-captured pixel value (window.innerHeight) was unreliable
+          // because the value depends on toolbar state at mount time, and any
+          // viewport-height recalculation during scroll triggers layout reflow.
+          // 100svh eliminates both problems: no JS, no dynamic recalculation.
+          // Desktop: 94vh — keeps the Page 2 peek that signals scrollability.
+          height: isMobile ? "100svh" : "94vh",
           width: "100vw",
           marginLeft: "calc(50% - 50vw)",
-          // Promote to a GPU compositing layer on mobile so scroll-driven Safari
-          // UI changes do not trigger a repaint of this section's contents.
-          // willChange:"transform" intentionally omitted on mobile.
-          // It was meant to prevent Safari repaints but creates a GPU compositing
-          // layer that the compositor thread moves independently during scroll,
-          // causing the headline to visually jitter by 1–2px as the Safari toolbar
-          // retracts. Normal flow positioning is stable; compositor promotion is not.
         }}
       >
 
@@ -2423,22 +2418,29 @@ export default function LandingPage() {
           </div>
         )}
 
-        {/* Canvas area — fills remaining viewport                                 */}
-        {/* Mobile: flex-col — sphere zone (flex-1) stacks above title bar.       */}
+        {/* Canvas area                                                            */}
+        {/* Mobile: centered flex column. The sphere has a fixed vw-based size    */}
+        {/*   so it never reacts to viewport-height changes. paddingTop clears    */}
+        {/*   the fixed nav. justifyContent:center vertically groups sphere+title. */}
         {/* Desktop: position-relative containing block for absolute children.    */}
         <div
           className="flex-1 min-h-0"
           style={isMobile
-            ? { display: "flex", flexDirection: "column", paddingTop: 56 }
+            ? { display: "flex", flexDirection: "column", alignItems: "center",
+                justifyContent: "center", gap: 20, paddingTop: 56 }
             : { position: "relative" }}
         >
 
           {/* ── Sphere zone ─────────────────────────────────────────────────── */}
-          {/* Mobile: flex-1 + relative — takes all space above the title;       */}
-          {/*   canvas fills this zone so the sphere centers within it.          */}
+          {/* Mobile: width-based square. width:100% fills the viewport width    */}
+          {/*   (section is 100vw); maxWidth caps it on large phones. The        */}
+          {/*   aspect-ratio:1/1 derives height from width, so sphere size is    */}
+          {/*   INDEPENDENT of viewport height — Safari toolbar changes cannot   */}
+          {/*   cause the sphere to stretch, squish, or trigger a canvas resize. */}
           {/* Desktop: absolute inset-0 — covers the full canvas area div.       */}
           <div style={isMobile
-            ? { flex: 1, position: "relative", minHeight: 0 }
+            ? { position: "relative", width: "100%", maxWidth: 420,
+                aspectRatio: "1/1", flexShrink: 0 }
             : { position: "absolute", inset: 0 }}
           >
 
@@ -2650,22 +2652,17 @@ export default function LandingPage() {
 
           </div>{/* /sphere zone */}
 
-          {/* ── Mobile title — flex-shrink-0, anchored at the section bottom ─── */}
-          {/* Sits below the sphere zone in the flex column. The sphere zone      */}
-          {/* is flex-1, so it fills all space above this element, naturally      */}
-          {/* centering the sphere between the nav and this title block.          */}
+          {/* ── Mobile title — sits directly below sphere in flex column ──────── */}
+          {/* The canvas area uses justifyContent:center so the sphere+gap+title  */}
+          {/* group is centered vertically. Title is in normal document flow —    */}
+          {/* no transforms, no viewport-height math, no scroll-linked position.  */}
           {isMobile && (
             <div
               className="flex-shrink-0 flex flex-col items-center text-center px-6"
               style={{
-                // paddingBottom — env(safe-area-inset-bottom) clears the home indicator
-                //   (~34 px on Face ID iPhones, 0 on older models). The extra 90 px
-                //   equalises all three gaps: nav→sphere, sphere→title, title→safe area.
-                //   Mathematically: gap3 = Tb − safe_area ≈ 90px when Tb = 90px.
-                // No paddingTop needed — sphere zone is flex-1 and pushes the title down.
-                // opacity: 1 always — no transition that could glitch during scroll.
-                paddingBottom: "calc(env(safe-area-inset-bottom) + 90px)",
-                opacity:       1,
+                // paddingBottom clears the iPhone home indicator.
+                // No complex equal-gap formula — static spacing only.
+                paddingBottom: "env(safe-area-inset-bottom)",
               }}
             >
               <h1
