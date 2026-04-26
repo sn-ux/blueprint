@@ -2372,7 +2372,7 @@ export default function LandingPage() {
               // Mobile: fixed upward offset — never changes, so the sheet
               // opening/closing cannot cause the sphere to shift position.
               // Desktop: slight upward nudge for visual centering.
-              transform: isMobile ? "translateY(-20%)" : "translateY(-3%)",
+              transform: isMobile ? "translateY(-10%)" : "translateY(-3%)",
               transition: "none",
             }}
             onMouseDown={onMouseDown}
@@ -2388,7 +2388,7 @@ export default function LandingPage() {
             style={isMobile ? {
               // Mobile: fixed position anchored below the sphere.
               // Does not react to sheet state — headline stays put.
-              bottom:     "28%",
+              bottom:     "20%",
               left:       0,
               right:      0,
               alignItems: "center",
