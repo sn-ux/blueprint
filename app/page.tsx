@@ -3477,18 +3477,22 @@ export default function LandingPage() {
             >
               So you never see
             </p>
-            <p
-              key={`mob-${discoveryIdx}`}
-              className="text-[17px] font-semibold leading-snug mt-4"
-              style={{
-                color: COMPANIES[discoveryIdx].accent,
-                animation: "fadeSlideUp 0.45s ease-out",
-                letterSpacing: "-0.01em",
-              }}
-            >
-              {DISCOVERY[discoveryIdx].line1}<br />
-              {DISCOVERY[discoveryIdx].line2}
-            </p>
+            {/* Fixed-height wrapper — reserves space for 3 visual lines of 17px/leading-snug
+                text (3 × 23.4 px ≈ 72 px) so layout never shifts as the carousel rotates. */}
+            <div className="mt-4" style={{ minHeight: 72 }}>
+              <p
+                key={`mob-${discoveryIdx}`}
+                className="text-[17px] font-semibold leading-snug"
+                style={{
+                  color: COMPANIES[discoveryIdx].accent,
+                  animation: "fadeSlideUp 0.45s ease-out",
+                  letterSpacing: "-0.01em",
+                }}
+              >
+                {DISCOVERY[discoveryIdx].line1}<br />
+                {DISCOVERY[discoveryIdx].line2}
+              </p>
+            </div>
           </div>
 
           {/* Final tagline */}
