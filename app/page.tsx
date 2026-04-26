@@ -3676,7 +3676,14 @@ export default function LandingPage() {
       {/* ══ SECTION 4 — Places ═══════════════════════════════════════════════ */}
       {/* Mobile: flex-col — map appears first (order-1), text below (order-2). */}
       <section className="min-h-[90vh] bg-black flex flex-col md:flex-row overflow-hidden"
-        style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
+        style={{
+          borderTop:  "1px solid rgba(255,255,255,0.04)",
+          // Mobile: break out of the px-6 (24px) padded container so the map
+          // is full-bleed. Same technique as Section 1. The copy block retains
+          // its own padding: "40px 24px 56px" so text stays properly inset.
+          width:      isMobile ? "100vw" : undefined,
+          marginLeft: isMobile ? "calc(50% - 50vw)" : undefined,
+        }}>
 
         {/* ── LEFT / BOTTOM: copy ─────────────────────────────────────────────── */}
         <div className="flex flex-col justify-center order-2 md:order-1 overflow-hidden"
