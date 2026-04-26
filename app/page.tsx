@@ -1119,15 +1119,46 @@ export default function LandingPage() {
     // returns and wastes GPU fill-rate. 2× covers Retina Mac and every flagship phone.
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
 
+    // ── Canvas sizing ──────────────────────────────────────────────────────
     // sync: sets the canvas BUFFER to physical pixels so there is a 1-to-1 mapping
-    // between canvas pixels and screen pixels.  The CSS size (w-full h-full) stays
+    // between canvas pixels and screen pixels. The CSS size (w-full h-full) stays
     // unchanged — only the internal resolution increases.
+    //
+    // TWO critical guards prevent scroll-induced sphere flicker on mobile:
+    //
+    // Guard A — identity check: canvas.width = X clears the canvas buffer even
+    //   when X hasn't changed. Any ResizeObserver call without this guard would
+    //   wipe the sphere for one frame and cause a visible flash. We check first.
+    //
+    // Guard B — scroll suppression: Safari fires ResizeObserver during toolbar
+    //   slide-in/out because the layout viewport height changes. These are not
+    //   real size changes that need a buffer reset, so we ignore them entirely
+    //   while the page is scrolling. The flag is cleared 200ms after scroll ends,
+    //   which covers both momentum scroll and toolbar settle time.
+
+    let scrolling = false;
+    let scrollEndTimer: ReturnType<typeof setTimeout> | null = null;
+    const onScrollForSync = () => {
+      scrolling = true;
+      if (scrollEndTimer !== null) clearTimeout(scrollEndTimer);
+      scrollEndTimer = setTimeout(() => { scrolling = false; scrollEndTimer = null; }, 200);
+    };
+    if (isMobileRef.current) {
+      window.addEventListener("scroll", onScrollForSync, { passive: true });
+    }
+
     const sync = () => {
+      // Guard B: never resize during scroll on mobile
+      if (isMobileRef.current && scrolling) return;
       const w = canvas.offsetWidth;
       const h = canvas.offsetHeight;
       if (w === 0 || h === 0) return;
-      canvas.width  = Math.round(w * dpr);
-      canvas.height = Math.round(h * dpr);
+      const newW = Math.round(w * dpr);
+      const newH = Math.round(h * dpr);
+      // Guard A: skip if nothing changed — avoids the canvas.width-clears-buffer trap
+      if (canvas.width === newW && canvas.height === newH) return;
+      canvas.width  = newW;
+      canvas.height = newH;
     };
     sync();
     const ro = new ResizeObserver(sync);
@@ -1904,6 +1935,8 @@ export default function LandingPage() {
     return () => {
       cancelAnimationFrame(rafRef.current);
       ro.disconnect();
+      if (scrollEndTimer !== null) clearTimeout(scrollEndTimer);
+      window.removeEventListener("scroll", onScrollForSync);
       canvas.removeEventListener("wheel",          onWheel);
       canvas.removeEventListener("gesturestart",   onGestureStart);
       canvas.removeEventListener("gesturechange",  onGestureChange);
@@ -2373,7 +2406,11 @@ export default function LandingPage() {
           marginLeft: "calc(50% - 50vw)",
           // Promote to a GPU compositing layer on mobile so scroll-driven Safari
           // UI changes do not trigger a repaint of this section's contents.
-          willChange: isMobile ? "transform" : undefined,
+          // willChange:"transform" intentionally omitted on mobile.
+          // It was meant to prevent Safari repaints but creates a GPU compositing
+          // layer that the compositor thread moves independently during scroll,
+          // causing the headline to visually jitter by 1–2px as the Safari toolbar
+          // retracts. Normal flow positioning is stable; compositor promotion is not.
         }}
       >
 
