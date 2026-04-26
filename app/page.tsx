@@ -613,14 +613,25 @@ export default function LandingPage() {
     return () => mq.removeEventListener("change", handler);
   }, []);
 
-  // ── Viewport height (for sheet snap math) ────────────────────────────────
+  // ── Viewport height (for section height + sheet snap math) ─────────────
+  // Captured ONCE on mount and never updated on resize.
+  //
+  // Why: Safari fires a "resize" event whenever its toolbar slides in/out
+  // during scroll (window.innerHeight changes by ~52px). If we updated
+  // viewportH on every resize, that would:
+  //   1. Trigger a React re-render that changes the section height
+  //   2. Cause the canvas element to resize
+  //   3. Fire the canvas ResizeObserver → sync() clears + resets the
+  //      canvas buffer → blank frame → sphere flickers and shifts
+  //
+  // Freezing at mount time gives us a stable pixel value for the lifetime
+  // of the page, eliminating the entire cascade. Orientation changes are
+  // not a concern: rotating the phone triggers a full page reflow anyway.
   const [viewportH, setViewportH] = useState(0);
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const update = () => setViewportH(window.innerHeight);
-    update();
-    window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
+    setViewportH(window.innerHeight);
+    // No resize listener — intentionally omitted. See comment above.
   }, []);
 
   // ── 3-state bottom sheet (mobile only) ───────────────────────────────────
