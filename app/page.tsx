@@ -2372,7 +2372,7 @@ export default function LandingPage() {
               // Mobile: fixed upward offset — never changes, so the sheet
               // opening/closing cannot cause the sphere to shift position.
               // Desktop: slight upward nudge for visual centering.
-              transform: isMobile ? "translateY(-10%)" : "translateY(-3%)",
+              transform: isMobile ? "translateY(-15%)" : "translateY(-3%)",
               transition: "none",
             }}
             onMouseDown={onMouseDown}
