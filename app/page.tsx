@@ -613,25 +613,14 @@ export default function LandingPage() {
     return () => mq.removeEventListener("change", handler);
   }, []);
 
-  // ── Viewport height (for section height + sheet snap math) ─────────────
-  // Captured ONCE on mount and never updated on resize.
-  //
-  // Why: Safari fires a "resize" event whenever its toolbar slides in/out
-  // during scroll (window.innerHeight changes by ~52px). If we updated
-  // viewportH on every resize, that would:
-  //   1. Trigger a React re-render that changes the section height
-  //   2. Cause the canvas element to resize
-  //   3. Fire the canvas ResizeObserver → sync() clears + resets the
-  //      canvas buffer → blank frame → sphere flickers and shifts
-  //
-  // Freezing at mount time gives us a stable pixel value for the lifetime
-  // of the page, eliminating the entire cascade. Orientation changes are
-  // not a concern: rotating the phone triggers a full page reflow anyway.
+  // ── Viewport height (for sheet snap math) ────────────────────────────────
   const [viewportH, setViewportH] = useState(0);
   useEffect(() => {
     if (typeof window === "undefined") return;
-    setViewportH(window.innerHeight);
-    // No resize listener — intentionally omitted. See comment above.
+    const update = () => setViewportH(window.innerHeight);
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
   }, []);
 
   // ── 3-state bottom sheet (mobile only) ───────────────────────────────────
@@ -1119,46 +1108,15 @@ export default function LandingPage() {
     // returns and wastes GPU fill-rate. 2× covers Retina Mac and every flagship phone.
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
 
-    // ── Canvas sizing ──────────────────────────────────────────────────────
     // sync: sets the canvas BUFFER to physical pixels so there is a 1-to-1 mapping
-    // between canvas pixels and screen pixels. The CSS size (w-full h-full) stays
+    // between canvas pixels and screen pixels.  The CSS size (w-full h-full) stays
     // unchanged — only the internal resolution increases.
-    //
-    // TWO critical guards prevent scroll-induced sphere flicker on mobile:
-    //
-    // Guard A — identity check: canvas.width = X clears the canvas buffer even
-    //   when X hasn't changed. Any ResizeObserver call without this guard would
-    //   wipe the sphere for one frame and cause a visible flash. We check first.
-    //
-    // Guard B — scroll suppression: Safari fires ResizeObserver during toolbar
-    //   slide-in/out because the layout viewport height changes. These are not
-    //   real size changes that need a buffer reset, so we ignore them entirely
-    //   while the page is scrolling. The flag is cleared 200ms after scroll ends,
-    //   which covers both momentum scroll and toolbar settle time.
-
-    let scrolling = false;
-    let scrollEndTimer: ReturnType<typeof setTimeout> | null = null;
-    const onScrollForSync = () => {
-      scrolling = true;
-      if (scrollEndTimer !== null) clearTimeout(scrollEndTimer);
-      scrollEndTimer = setTimeout(() => { scrolling = false; scrollEndTimer = null; }, 200);
-    };
-    if (isMobileRef.current) {
-      window.addEventListener("scroll", onScrollForSync, { passive: true });
-    }
-
     const sync = () => {
-      // Guard B: never resize during scroll on mobile
-      if (isMobileRef.current && scrolling) return;
       const w = canvas.offsetWidth;
       const h = canvas.offsetHeight;
       if (w === 0 || h === 0) return;
-      const newW = Math.round(w * dpr);
-      const newH = Math.round(h * dpr);
-      // Guard A: skip if nothing changed — avoids the canvas.width-clears-buffer trap
-      if (canvas.width === newW && canvas.height === newH) return;
-      canvas.width  = newW;
-      canvas.height = newH;
+      canvas.width  = Math.round(w * dpr);
+      canvas.height = Math.round(h * dpr);
     };
     sync();
     const ro = new ResizeObserver(sync);
@@ -1935,8 +1893,6 @@ export default function LandingPage() {
     return () => {
       cancelAnimationFrame(rafRef.current);
       ro.disconnect();
-      if (scrollEndTimer !== null) clearTimeout(scrollEndTimer);
-      window.removeEventListener("scroll", onScrollForSync);
       canvas.removeEventListener("wheel",          onWheel);
       canvas.removeEventListener("gesturestart",   onGestureStart);
       canvas.removeEventListener("gesturechange",  onGestureChange);
@@ -2393,94 +2349,73 @@ export default function LandingPage() {
           94vh (not 100vh) so the Page 2 headline peeks below the fold,
           signalling scroll naturally.                                           */}
       <section
-        className="overflow-hidden flex flex-col"
-        style={{
-          // Mobile: 100svh = "small viewport height" — the viewport size when
-          // Safari's toolbar is FULLY VISIBLE. This is a static CSS unit; it
-          // does NOT change when the toolbar slides in or out during scroll.
-          // Using a JS-captured pixel value (window.innerHeight) was unreliable
-          // because the value depends on toolbar state at mount time, and any
-          // viewport-height recalculation during scroll triggers layout reflow.
-          // 100svh eliminates both problems: no JS, no dynamic recalculation.
-          // Desktop: 94vh — keeps the Page 2 peek that signals scrollability.
-          height: isMobile ? "100svh" : "94vh",
-          width: "100vw",
-          marginLeft: "calc(50% - 50vw)",
-        }}
+        className="h-[94vh] overflow-hidden flex flex-col"
+        style={{ width: "100vw", marginLeft: "calc(50% - 50vw)" }}
       >
 
-        {/* Wordmark — desktop only; hidden on mobile so it doesn't shift the sphere zone origin */}
-        {!isMobile && (
-          <div className="flex-shrink-0 flex items-center px-6 py-2.5 z-20 relative">
-            <span className="text-xs tracking-widest uppercase text-zinc-700 font-medium select-none">
-              Blueprint
-            </span>
-          </div>
-        )}
+        {/* Wordmark */}
+        <div className="flex-shrink-0 flex items-center px-6 py-2.5 z-20 relative">
+          <span className="text-xs tracking-widest uppercase text-zinc-700 font-medium select-none">
+            Blueprint
+          </span>
+        </div>
 
-        {/* Canvas area — fills remaining section height.                          */}
-        {/* Mobile: flex column; paddingTop clears the fixed nav bar (56px).      */}
-        {/*   Sphere zone is flex-1 so it grows tall, giving the canvas enough    */}
-        {/*   vertical space that zooming-in doesn't clip the sphere top/bottom.  */}
-        {/* Desktop: position-relative containing block for absolute children.    */}
-        <div
-          className="flex-1 min-h-0"
-          style={isMobile
-            ? { display: "flex", flexDirection: "column", paddingTop: 56 }
-            : { position: "relative" }}
-        >
+        {/* Canvas area — fills remaining viewport, sphere centered within */}
+        <div className="flex-1 relative min-h-0">
 
-          {/* ── Sphere zone ─────────────────────────────────────────────────── */}
-          {/* Mobile: flex-1 so it fills all canvas area height above the title. */}
-          {/*   A tall zone (≈700px on iPhone 13) means R×zoom stays within the  */}
-          {/*   canvas bounds vertically so the sphere is never clipped top/btm. */}
-          {/* Desktop: absolute inset-0 — covers the full canvas area div.       */}
-          <div style={isMobile
-            ? { flex: 1, position: "relative", minHeight: 0 }
-            : { position: "absolute", inset: 0 }}
+          {/* Canvas — fills entire area, sphere always centered */}
+          <canvas
+            ref={canvasRef}
+            className="absolute inset-0 w-full h-full cursor-pointer"
+            style={{
+              display:   "block",
+              // Mobile: fixed upward offset — never changes, so the sheet
+              // opening/closing cannot cause the sphere to shift position.
+              // Desktop: slight upward nudge for visual centering.
+              transform: isMobile ? "translateY(-20%)" : "translateY(-3%)",
+              transition: "none",
+            }}
+            onMouseDown={onMouseDown}
+            onMouseMove={onMouseMove}
+            onMouseUp={stopDrag}
+            onMouseLeave={onMouseLeave}
+            onClick={handleClick}
+          />
+
+          {/* Headline — desktop: top-left overlay; mobile: centered below sphere */}
+          <div
+            className="absolute z-10 flex flex-col pointer-events-none"
+            style={isMobile ? {
+              // Mobile: fixed position anchored below the sphere.
+              // Does not react to sheet state — headline stays put.
+              bottom:     "28%",
+              left:       0,
+              right:      0,
+              alignItems: "center",
+              textAlign:  "center",
+              padding:    "0 24px",
+              opacity:    textVisible ? 1 : 0,
+              transition: "opacity 0.4s ease-in-out",
+            } : {
+              top:        "9%",
+              left:       "8%",
+              maxWidth:   420,
+              opacity:    textVisible ? 1 : 0,
+              transition: "opacity 0.4s ease-in-out",
+            }}
           >
-
-            {/* Canvas — fills sphere zone; sphere drawn at its center */}
-            <canvas
-              ref={canvasRef}
-              className="absolute inset-0 w-full h-full cursor-pointer"
-              style={{
-                display:   "block",
-                // Mobile: no offset — sphere renders at the true center of the zone.
-                // Desktop: slight upward nudge for visual centering.
-                transform: isMobile ? "none" : "translateY(-3%)",
-                transition: "none",
-              }}
-              onMouseDown={onMouseDown}
-              onMouseMove={onMouseMove}
-              onMouseUp={stopDrag}
-              onMouseLeave={onMouseLeave}
-              onClick={handleClick}
-            />
-
-            {/* Headline — desktop only, absolute top-left overlay */}
-            {!isMobile && (
-              <div
-                className="absolute z-10 flex flex-col pointer-events-none"
-                style={{
-                  top:        "9%",
-                  left:       "8%",
-                  maxWidth:   420,
-                  opacity:    textVisible ? 1 : 0,
-                  transition: "opacity 0.4s ease-in-out",
-                }}
-              >
-                <h1
-                  className="md:text-[52px] lg:text-[56px] font-semibold leading-[1.06] text-white mb-3"
-                  style={{ letterSpacing: "-0.02em" }}
-                >
-                  This is what a music taste looks like.
-                </h1>
-                <p className="text-xs tracking-[0.22em] uppercase" style={{ color: "rgba(255,255,255,0.62)" }}>
-                  Click. Zoom. Discover.
-                </p>
-              </div>
-            )}
+            <h1
+              className="md:text-[52px] lg:text-[56px] font-semibold leading-[1.06] text-white mb-3"
+              style={{ letterSpacing: "-0.02em", fontSize: isMobile ? 19 : undefined }}
+            >
+              {isMobile
+                ? "This is what a music taste looks like"
+                : "This is what a music taste looks like."}
+            </h1>
+            <p className="text-xs tracking-[0.22em] uppercase" style={{ color: "rgba(255,255,255,0.62)" }}>
+              Click. Zoom. Discover.
+            </p>
+          </div>
 
           {/* Stats row — bottom-right, desktop only */}
           {totalTrackCount > 0 && !isMobile && (
@@ -2643,30 +2578,6 @@ export default function LandingPage() {
                 <button onClick={() => { setSelected(null); setSelectedSubgenre(null); selectedSubgenreRef.current = null; setZoomSubgenre(null); zoomSubgenreRef.current = null; autoSelectedRef.current = false; }}
                   className="text-zinc-700 hover:text-zinc-400 text-xs transition-colors">close ✕</button>
               </div>
-            </div>
-          )}
-
-          </div>{/* /sphere zone */}
-
-          {/* ── Mobile title — flex-shrink-0 below the sphere zone ──────────────── */}
-          {/* Normal document flow. No transforms, no viewport-height math.       */}
-          {isMobile && (
-            <div
-              className="flex-shrink-0 flex flex-col items-center text-center px-6"
-              style={{
-                paddingTop:    12,
-                paddingBottom: "calc(env(safe-area-inset-bottom) + 16px)",
-              }}
-            >
-              <h1
-                className="font-semibold leading-[1.06] text-white mb-2"
-                style={{ fontSize: 19, letterSpacing: "-0.02em" }}
-              >
-                This is what a music taste looks like
-              </h1>
-              <p className="text-xs tracking-[0.22em] uppercase" style={{ color: "rgba(255,255,255,0.62)" }}>
-                Click. Zoom. Discover.
-              </p>
             </div>
           )}
 

@@ -65,11 +65,6 @@ export default function Navbar() {
         backdropFilter:       "blur(12px)",
         WebkitBackdropFilter: "blur(12px)",
         borderBottom:         "1px solid rgba(255,255,255,0.04)",
-        // Promote to a GPU compositing layer so Safari does not repaint the
-        // navbar during toolbar slide-in/out animations triggered by scroll.
-        // Without this, position:fixed elements can visually lag or jump
-        // by a few pixels when the browser chrome changes height on iOS.
-        transform:            "translateZ(0)",
       }}
     >
       {/* ── LEFT: logo + wordmark ────────────────────────────────────────── */}
