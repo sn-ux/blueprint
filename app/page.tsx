@@ -2418,29 +2418,25 @@ export default function LandingPage() {
           </div>
         )}
 
-        {/* Canvas area                                                            */}
-        {/* Mobile: centered flex column. The sphere has a fixed vw-based size    */}
-        {/*   so it never reacts to viewport-height changes. paddingTop clears    */}
-        {/*   the fixed nav. justifyContent:center vertically groups sphere+title. */}
+        {/* Canvas area — fills remaining section height.                          */}
+        {/* Mobile: flex column; paddingTop clears the fixed nav bar (56px).      */}
+        {/*   Sphere zone is flex-1 so it grows tall, giving the canvas enough    */}
+        {/*   vertical space that zooming-in doesn't clip the sphere top/bottom.  */}
         {/* Desktop: position-relative containing block for absolute children.    */}
         <div
           className="flex-1 min-h-0"
           style={isMobile
-            ? { display: "flex", flexDirection: "column", alignItems: "center",
-                justifyContent: "center", gap: 20, paddingTop: 56 }
+            ? { display: "flex", flexDirection: "column", paddingTop: 56 }
             : { position: "relative" }}
         >
 
           {/* ── Sphere zone ─────────────────────────────────────────────────── */}
-          {/* Mobile: width-based square. width:100% fills the viewport width    */}
-          {/*   (section is 100vw); maxWidth caps it on large phones. The        */}
-          {/*   aspect-ratio:1/1 derives height from width, so sphere size is    */}
-          {/*   INDEPENDENT of viewport height — Safari toolbar changes cannot   */}
-          {/*   cause the sphere to stretch, squish, or trigger a canvas resize. */}
+          {/* Mobile: flex-1 so it fills all canvas area height above the title. */}
+          {/*   A tall zone (≈700px on iPhone 13) means R×zoom stays within the  */}
+          {/*   canvas bounds vertically so the sphere is never clipped top/btm. */}
           {/* Desktop: absolute inset-0 — covers the full canvas area div.       */}
           <div style={isMobile
-            ? { position: "relative", width: "100%", maxWidth: 420,
-                aspectRatio: "1/1", flexShrink: 0 }
+            ? { flex: 1, position: "relative", minHeight: 0 }
             : { position: "absolute", inset: 0 }}
           >
 
@@ -2652,17 +2648,14 @@ export default function LandingPage() {
 
           </div>{/* /sphere zone */}
 
-          {/* ── Mobile title — sits directly below sphere in flex column ──────── */}
-          {/* The canvas area uses justifyContent:center so the sphere+gap+title  */}
-          {/* group is centered vertically. Title is in normal document flow —    */}
-          {/* no transforms, no viewport-height math, no scroll-linked position.  */}
+          {/* ── Mobile title — flex-shrink-0 below the sphere zone ──────────────── */}
+          {/* Normal document flow. No transforms, no viewport-height math.       */}
           {isMobile && (
             <div
               className="flex-shrink-0 flex flex-col items-center text-center px-6"
               style={{
-                // paddingBottom clears the iPhone home indicator.
-                // No complex equal-gap formula — static spacing only.
-                paddingBottom: "env(safe-area-inset-bottom)",
+                paddingTop:    12,
+                paddingBottom: "calc(env(safe-area-inset-bottom) + 16px)",
               }}
             >
               <h1
