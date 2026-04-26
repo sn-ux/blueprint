@@ -2351,22 +2351,29 @@ export default function LandingPage() {
       <section
         className="overflow-hidden flex flex-col"
         style={{
-          // Mobile: 100svh = small viewport height — the fixed, minimum visible
-          // area with all Safari chrome (address bar + toolbar) fully shown.
-          // This prevents the title from sliding behind the bottom toolbar.
-          // Desktop: 94vh — keeps the "peek" that signals scroll.
-          height: isMobile ? "100svh" : "94vh",
+          // Mobile: JS-captured pixel height (window.innerHeight at mount) gives
+          // a stable fixed size that never recalculates during scroll. Safari
+          // toolbar animations cannot trigger a layout reflow that shifts the
+          // sphere or headline. Falls back to 100svh for the one render before
+          // the useEffect fires (imperceptible on device).
+          // Desktop: 94vh — keeps the peek that signals scroll to section 2.
+          height: isMobile ? (viewportH > 0 ? viewportH : "100svh") : "94vh",
           width: "100vw",
           marginLeft: "calc(50% - 50vw)",
+          // Promote to a GPU compositing layer on mobile so scroll-driven Safari
+          // UI changes do not trigger a repaint of this section's contents.
+          willChange: isMobile ? "transform" : undefined,
         }}
       >
 
-        {/* Wordmark */}
-        <div className="flex-shrink-0 flex items-center px-6 py-2.5 z-20 relative">
-          <span className="text-xs tracking-widest uppercase text-zinc-700 font-medium select-none">
-            Blueprint
-          </span>
-        </div>
+        {/* Wordmark — desktop only; hidden on mobile so it doesn't shift the sphere zone origin */}
+        {!isMobile && (
+          <div className="flex-shrink-0 flex items-center px-6 py-2.5 z-20 relative">
+            <span className="text-xs tracking-widest uppercase text-zinc-700 font-medium select-none">
+              Blueprint
+            </span>
+          </div>
+        )}
 
         {/* Canvas area — fills remaining viewport                                 */}
         {/* Mobile: flex-col — sphere zone (flex-1) stacks above title bar.       */}
@@ -2374,7 +2381,7 @@ export default function LandingPage() {
         <div
           className="flex-1 min-h-0"
           style={isMobile
-            ? { display: "flex", flexDirection: "column" }
+            ? { display: "flex", flexDirection: "column", paddingTop: 56 }
             : { position: "relative" }}
         >
 
@@ -2603,15 +2610,14 @@ export default function LandingPage() {
             <div
               className="flex-shrink-0 flex flex-col items-center text-center px-6"
               style={{
-                // paddingTop  — visual gap between the sphere zone and the title text.
-                // paddingBottom — env(safe-area-inset-bottom) clears the home
-                //   indicator (~34 px on Face ID iPhones, 0 on older models).
-                //   The extra 64 px ensures the title sits comfortably above
-                //   the Safari bottom toolbar even on svh-constrained layouts.
-                paddingTop:    24,
-                paddingBottom: "calc(env(safe-area-inset-bottom) + 64px)",
-                opacity:       textVisible ? 1 : 0,
-                transition:    "opacity 0.4s ease-in-out",
+                // paddingBottom — env(safe-area-inset-bottom) clears the home indicator
+                //   (~34 px on Face ID iPhones, 0 on older models). The extra 90 px
+                //   equalises all three gaps: nav→sphere, sphere→title, title→safe area.
+                //   Mathematically: gap3 = Tb − safe_area ≈ 90px when Tb = 90px.
+                // No paddingTop needed — sphere zone is flex-1 and pushes the title down.
+                // opacity: 1 always — no transition that could glitch during scroll.
+                paddingBottom: "calc(env(safe-area-inset-bottom) + 90px)",
+                opacity:       1,
               }}
             >
               <h1
