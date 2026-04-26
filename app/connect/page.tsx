@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useRef, useState } from "react";
+import Footer from "@/components/Footer";
 
 // ── Scroll-reveal ─────────────────────────────────────────────────────────────
 
@@ -62,6 +63,7 @@ export default function ConnectPage() {
   };
 
   return (
+    <>
     <main
       style={{
         minHeight:      "100vh",
@@ -205,5 +207,7 @@ export default function ConnectPage() {
         </FadeIn>
       </div>
     </main>
+    <Footer />
+    </>
   );
 }

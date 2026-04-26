@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import Image from "next/image";
+import Footer from "@/components/Footer";
 
 // ── Scroll-reveal hook ─────────────────────────────────────────────────────
 function useInView(threshold = 0.08) {
@@ -751,6 +752,8 @@ export default function PhilosophyPage() {
           </FadeIn>
         </div>
       </section>
+
+      <Footer />
 
     </div>
   );

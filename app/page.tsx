@@ -5,6 +5,7 @@ import { useSession, signIn } from "next-auth/react";
 import SphereCanvas from "@/components/SphereCanvas";
 import MiniSphere from "@/components/MiniSphere";
 import MapVisual from "@/components/MapVisual";
+import Footer from "@/components/Footer";
 
 // ── Genre display-name overrides (short labels for sphere + UI) ───────────────
 // Keys are the full canonical genre names used as data keys everywhere.
@@ -3770,6 +3771,8 @@ export default function LandingPage() {
         </div>
 
       </section>
+
+      <Footer />
 
     </div>
   );
