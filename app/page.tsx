@@ -3529,12 +3529,15 @@ export default function LandingPage() {
                    paddingLeft: isMobile ? 16 : 24, paddingRight: isMobile ? 16 : 56 }}>
 
           {/* Domain label */}
-          <div className="absolute select-none" style={{ top: isMobile ? 20 : 40, left: isMobile ? 16 : 40 }}>
+          {/* Mobile: left:24 matches px-6 (24px) of the headline above the sphere cluster,
+              aligning the first character with the "T" in "Turn your network…".
+              Font reduced from 17→13px (~24% smaller) on mobile only.              */}
+          <div className="absolute select-none" style={{ top: isMobile ? 20 : 40, left: isMobile ? 24 : 40 }}>
             <span
               key={page3LabelAnimKey}
               style={{
                 display: "block",
-                fontSize: 17, fontWeight: 600, letterSpacing: "0.18em",
+                fontSize: isMobile ? 13 : 17, fontWeight: 600, letterSpacing: "0.18em",
                 textTransform: "uppercase", whiteSpace: "nowrap",
                 ...(page3LabelAnimKey > 0 && prevPage3LabelIdx !== null ? {
                   background: `linear-gradient(to right, ${PAGE3_COLORS[carouselIdx]} 50%, ${PAGE3_COLORS[prevPage3LabelIdx]} 50%)`,
