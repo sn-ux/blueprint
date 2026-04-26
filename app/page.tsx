@@ -2360,62 +2360,66 @@ export default function LandingPage() {
           </span>
         </div>
 
-        {/* Canvas area — fills remaining viewport, sphere centered within */}
-        <div className="flex-1 relative min-h-0">
+        {/* Canvas area — fills remaining viewport                                 */}
+        {/* Mobile: flex-col — sphere zone (flex-1) stacks above title bar.       */}
+        {/* Desktop: position-relative containing block for absolute children.    */}
+        <div
+          className="flex-1 min-h-0"
+          style={isMobile
+            ? { display: "flex", flexDirection: "column" }
+            : { position: "relative" }}
+        >
 
-          {/* Canvas — fills entire area, sphere always centered */}
-          <canvas
-            ref={canvasRef}
-            className="absolute inset-0 w-full h-full cursor-pointer"
-            style={{
-              display:   "block",
-              // Mobile: fixed upward offset — never changes, so the sheet
-              // opening/closing cannot cause the sphere to shift position.
-              // Desktop: slight upward nudge for visual centering.
-              transform: isMobile ? "translateY(-20%)" : "translateY(-3%)",
-              transition: "none",
-            }}
-            onMouseDown={onMouseDown}
-            onMouseMove={onMouseMove}
-            onMouseUp={stopDrag}
-            onMouseLeave={onMouseLeave}
-            onClick={handleClick}
-          />
-
-          {/* Headline — desktop: top-left overlay; mobile: centered below sphere */}
-          <div
-            className="absolute z-10 flex flex-col pointer-events-none"
-            style={isMobile ? {
-              // Mobile: fixed position anchored below the sphere.
-              // Does not react to sheet state — headline stays put.
-              bottom:     "28%",
-              left:       0,
-              right:      0,
-              alignItems: "center",
-              textAlign:  "center",
-              padding:    "0 24px",
-              opacity:    textVisible ? 1 : 0,
-              transition: "opacity 0.4s ease-in-out",
-            } : {
-              top:        "9%",
-              left:       "8%",
-              maxWidth:   420,
-              opacity:    textVisible ? 1 : 0,
-              transition: "opacity 0.4s ease-in-out",
-            }}
+          {/* ── Sphere zone ─────────────────────────────────────────────────── */}
+          {/* Mobile: flex-1 + relative — takes all space above the title;       */}
+          {/*   canvas fills this zone so the sphere centers within it.          */}
+          {/* Desktop: absolute inset-0 — covers the full canvas area div.       */}
+          <div style={isMobile
+            ? { flex: 1, position: "relative", minHeight: 0 }
+            : { position: "absolute", inset: 0 }}
           >
-            <h1
-              className="md:text-[52px] lg:text-[56px] font-semibold leading-[1.06] text-white mb-3"
-              style={{ letterSpacing: "-0.02em", fontSize: isMobile ? 19 : undefined }}
-            >
-              {isMobile
-                ? "This is what a music taste looks like"
-                : "This is what a music taste looks like."}
-            </h1>
-            <p className="text-xs tracking-[0.22em] uppercase" style={{ color: "rgba(255,255,255,0.62)" }}>
-              Click. Zoom. Discover.
-            </p>
-          </div>
+
+            {/* Canvas — fills sphere zone; sphere drawn at its center */}
+            <canvas
+              ref={canvasRef}
+              className="absolute inset-0 w-full h-full cursor-pointer"
+              style={{
+                display:   "block",
+                // Mobile: no offset — sphere renders at the true center of the zone.
+                // Desktop: slight upward nudge for visual centering.
+                transform: isMobile ? "none" : "translateY(-3%)",
+                transition: "none",
+              }}
+              onMouseDown={onMouseDown}
+              onMouseMove={onMouseMove}
+              onMouseUp={stopDrag}
+              onMouseLeave={onMouseLeave}
+              onClick={handleClick}
+            />
+
+            {/* Headline — desktop only, absolute top-left overlay */}
+            {!isMobile && (
+              <div
+                className="absolute z-10 flex flex-col pointer-events-none"
+                style={{
+                  top:        "9%",
+                  left:       "8%",
+                  maxWidth:   420,
+                  opacity:    textVisible ? 1 : 0,
+                  transition: "opacity 0.4s ease-in-out",
+                }}
+              >
+                <h1
+                  className="md:text-[52px] lg:text-[56px] font-semibold leading-[1.06] text-white mb-3"
+                  style={{ letterSpacing: "-0.02em" }}
+                >
+                  This is what a music taste looks like.
+                </h1>
+                <p className="text-xs tracking-[0.22em] uppercase" style={{ color: "rgba(255,255,255,0.62)" }}>
+                  Click. Zoom. Discover.
+                </p>
+              </div>
+            )}
 
           {/* Stats row — bottom-right, desktop only */}
           {totalTrackCount > 0 && !isMobile && (
@@ -2578,6 +2582,33 @@ export default function LandingPage() {
                 <button onClick={() => { setSelected(null); setSelectedSubgenre(null); selectedSubgenreRef.current = null; setZoomSubgenre(null); zoomSubgenreRef.current = null; autoSelectedRef.current = false; }}
                   className="text-zinc-700 hover:text-zinc-400 text-xs transition-colors">close ✕</button>
               </div>
+            </div>
+          )}
+
+          </div>{/* /sphere zone */}
+
+          {/* ── Mobile title — flex-shrink-0, anchored at the section bottom ─── */}
+          {/* Sits below the sphere zone in the flex column. The sphere zone      */}
+          {/* is flex-1, so it fills all space above this element, naturally      */}
+          {/* centering the sphere between the nav and this title block.          */}
+          {isMobile && (
+            <div
+              className="flex-shrink-0 flex flex-col items-center text-center px-6"
+              style={{
+                paddingBottom: "max(32px, env(safe-area-inset-bottom))",
+                opacity:       textVisible ? 1 : 0,
+                transition:    "opacity 0.4s ease-in-out",
+              }}
+            >
+              <h1
+                className="font-semibold leading-[1.06] text-white mb-2"
+                style={{ fontSize: 19, letterSpacing: "-0.02em" }}
+              >
+                This is what a music taste looks like
+              </h1>
+              <p className="text-xs tracking-[0.22em] uppercase" style={{ color: "rgba(255,255,255,0.62)" }}>
+                Click. Zoom. Discover.
+              </p>
             </div>
           )}
 
