@@ -2349,8 +2349,16 @@ export default function LandingPage() {
           94vh (not 100vh) so the Page 2 headline peeks below the fold,
           signalling scroll naturally.                                           */}
       <section
-        className="h-[94vh] overflow-hidden flex flex-col"
-        style={{ width: "100vw", marginLeft: "calc(50% - 50vw)" }}
+        className="overflow-hidden flex flex-col"
+        style={{
+          // Mobile: 100svh = small viewport height — the fixed, minimum visible
+          // area with all Safari chrome (address bar + toolbar) fully shown.
+          // This prevents the title from sliding behind the bottom toolbar.
+          // Desktop: 94vh — keeps the "peek" that signals scroll.
+          height: isMobile ? "100svh" : "94vh",
+          width: "100vw",
+          marginLeft: "calc(50% - 50vw)",
+        }}
       >
 
         {/* Wordmark */}
@@ -2595,7 +2603,13 @@ export default function LandingPage() {
             <div
               className="flex-shrink-0 flex flex-col items-center text-center px-6"
               style={{
-                paddingBottom: "max(32px, env(safe-area-inset-bottom))",
+                // paddingTop  — visual gap between the sphere zone and the title text.
+                // paddingBottom — env(safe-area-inset-bottom) clears the home
+                //   indicator (~34 px on Face ID iPhones, 0 on older models).
+                //   The extra 64 px ensures the title sits comfortably above
+                //   the Safari bottom toolbar even on svh-constrained layouts.
+                paddingTop:    24,
+                paddingBottom: "calc(env(safe-area-inset-bottom) + 64px)",
                 opacity:       textVisible ? 1 : 0,
                 transition:    "opacity 0.4s ease-in-out",
               }}
