@@ -287,7 +287,15 @@ export default function MapVisual({
       fadeDuration:       0,
     });
 
-    // Resize canvas to match wrapper
+    // ── Resize helpers ────────────────────────────────────────────────────────
+    // mapLoaded gates map.resize() calls — the MapLibre instance must be fully
+    // initialised before resize() is safe to call.
+    let mapLoaded = false;
+
+    // resizeCanvas syncs the overlay <canvas> to the wrapper dimensions and,
+    // once the map is loaded, also tells MapLibre to re-measure its container.
+    // This fires both on initial mount and whenever the wrapper size changes
+    // (e.g. after Next.js client-side navigation restores the page).
     const resizeCanvas = () => {
       const dpr = window.devicePixelRatio || 1;
       const w   = wrapper.clientWidth;
@@ -297,6 +305,10 @@ export default function MapVisual({
       overlayEl.style.width  = `${w}px`;
       overlayEl.style.height = `${h}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      // Keep MapLibre's internal canvas in sync with the wrapper.
+      // Guard: skip if the map hasn't loaded yet (map.resize() is a no-op
+      // before load and can log warnings in some MapLibre versions).
+      if (mapLoaded) map.resize();
     };
     resizeCanvas();
     const ro = new ResizeObserver(resizeCanvas);
@@ -327,6 +339,17 @@ export default function MapVisual({
     }
 
     map.on("load", () => {
+      // Mark the map as ready so resizeCanvas() can call map.resize() safely.
+      mapLoaded = true;
+
+      // Re-measure the container now that the map is fully initialised.
+      // MapLibre GL reads container dimensions at construction time; if the
+      // component mounted while the container was 0-wide (e.g. during Next.js
+      // hydration or after client-side navigation), the internal canvas will
+      // be the wrong size. A rAF delay ensures the browser has finished layout
+      // before we ask MapLibre to re-measure.
+      requestAnimationFrame(() => map.resize());
+
       // Globe projection
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       try { (map as any).setProjection({ type: "globe" }); } catch {
