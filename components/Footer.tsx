@@ -80,9 +80,7 @@ export default function Footer() {
           lineHeight:    1.9,
           color:         "rgba(255,255,255,0.28)",
         }}>
-          1600 El Camino Real,<br />
-          Suite 280,<br />
-          Menlo Park, CA 94025
+          Menlo Park, CA
         </p>
       </div>
 
