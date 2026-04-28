@@ -99,8 +99,16 @@ export async function GET() {
     const user = await getCurrentUser();
 
     if (!user) {
+      console.warn("[import] called with no authenticated session → 401");
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
+
+    // ── Debug: confirm which user this import run is for ──────────────────────
+    console.log("[import] starting for user:", {
+      id:    user.id,
+      name:  user.name,
+      email: user.email,
+    });
 
     const account = await prisma.account.findFirst({
       where: {
@@ -240,6 +248,13 @@ export async function GET() {
       console.log("[import] Sample 'Other' tracks (up to 20):", otherExamples);
     }
     // ────────────────────────────────────────────────────────────────────────
+
+    console.log("[import] finished for user:", {
+      id:           user.id,
+      name:         user.name,
+      tracksTotal:  allItems.length,
+      uniqueArtists: uniqueArtistIds.length,
+    });
 
     return NextResponse.json({
       success: true,

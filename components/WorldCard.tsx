@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { signIn } from "next-auth/react";
+import { signIn, signOut } from "next-auth/react";
 import { useEffect, useRef, useState } from "react";
 import SphereCanvas from "./SphereCanvas";
 
@@ -220,8 +220,30 @@ function RoommateCard({ name, rotSeed = 0 }: { name: string; rotSeed: number }) 
 
   const handleConnect = async () => {
     setConnecting(true);
-    // callbackUrl includes ?import=1 so MidvaleAutoImport fires on redirect.
-    await signIn("spotify", { callbackUrl: "/midvale?import=1" });
+
+    // ── Clear any existing session first ─────────────────────────────────────
+    // If Surya (or anyone) is currently logged in, their session must be ended
+    // before we start the new OAuth.  Without this, NextAuth may receive the
+    // callback and find an existing user that matches Spotify's silent re-auth,
+    // leaving the browser in Surya's session instead of the new roommate's.
+    // redirect: false keeps us on the page; signIn below immediately redirects.
+    await signOut({ redirect: false });
+
+    // ── Start Spotify OAuth with forced account chooser ───────────────────────
+    // The third argument passes extra params to Spotify's authorization URL.
+    // show_dialog=true forces Spotify to always present the account/permission
+    // dialog, even when the user is already logged into Spotify in the browser.
+    // This lets the roommate pick THEIR account instead of silently reusing
+    // whatever Spotify session is active.
+    //
+    // callbackUrl includes ?import=1 so MidvaleAutoImport fires on return.
+    await signIn(
+      "spotify",
+      { callbackUrl: "/midvale?import=1" },
+      { show_dialog: "true" },
+    );
+
+    // signIn redirects; this line only runs if the redirect somehow resolves.
     setConnecting(false);
   };
 
