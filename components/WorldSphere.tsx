@@ -2,6 +2,21 @@
 
 import { useEffect, useRef, useState } from "react";
 
+// ── Short display labels for sphere (long names → readable at small sizes) ────
+
+const GENRE_SHORT: Record<string, string> = {
+  "Jazz / Blues":                   "Jazz",
+  "Rap / Hip-Hop":                  "Rap",
+  "R&B / Soul / Funk":              "R&B",
+  "Classical / Score / Soundtrack": "Classical",
+  "Pop / Dance":                    "Pop",
+  "Rock / Indie / Alternative":     "Rock",
+  "Electronic / Ambient":           "Electronic",
+  "World / Folk / Regional":        "World",
+};
+
+const shortLabel = (genre: string) => GENRE_SHORT[genre] ?? genre;
+
 // ── Blueprint palette ─────────────────────────────────────────────────────────
 
 const COLORS: Record<string, string> = {
@@ -23,6 +38,9 @@ type TrackItem = {
   name: string;
   artist: string;
   album: string | null;
+  imageUrl?: string | null;
+  previewUrl?: string | null;
+  spotifyId?: string | null;
   blueprintSubgenre: string;
 };
 
@@ -41,12 +59,6 @@ const norm3 = ([x, y, z]: V3): V3 => {
   return [x / l, y / l, z / l];
 };
 
-/**
- * Build a unit icosphere by subdividing a regular icosahedron `subdivs` times.
- *   subdivs=0 →  20 faces
- *   subdivs=1 →  80 faces
- *   subdivs=2 → 320 faces  ← we use this
- */
 function buildIcosphere(subdivs: number): { verts: V3[]; faces: Tri[] } {
   const φ = (1 + Math.sqrt(5)) / 2;
 
@@ -85,9 +97,6 @@ function buildIcosphere(subdivs: number): { verts: V3[]; faces: Tri[] } {
   return { verts, faces };
 }
 
-/**
- * Distribute n points evenly on a unit sphere (Fibonacci / golden-angle method).
- */
 function fiboPoles(n: number): V3[] {
   const phi = Math.PI * (3 - Math.sqrt(5));
   return Array.from({ length: n }, (_, i) => {
@@ -98,7 +107,6 @@ function fiboPoles(n: number): V3[] {
   });
 }
 
-/** Normalised centroid of a triangle mapped back onto the sphere. */
 function triCentroid(verts: V3[], [a, b, c]: Tri): V3 {
   return norm3([
     (verts[a][0] + verts[b][0] + verts[c][0]) / 3,
@@ -107,10 +115,6 @@ function triCentroid(verts: V3[], [a, b, c]: Tri): V3 {
   ]);
 }
 
-/**
- * Additive weighted Voronoi: each face goes to genre i minimising
- *   arc_distance(centroid, pole_i) − bonus_i
- */
 function assignVoronoi(cents: V3[], poles: V3[], bonuses: number[]): number[] {
   return cents.map(c => {
     let best = 0, bestScore = Infinity;
@@ -125,10 +129,6 @@ function assignVoronoi(cents: V3[], poles: V3[], bonuses: number[]): number[] {
   });
 }
 
-/**
- * Lloyd's relaxation: iteratively move each pole to the centroid of its
- * currently-assigned faces, then re-assign.
- */
 function lloydRelax(
   cents: V3[],
   initialPoles: V3[],
@@ -162,9 +162,6 @@ function lloydRelax(
   return { poles, region };
 }
 
-/**
- * Build a face-adjacency list from shared icosphere edges.
- */
 function buildAdjacency(faces: Tri[]): number[][] {
   const edgeMap = new Map<string, number[]>();
   for (let fi = 0; fi < faces.length; fi++) {
@@ -185,11 +182,6 @@ function buildAdjacency(faces: Tri[]): number[][] {
   return adj;
 }
 
-/**
- * Remove disconnected islands: for each genre, BFS its faces to find
- * connected components. Any component smaller than the largest is
- * re-assigned to the most-common neighbouring genre.
- */
 function removeIslands(region: number[], adj: number[][], numGenres: number): number[] {
   const result = [...region];
 
@@ -245,47 +237,115 @@ function removeIslands(region: number[], adj: number[][], numGenres: number): nu
   return result;
 }
 
-/** Parse a 7-char hex colour to [r, g, b] integers. */
 function hexRgb(h: string): [number, number, number] {
   return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+}
+
+// ── SpotifyLogoButton ─────────────────────────────────────────────────────────
+// Dims when no track is active; lights up green and becomes clickable when
+// a track is playing. Clicking opens that track on Spotify in a new tab.
+
+function SpotifyLogoButton({
+  track,
+  size = 22,
+}: {
+  track: { name: string; spotifyId?: string | null } | null;
+  size?: number;
+}) {
+  const active  = !!track;
+  const canOpen = !!(track?.spotifyId);
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!canOpen || !track?.spotifyId) return;
+    const url = `https://open.spotify.com/track/${track.spotifyId}`;
+    const ok = window.confirm(`Open "${track.name}" on Spotify?`);
+    if (ok) window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  return (
+    <button
+      onClick={handleClick}
+      aria-label={canOpen ? `Open ${track?.name} on Spotify` : "Spotify"}
+      style={{
+        flexShrink: 0,
+        background: "none",
+        border:     "none",
+        padding:    0,
+        cursor:     canOpen ? "pointer" : "default",
+        color:      active ? "#1DB954" : "rgba(255,255,255,0.20)",
+        transition: "color 0.25s ease",
+        display:    "flex",
+        alignItems: "center",
+        lineHeight: 1,
+      }}
+    >
+      {/* Official Spotify sound-wave mark */}
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+      </svg>
+    </button>
+  );
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function WorldSphere() {
-  const canvasRef    = useRef<HTMLCanvasElement>(null);
-  const [loading,    setLoading]     = useState(true);
-  const [refreshing, setRefreshing]  = useState(false);
-  const [worlds,     setWorlds]      = useState<Record<string, number>>({});
-  const [error,      setError]       = useState<string | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [loading,    setLoading]    = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [worlds,     setWorlds]     = useState<Record<string, number>>({});
+  const [error,      setError]      = useState<string | null>(null);
 
   // ── Genre selection + track list ──────────────────────────────────────────
-  const [selected,         setSelected]         = useState<string | null>(null);
-  const [tracks,           setTracks]           = useState<TrackItem[]>([]);
-  const [tracksLoading,    setTracksLoading]    = useState(false);
-  const [subgenres,        setSubgenres]        = useState<SubgenreItem[]>([]);
-  const [subgenresLoading, setSubgenresLoading] = useState(false);
-  const [selectedSubgenre, setSelectedSubgenre] = useState<string | null>(null);
+  const [selected,          setSelected]          = useState<string | null>(null);
+  const [tracks,            setTracks]            = useState<TrackItem[]>([]);
+  const [tracksLoading,     setTracksLoading]     = useState(false);
+  const [subgenres,         setSubgenres]         = useState<SubgenreItem[]>([]);
+  const [selectedSubgenre,  setSelectedSubgenre]  = useState<string | null>(null);
   const selectedSubgenreRef = useRef<string | null>(null);
-  const [zoomSubgenre, setZoomSubgenre] = useState<string | null>(null);
-  const zoomSubgenreRef = useRef<string | null>(null);
-  const [hoveredSubgenre, setHoveredSubgenre] = useState<string | null>(null);
-  const hoveredSubgRef = useRef<string | null>(null);
+  const [zoomSubgenre,      setZoomSubgenre]      = useState<string | null>(null);
+  const zoomSubgenreRef     = useRef<string | null>(null);
+  const [hoveredSubgenre,   setHoveredSubgenre]   = useState<string | null>(null);
+  const hoveredSubgRef      = useRef<string | null>(null);
 
-  const zoomRef      = useRef(1);
+  // ── Audio playback ────────────────────────────────────────────────────────
+  const [nowPlayingId,   setNowPlayingId]   = useState<string | null>(null);
+  const [audioPlaying,   setAudioPlaying]   = useState(false);
+  const audioRef                            = useRef<HTMLAudioElement | null>(null);
+  const nowPlayingIdRef                     = useRef<string | null>(null);
+  nowPlayingIdRef.current                   = nowPlayingId;
+  const [playingTrack,   setPlayingTrack]   = useState<{
+    id: string; name: string; artist: string; spotifyId?: string | null;
+  } | null>(null);
+  const [pendingTrackId, setPendingTrackId] = useState<string | null>(null);
+  const requestedTrackRef                   = useRef<string | null>(null);
+  requestedTrackRef.current                 = pendingTrackId;
+  const pendingAudioRef                     = useRef<HTMLAudioElement | null>(null);
+
+  // ── Deezer preview cache ──────────────────────────────────────────────────
+  const [deezerPreviews,  setDeezerPreviews]  = useState<Record<string, string>>({});
+  const deezerPreviewsRef                     = useRef<Record<string, string>>({});
+
+  // ── Interaction refs ──────────────────────────────────────────────────────
+  // Two zoom refs: target is updated immediately on wheel; visual lerps toward it.
+  const zoomRef       = useRef(1);         // visual zoom — lerped each RAF frame
+  const zoomTargetRef = useRef(1);         // intended zoom — updated by wheel/click
   const subRegionRef  = useRef<Map<number, number>>(new Map());
   const activeSubsRef = useRef<SubgenreItem[]>([]);
   const subPolesRef   = useRef<{ name: string; pole: V3 }[]>([]);
-  const rotRef  = useRef({ x: 0.3, y: 0 });
-  const dragRef = useRef({ active: false, lx: 0, ly: 0, moved: false });
-  const rafRef  = useRef<number>(0);
+  const rotRef        = useRef({ x: 0.3, y: 0 });
+  const dragRef       = useRef({ active: false, lx: 0, ly: 0, moved: false });
+  const rafRef        = useRef<number>(0);
 
   const labelHitsRef = useRef<
     { name: string; subgenre?: string; x1: number; y1: number; x2: number; y2: number }[]
   >([]);
-  const regionPolesRef = useRef<{ name: string; pole: V3 }[]>([]);
-  const hoveredRef = useRef<{ genre: string; subgenre?: string } | null>(null);
+  const regionPolesRef  = useRef<{ name: string; pole: V3 }[]>([]);
+  const hoveredRef      = useRef<{ genre: string; subgenre?: string } | null>(null);
   const autoSelectedRef = useRef(false);
+  const selectedRef     = useRef<string | null>(null);
+  selectedRef.current   = selected;
 
   // ── Data fetching ─────────────────────────────────────────────────────────
 
@@ -315,7 +375,7 @@ export default function WorldSphere() {
 
   useEffect(() => { loadWorld(); }, []);
 
-  // ── Fetch tracks for the selected genre ───────────────────────────────────
+  // ── Fetch tracks + subgenres + Deezer previews when genre selected ────────
 
   useEffect(() => {
     hoveredSubgRef.current = null;
@@ -326,30 +386,54 @@ export default function WorldSphere() {
       setSubgenres([]);
       setSelectedSubgenre(null);
       selectedSubgenreRef.current = null;
-      zoomSubgenreRef.current = null;
+      zoomSubgenreRef.current     = null;
       setZoomSubgenre(null);
+      deezerPreviewsRef.current   = {};
+      setDeezerPreviews({});
       return;
     }
     setSelectedSubgenre(null);
     selectedSubgenreRef.current = null;
-    zoomSubgenreRef.current = null;
+    zoomSubgenreRef.current     = null;
     setZoomSubgenre(null);
+    deezerPreviewsRef.current   = {};
+    setDeezerPreviews({});
 
     const encoded = encodeURIComponent(selected);
 
     setTracksLoading(true);
     fetch(`/api/world/${encoded}`)
       .then(r => r.json())
-      .then(d => setTracks(d.tracks ?? []))
+      .then(d => {
+        const loadedTracks: TrackItem[] = d.tracks ?? [];
+        setTracks(loadedTracks);
+
+        // Fetch Deezer preview URLs in batches of 5 (server-side proxy avoids CORS).
+        const fetchPreview = (t: TrackItem) =>
+          fetch(`/api/preview?track=${encodeURIComponent(t.name)}&artist=${encodeURIComponent(t.artist)}`)
+            .then(r => r.json())
+            .then((data: { previewUrl: string | null }) => {
+              if (data.previewUrl) {
+                deezerPreviewsRef.current[t.id] = data.previewUrl;
+                setDeezerPreviews(prev => ({ ...prev, [t.id]: data.previewUrl! }));
+              }
+            })
+            .catch(() => {});
+
+        const runBatches = async (ts: TrackItem[]) => {
+          for (let i = 0; i < ts.length; i += 5) {
+            await Promise.all(ts.slice(i, i + 5).map(fetchPreview));
+          }
+        };
+        runBatches(loadedTracks);
+      })
       .catch(() => setTracks([]))
       .finally(() => setTracksLoading(false));
 
-    setSubgenresLoading(true);
     fetch(`/api/world/${encoded}/subgenres`)
       .then(r => r.json())
       .then(d => setSubgenres(d.subgenres ?? []))
-      .catch(() => setSubgenres([]))
-      .finally(() => setSubgenresLoading(false));
+      .catch(() => setSubgenres([]));
   }, [selected]);
 
   // ── Poll hoveredRef → hoveredSubgenre state ───────────────────────────────
@@ -364,16 +448,104 @@ export default function WorldSphere() {
     return () => clearInterval(id);
   }, []);
 
+  // ── playTrack ─────────────────────────────────────────────────────────────
+  // Must stay synchronous — audio.play() must be called in the same call-stack
+  // as the user gesture to satisfy Chrome/Safari autoplay policies.
+
+  const playTrack = (t: TrackItem) => {
+    const previewUrl = deezerPreviewsRef.current[t.id] ?? t.previewUrl ?? null;
+
+    if (!previewUrl) {
+      // Same track → deselect
+      if (nowPlayingIdRef.current === t.id) {
+        if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+        setNowPlayingId(null); setAudioPlaying(false); setPlayingTrack(null);
+        return;
+      }
+      // Same pending → already in-flight
+      if (requestedTrackRef.current === t.id) return;
+
+      // No URL yet — record intent + on-demand fetch
+      requestedTrackRef.current = t.id;
+      setPendingTrackId(t.id);
+      if (pendingAudioRef.current) { pendingAudioRef.current.src = ""; pendingAudioRef.current = null; }
+      const pendingAudio = new Audio();
+      pendingAudio.volume = 0.8;
+      pendingAudioRef.current = pendingAudio;
+
+      fetch(`/api/preview?track=${encodeURIComponent(t.name)}&artist=${encodeURIComponent(t.artist)}`)
+        .then(r => r.json())
+        .then((d: { previewUrl: string | null }) => {
+          if (requestedTrackRef.current !== t.id) return; // stale
+          requestedTrackRef.current = null;
+          setPendingTrackId(null);
+          if (!d.previewUrl) return;
+          deezerPreviewsRef.current[t.id] = d.previewUrl;
+          setDeezerPreviews(prev => ({ ...prev, [t.id]: d.previewUrl! }));
+          const audio = pendingAudioRef.current;
+          if (!audio) return;
+          audio.src = d.previewUrl;
+          if (audioRef.current) { audioRef.current.pause(); audioRef.current.currentTime = 0; }
+          audio.addEventListener("ended", () => { setAudioPlaying(false); setNowPlayingId(null); setPlayingTrack(null); });
+          audio.addEventListener("error", () => {
+            delete deezerPreviewsRef.current[t.id];
+            setDeezerPreviews(prev => { const n = { ...prev }; delete n[t.id]; return n; });
+            setAudioPlaying(false); setNowPlayingId(null); setPlayingTrack(null);
+          });
+          audioRef.current = audio; pendingAudioRef.current = null;
+          setNowPlayingId(t.id);
+          setPlayingTrack({ id: t.id, name: t.name, artist: t.artist, spotifyId: t.spotifyId ?? null });
+          setAudioPlaying(true);
+          const p = audio.play();
+          if (p) p.catch(() => { if (audioRef.current === audio) audioRef.current = null; setAudioPlaying(false); setNowPlayingId(null); setPlayingTrack(null); });
+        })
+        .catch(() => {});
+      return;
+    }
+
+    // Same track again → stop
+    if (nowPlayingIdRef.current === t.id) {
+      if (audioRef.current) { audioRef.current.pause(); audioRef.current.currentTime = 0; audioRef.current = null; }
+      setAudioPlaying(false); setNowPlayingId(null); setPlayingTrack(null);
+      return;
+    }
+
+    // Cancel pending + stop current
+    requestedTrackRef.current = null; setPendingTrackId(null);
+    if (pendingAudioRef.current) { pendingAudioRef.current.src = ""; pendingAudioRef.current = null; }
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current.currentTime = 0; }
+
+    const audio = new Audio(previewUrl);
+    audio.volume = 0.8;
+    audio.addEventListener("ended", () => { setAudioPlaying(false); setNowPlayingId(null); setPlayingTrack(null); });
+    audio.addEventListener("error", () => {
+      delete deezerPreviewsRef.current[t.id];
+      setDeezerPreviews(prev => { const n = { ...prev }; delete n[t.id]; return n; });
+      setAudioPlaying(false); setNowPlayingId(null); setPlayingTrack(null);
+    });
+    audioRef.current = audio;
+    setNowPlayingId(t.id);
+    setPlayingTrack({ id: t.id, name: t.name, artist: t.artist, spotifyId: t.spotifyId ?? null });
+    setAudioPlaying(true);
+    const p = audio.play();
+    if (p) p.catch(err => {
+      if (err.name !== "AbortError") {
+        delete deezerPreviewsRef.current[t.id];
+        setDeezerPreviews(prev => { const n = { ...prev }; delete n[t.id]; return n; });
+        setNowPlayingId(null); setAudioPlaying(false); setPlayingTrack(null);
+      } else {
+        setAudioPlaying(false);
+      }
+    });
+  };
+
   // ── Canvas / render loop ───────────────────────────────────────────────────
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || loading || Object.keys(worlds).length === 0) return;
 
-    const sync = () => {
-      canvas.width  = canvas.offsetWidth;
-      canvas.height = canvas.offsetHeight;
-    };
+    const sync = () => { canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight; };
     sync();
     const ro = new ResizeObserver(sync);
     ro.observe(canvas);
@@ -384,13 +556,11 @@ export default function WorldSphere() {
     const total   = entries.reduce((s, [, c]) => s + c, 0) || 1;
     const names   = entries.map(([n]) => n);
 
-    const bonuses = entries.map(([, c]) => (Math.PI / 4) * Math.sqrt(c / total));
-
+    const bonuses      = entries.map(([, c]) => (Math.PI / 4) * Math.sqrt(c / total));
     const initialPoles = fiboPoles(names.length);
     const cents        = faces.map(f => triCentroid(verts, f));
 
     const { region: rawRegion, poles: finalPoles } = lloydRelax(cents, initialPoles, bonuses, 8);
-
     regionPolesRef.current = names.map((n, i) => ({ name: n, pole: finalPoles[i] }));
 
     const adj    = buildAdjacency(faces);
@@ -462,7 +632,7 @@ export default function WorldSphere() {
           }
 
           const assignment = new Map<number, number>();
-          const frontiers:   number[][] = Array.from({ length: n }, () => []);
+          const frontiers: number[][] = Array.from({ length: n }, () => []);
           const regionCounts = new Array<number>(n).fill(0);
 
           for (let i = 0; i < n; i++) {
@@ -482,14 +652,8 @@ export default function WorldSphere() {
                 let claimedOne = false;
                 for (const ni of (subAdj.get(fi2) ?? [])) {
                   if (!assignment.has(ni)) {
-                    assignment.set(ni, i);
-                    regionCounts[i]++;
-                    totalAssigned++;
-                    frontiers[i].push(ni);
-                    claimedOne = true;
-                    found = true;
-                    grewAny = true;
-                    break;
+                    assignment.set(ni, i); regionCounts[i]++; totalAssigned++;
+                    frontiers[i].push(ni); claimedOne = true; found = true; grewAny = true; break;
                   }
                 }
                 if (!claimedOne) frontiers[i].shift();
@@ -504,26 +668,18 @@ export default function WorldSphere() {
             for (const fi of gfi) {
               if (assignment.has(fi)) continue;
               for (const ni of (subAdj.get(fi) ?? [])) {
-                if (assignment.has(ni)) {
-                  assignment.set(fi, assignment.get(ni)!);
-                  mopping = true;
-                  break;
-                }
+                if (assignment.has(ni)) { assignment.set(fi, assignment.get(ni)!); mopping = true; break; }
               }
             }
           }
-          for (const fi of gfi) {
-            if (!assignment.has(fi)) assignment.set(fi, 0);
-          }
+          for (const fi of gfi) { if (!assignment.has(fi)) assignment.set(fi, 0); }
 
           subRegionRef.current = assignment;
 
           const poleAcc: V3[] = Array.from({ length: n }, () => [0, 0, 0] as V3);
           const poleCnt = new Int32Array(n);
           for (const [fi2, si] of assignment) {
-            poleAcc[si][0] += cents[fi2][0];
-            poleAcc[si][1] += cents[fi2][1];
-            poleAcc[si][2] += cents[fi2][2];
+            poleAcc[si][0] += cents[fi2][0]; poleAcc[si][1] += cents[fi2][1]; poleAcc[si][2] += cents[fi2][2];
             poleCnt[si]++;
           }
           subPolesRef.current = actSubs.map((sub, i) => ({
@@ -537,25 +693,25 @@ export default function WorldSphere() {
     }
 
     const rgbMap: [number, number, number][] = names.map(n => hexRgb(COLORS[n] ?? "#71717a"));
-
     const FOV = 900;
 
+    // ── Per-frame draw ─────────────────────────────────────────────────────
     function drawFrame() {
       const canvas = canvasRef.current;
       if (!canvas) return;
-
-      const W = canvas.width;
-      const H = canvas.height;
+      const W = canvas.width, H = canvas.height;
       if (!W || !H) return;
-
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
-      const R   = Math.min(W, H) * 0.38 * zoomRef.current;
-      const cx  = W / 2, cy = H / 2;
-      const rx  = rotRef.current.x, ry = rotRef.current.y;
+
+      // ── Zoom lerp: visual zoom smoothly tracks target (Google Maps feel) ──
+      zoomRef.current += (zoomTargetRef.current - zoomRef.current) * 0.10;
+
+      const R  = Math.min(W, H) * 0.38 * zoomRef.current;
+      const cx = W / 2, cy = H / 2;
+      const rx = rotRef.current.x, ry = rotRef.current.y;
 
       labelHitsRef.current = [];
-
       ctx.clearRect(0, 0, W, H);
 
       const atmo = ctx.createRadialGradient(cx, cy, R * 0.82, cx, cy, R * 1.22);
@@ -593,21 +749,14 @@ export default function WorldSphere() {
         const isFront        = depth >= 0;
         const isSelected     = ri === selectedIdx;
         const isHoveredGenre = ri === hoveredIdx && !isSelected;
-        const subIdx  = isSelected && zoomRef.current >= 1.6
-          ? subRegionRef.current.get(fi)
-          : undefined;
+        const subIdx  = isSelected && zoomRef.current >= 1.6 ? subRegionRef.current.get(fi) : undefined;
         const showSub = subIdx !== undefined;
         const subName      = showSub ? activeSubsRef.current[subIdx!]?.name : undefined;
         const isHoveredSub = showSub && !!subName && subName === hoveredSubName;
         const isClickedSub = showSub && !!subName && subName === selectedSubgenreRef.current;
         const siblingHov   = showSub && !!hoveredSubName && !isHoveredSub;
         let [r, g, b] = rgbMap[ri];
-        if (showSub) {
-          const scale = 0.55;
-          r = Math.round(r * scale);
-          g = Math.round(g * scale);
-          b = Math.round(b * scale);
-        }
+        if (showSub) { const sc = 0.55; r = Math.round(r*sc); g = Math.round(g*sc); b = Math.round(b*sc); }
 
         ctx.beginPath();
         ctx.moveTo(pv[ia].sx, pv[ia].sy);
@@ -616,31 +765,19 @@ export default function WorldSphere() {
         ctx.closePath();
 
         if (isFront) {
-          const hasSel = selectedIdx >= 0;
-          const fillAlpha = isClickedSub  ? 0.52 * subgReveal
-            : isHoveredSub                ? 0.35 * subgReveal
-            : siblingHov                  ? 0.06 * subgReveal
-            : showSub                     ? 0.08 * subgReveal
-            : isSelected                  ? 0.28
-            : isHoveredGenre              ? 0.15
-            : hasSel                      ? 0.015 : 0.02;
+          const hasSel    = selectedIdx >= 0;
+          const fillAlpha = isClickedSub ? 0.52*subgReveal : isHoveredSub ? 0.35*subgReveal
+            : siblingHov ? 0.06*subgReveal : showSub ? 0.08*subgReveal
+            : isSelected ? 0.28 : isHoveredGenre ? 0.15 : hasSel ? 0.015 : 0.02;
           ctx.fillStyle = `rgba(${r},${g},${b},${fillAlpha})`;
           ctx.fill();
 
-          const edgeAlpha = isClickedSub  ? 0.90 * subgReveal
-            : isHoveredSub                ? 0.65 * subgReveal
-            : siblingHov                  ? 0.03 * subgReveal
-            : showSub                     ? 0.05 * subgReveal
-            : isSelected                  ? 1.0
-            : isHoveredGenre              ? 0.95
-            : hasSel                      ? 0.60 : 0.82;
+          const edgeAlpha = isClickedSub ? 0.90*subgReveal : isHoveredSub ? 0.65*subgReveal
+            : siblingHov ? 0.03*subgReveal : showSub ? 0.05*subgReveal
+            : isSelected ? 1.0 : isHoveredGenre ? 0.95 : hasSel ? 0.60 : 0.82;
           ctx.strokeStyle = `rgba(${r},${g},${b},${edgeAlpha})`;
-          ctx.lineWidth   = isClickedSub  ? 0.70
-            : isHoveredSub                ? 0.55
-            : showSub                     ? 0.30
-            : isSelected                  ? 1.4
-            : isHoveredGenre              ? 1.2
-            : hasSel                      ? 0.75 : 0.9;
+          ctx.lineWidth   = isClickedSub ? 0.70 : isHoveredSub ? 0.55 : showSub ? 0.30
+            : isSelected ? 1.4 : isHoveredGenre ? 1.2 : hasSel ? 0.75 : 0.9;
           ctx.stroke();
         } else {
           const t = Math.max(0, (depth + 0.8) / 0.8) * 0.13;
@@ -650,16 +787,15 @@ export default function WorldSphere() {
         }
       }
 
+      // Level 2: subgenre boundary edges
       if (zoomRef.current >= 1.6 && selectedIdx >= 0 && subRegionRef.current.size > 0) {
         const [br, bg, bb] = rgbMap[selectedIdx];
         ctx.save();
         ctx.shadowColor = `rgba(${br},${bg},${bb},${(0.55 * subgReveal).toFixed(3)})`;
         ctx.shadowBlur  = 5;
         ctx.strokeStyle = `rgba(${br},${bg},${bb},${(0.82 * subgReveal).toFixed(3)})`;
-        ctx.lineWidth   = 1.6;
-        ctx.lineCap     = "round";
+        ctx.lineWidth   = 1.6; ctx.lineCap = "round";
         const drawnEdges = new Set<string>();
-
         for (const { fi, depth, ri } of fd) {
           if (ri !== selectedIdx || depth < 0) continue;
           const siA = subRegionRef.current.get(fi);
@@ -667,8 +803,7 @@ export default function WorldSphere() {
           for (const ni of adj[fi]) {
             const siB = subRegionRef.current.get(ni);
             if (siB === undefined || siB === siA) continue;
-            const fv = faces[fi];
-            const nv = faces[ni];
+            const fv = faces[fi], nv = faces[ni];
             const shared = fv.filter(v => nv.includes(v));
             if (shared.length !== 2) continue;
             const key = shared[0] < shared[1] ? `${shared[0]}:${shared[1]}` : `${shared[1]}:${shared[0]}`;
@@ -683,16 +818,15 @@ export default function WorldSphere() {
         ctx.restore();
       }
 
+      // Level 1: main genre plate boundary
       if (selectedIdx >= 0) {
         const [pr, pg, pb] = rgbMap[selectedIdx];
         ctx.save();
         ctx.shadowColor = `rgba(${pr},${pg},${pb},0.85)`;
         ctx.shadowBlur  = 10;
         ctx.strokeStyle = `rgba(${pr},${pg},${pb},1.0)`;
-        ctx.lineWidth   = 3.0;
-        ctx.lineCap     = "round";
+        ctx.lineWidth   = 3.0; ctx.lineCap = "round";
         const drawnPlate = new Set<string>();
-
         for (const { fi, depth, ri } of fd) {
           if (ri !== selectedIdx || depth < 0) continue;
           for (const ni of adj[fi]) {
@@ -700,9 +834,7 @@ export default function WorldSphere() {
             const fv = faces[fi], nv = faces[ni];
             const shared = fv.filter(v => nv.includes(v));
             if (shared.length !== 2) continue;
-            const key = shared[0] < shared[1]
-              ? `${shared[0]}:${shared[1]}`
-              : `${shared[1]}:${shared[0]}`;
+            const key = shared[0] < shared[1] ? `${shared[0]}:${shared[1]}` : `${shared[1]}:${shared[0]}`;
             if (drawnPlate.has(key)) continue;
             drawnPlate.add(key);
             ctx.beginPath();
@@ -714,6 +846,7 @@ export default function WorldSphere() {
         ctx.restore();
       }
 
+      // ── Genre labels (short names) ────────────────────────────────────────
       const acc: Record<number, { sx: number; sy: number; n: number }> = {};
       for (const { tri, depth, ri } of fd) {
         if (depth < 0) continue;
@@ -721,27 +854,20 @@ export default function WorldSphere() {
         const lx = (pv[ia].sx + pv[ib].sx + pv[ic].sx) / 3;
         const ly = (pv[ia].sy + pv[ib].sy + pv[ic].sy) / 3;
         if (!acc[ri]) acc[ri] = { sx: 0, sy: 0, n: 0 };
-        acc[ri].sx += lx;
-        acc[ri].sy += ly;
-        acc[ri].n++;
+        acc[ri].sx += lx; acc[ri].sy += ly; acc[ri].n++;
       }
 
-      ctx.textAlign    = "center";
-      ctx.textBaseline = "middle";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
 
       for (const [riStr, a] of Object.entries(acc)) {
         if (a.n < 4) continue;
-        const ri        = Number(riStr);
+        const ri         = Number(riStr);
         const isSelected = ri === selectedIdx;
-        const rawLx = a.sx / a.n;
-        const rawLy = a.sy / a.n;
-        const lx = isSelected
-          ? Math.max(80, Math.min(W - 80, rawLx))
-          : rawLx;
-        const ly = isSelected
-          ? Math.max(24, Math.min(H * 0.88, rawLy))
-          : rawLy;
-        const name = names[ri];
+        const rawLx = a.sx / a.n, rawLy = a.sy / a.n;
+        const lx = isSelected ? Math.max(80, Math.min(W - 80, rawLx)) : rawLx;
+        const ly = isSelected ? Math.max(24, Math.min(H * 0.88, rawLy)) : rawLy;
+        const name    = names[ri];
+        const label   = shortLabel(name); // ← short display name
         const [r, g, b] = rgbMap[ri];
         const isThisHov = ri === hoveredIdx;
         const labelDim  = isSelected || isThisHov ? 1.0 : selectedIdx >= 0 ? 0.50 : 1.0;
@@ -749,39 +875,31 @@ export default function WorldSphere() {
 
         ctx.globalAlpha = labelDim;
         ctx.font = `700 ${fs}px system-ui, sans-serif`;
-        const tw  = ctx.measureText(name).width;
-        const pad = 8;
-        const rad = 8;
-
-        const bx = lx - tw / 2 - pad;
-        const by = ly - fs / 2 - pad;
-        const bw = tw + pad * 2;
-        const bh = fs + pad * 2;
+        const tw  = ctx.measureText(label).width;
+        const pad = 8, rad = 8;
+        const bx = lx - tw/2 - pad, by = ly - fs/2 - pad;
+        const bw = tw + pad*2,       bh = fs + pad*2;
 
         ctx.save();
-        ctx.shadowColor = "rgba(0,0,0,0.75)";
-        ctx.shadowBlur  = 14;
+        ctx.shadowColor = "rgba(0,0,0,0.75)"; ctx.shadowBlur = 14;
         ctx.fillStyle   = isSelected ? "rgba(8,8,16,0.90)" : "rgba(8,8,16,0.72)";
-        ctx.beginPath();
-        ctx.roundRect(bx, by, bw, bh, rad);
-        ctx.fill();
+        ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, rad); ctx.fill();
         ctx.restore();
 
         if (isSelected) {
-          ctx.strokeStyle = `rgba(${r},${g},${b},0.7)`;
-          ctx.lineWidth   = 1;
-          ctx.beginPath();
-          ctx.roundRect(bx, by, bw, bh, rad);
-          ctx.stroke();
+          ctx.strokeStyle = `rgba(${r},${g},${b},0.7)`; ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, rad); ctx.stroke();
         }
 
         ctx.fillStyle = `rgb(${r},${g},${b})`;
-        ctx.fillText(name, lx, ly);
+        ctx.fillText(label, lx, ly);
         ctx.globalAlpha = 1.0;
 
+        // Hit area uses full name for data lookups
         labelHitsRef.current.push({ name, x1: bx, y1: by, x2: bx + bw, y2: by + bh });
       }
 
+      // ── Subgenre labels ───────────────────────────────────────────────────
       if (zoomRef.current >= 1.6 && selectedIdx >= 0) {
         const subTriMap = new Map<number, { sx: number; sy: number; n: number }>();
         for (const { tri, fi, depth, ri } of fd) {
@@ -791,60 +909,44 @@ export default function WorldSphere() {
           const [ia, ib, ic] = tri;
           const tsx = (pv[ia].sx + pv[ib].sx + pv[ic].sx) / 3;
           const tsy = (pv[ia].sy + pv[ib].sy + pv[ic].sy) / 3;
-          const acc = subTriMap.get(si);
-          if (acc) { acc.sx += tsx; acc.sy += tsy; acc.n++; }
-          else { subTriMap.set(si, { sx: tsx, sy: tsy, n: 1 }); }
+          const a = subTriMap.get(si);
+          if (a) { a.sx += tsx; a.sy += tsy; a.n++; }
+          else subTriMap.set(si, { sx: tsx, sy: tsy, n: 1 });
         }
 
         const labelReveal = Math.min(1, Math.max(0, (zoomRef.current - 1.6) / 0.3));
         ctx.globalAlpha = labelReveal;
 
         activeSubsRef.current.forEach((sub, si) => {
-          const acc = subTriMap.get(si);
-          if (!acc) return;
-
-          const lx = acc.sx / acc.n;
-          const ly = acc.sy / acc.n;
-
+          const a = subTriMap.get(si);
+          if (!a) return;
+          const lx = a.sx / a.n, ly = a.sy / a.n;
           const n = activeSubsRef.current.length;
           const t = n > 1 ? 1 - si / (n - 1) : 0.5;
           const scale = 0.45 + 0.55 * t;
           const [pr, pg, pb] = rgbMap[selectedIdx];
-          const cr = Math.round(pr * scale);
-          const cg = Math.round(pg * scale);
-          const cb = Math.round(pb * scale);
+          const cr = Math.round(pr * scale), cg = Math.round(pg * scale), cb = Math.round(pb * scale);
           const isActiveSub = selectedSubgenreRef.current === sub.name;
           const isHovSub    = hoveredSubName === sub.name;
           const subLit = isActiveSub || isHovSub;
           const fs  = subLit ? 12 : 11;
           ctx.font  = `${subLit ? 700 : 600} ${fs}px system-ui, sans-serif`;
-          const tw  = ctx.measureText(sub.name).width;
-          const pad = 6;
-          const rad = 6;
-          const bx  = lx - tw / 2 - pad, by = ly - fs / 2 - pad;
-          const bw  = tw + pad * 2,       bh = fs + pad * 2;
+          const tw = ctx.measureText(sub.name).width;
+          const pad = 6, rad = 6;
+          const bx = lx - tw/2 - pad, by = ly - fs/2 - pad;
+          const bw = tw + pad*2,       bh = fs + pad*2;
           ctx.save();
           ctx.shadowColor = isHovSub ? `rgba(${cr},${cg},${cb},0.45)` : "rgba(0,0,0,0.55)";
           ctx.shadowBlur  = isHovSub ? 12 : 8;
-          ctx.fillStyle   = isActiveSub ? `rgba(${cr},${cg},${cb},0.18)`
-            : isHovSub    ? `rgba(${cr},${cg},${cb},0.12)`
-            : "rgba(8,8,16,0.60)";
-          ctx.beginPath();
-          ctx.roundRect(bx, by, bw, bh, rad);
-          ctx.fill();
+          ctx.fillStyle   = isActiveSub ? `rgba(${cr},${cg},${cb},0.18)` : isHovSub ? `rgba(${cr},${cg},${cb},0.12)` : "rgba(8,8,16,0.60)";
+          ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, rad); ctx.fill();
           ctx.restore();
           if (isActiveSub) {
-            ctx.strokeStyle = `rgba(${cr},${cg},${cb},1.0)`;
-            ctx.lineWidth   = 1.5;
-            ctx.beginPath();
-            ctx.roundRect(bx, by, bw, bh, rad);
-            ctx.stroke();
+            ctx.strokeStyle = `rgba(${cr},${cg},${cb},1.0)`; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, rad); ctx.stroke();
           } else if (isHovSub) {
-            ctx.strokeStyle = `rgba(${cr},${cg},${cb},0.60)`;
-            ctx.lineWidth   = 1.0;
-            ctx.beginPath();
-            ctx.roundRect(bx, by, bw, bh, rad);
-            ctx.stroke();
+            ctx.strokeStyle = `rgba(${cr},${cg},${cb},0.60)`; ctx.lineWidth = 1.0;
+            ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, rad); ctx.stroke();
           }
           ctx.fillStyle = isHovSub ? `rgb(${cr},${cg},${cb})` : `rgba(${cr},${cg},${cb},0.80)`;
           ctx.fillText(sub.name, lx, ly);
@@ -859,14 +961,14 @@ export default function WorldSphere() {
 
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      const prevZoom = zoomRef.current;
-      zoomRef.current = Math.max(0.5, Math.min(5, prevZoom * (1 - e.deltaY * 0.004)));
-      const newZoom  = zoomRef.current;
+      const prev   = zoomTargetRef.current;
+      const next   = Math.max(0.5, Math.min(5, prev * (1 - e.deltaY * 0.004)));
+      zoomTargetRef.current = next;
 
-      if (newZoom >= 1.2 && selected === null && regionPolesRef.current.length > 0) {
+      // Auto-reveal: select most front-facing genre on zoom-in
+      if (next >= 1.2 && selectedRef.current === null && regionPolesRef.current.length > 0) {
         const rx = rotRef.current.x, ry = rotRef.current.y;
-        let bestName = regionPolesRef.current[0].name;
-        let bestZ    = -Infinity;
+        let bestName = regionPolesRef.current[0].name, bestZ = -Infinity;
         for (const { name, pole: [px, py, pz] } of regionPolesRef.current) {
           const x1 =  px * Math.cos(ry) + pz * Math.sin(ry);
           const z1 = -px * Math.sin(ry) + pz * Math.cos(ry);
@@ -877,7 +979,8 @@ export default function WorldSphere() {
         setSelected(bestName);
       }
 
-      if (newZoom >= 2.0 && subPolesRef.current.length > 0) {
+      // Auto-focus subgenre at zoom >= 2.0
+      if (next >= 2.0 && subPolesRef.current.length > 0) {
         const rx2 = rotRef.current.x, ry2 = rotRef.current.y;
         let bestSubName = subPolesRef.current[0].name, bestSubZ = -Infinity;
         for (const { name, pole: [px, py, pz] } of subPolesRef.current) {
@@ -890,33 +993,22 @@ export default function WorldSphere() {
           zoomSubgenreRef.current = bestSubName;
           setZoomSubgenre(bestSubName);
         }
-      } else if (newZoom < 2.0) {
-        if (zoomSubgenreRef.current !== null) {
-          zoomSubgenreRef.current = null;
-          setZoomSubgenre(null);
-        }
-        if (selectedSubgenreRef.current !== null) {
-          selectedSubgenreRef.current = null;
-          setSelectedSubgenre(null);
-        }
+      } else if (next < 2.0) {
+        if (zoomSubgenreRef.current !== null) { zoomSubgenreRef.current = null; setZoomSubgenre(null); }
+        if (selectedSubgenreRef.current !== null) { selectedSubgenreRef.current = null; setSelectedSubgenre(null); }
       }
 
-      if (newZoom < 1.1 && selected !== null) {
+      // Deselect when zooming back out
+      if (next < 1.1 && selectedRef.current !== null) {
         autoSelectedRef.current = false;
-        selectedSubgenreRef.current = null;
-        setSelectedSubgenre(null);
-        zoomSubgenreRef.current = null;
-        setZoomSubgenre(null);
+        selectedSubgenreRef.current = null; setSelectedSubgenre(null);
+        zoomSubgenreRef.current     = null; setZoomSubgenre(null);
         setSelected(null);
       }
     };
     canvas.addEventListener("wheel", onWheel, { passive: false });
 
-    function animate() {
-      drawFrame();
-      rafRef.current = requestAnimationFrame(animate);
-    }
-
+    function animate() { drawFrame(); rafRef.current = requestAnimationFrame(animate); }
     rafRef.current = requestAnimationFrame(animate);
     return () => {
       cancelAnimationFrame(rafRef.current);
@@ -934,22 +1026,20 @@ export default function WorldSphere() {
   const hitTestSphere = (mx: number, my: number): string | null => {
     const canvas = canvasRef.current;
     if (!canvas || regionPolesRef.current.length === 0) return null;
-    const W  = canvas.clientWidth, H = canvas.clientHeight;
-    const R  = Math.min(W, H) * 0.38 * zoomRef.current;
+    const W = canvas.clientWidth, H = canvas.clientHeight;
+    const R = Math.min(W, H) * 0.38 * zoomRef.current;
     const cx = W / 2, cy = H / 2;
-    const nx = (mx - cx) / R;
-    const ny = (my - cy) / R;
+    const nx = (mx - cx) / R, ny = (my - cy) / R;
     if (nx * nx + ny * ny > 1) return null;
-    const nz  = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
+    const nz  = Math.sqrt(Math.max(0, 1 - nx*nx - ny*ny));
     const rx  = rotRef.current.x, ry = rotRef.current.y;
     const y_w = ny * Math.cos(rx) + nz * Math.sin(rx);
     const z1  = -ny * Math.sin(rx) + nz * Math.cos(rx);
     const x_w = nx * Math.cos(ry) - z1 * Math.sin(ry);
     const z_w = nx * Math.sin(ry) + z1 * Math.cos(ry);
-    let best    = regionPolesRef.current[0];
-    let bestDot = -Infinity;
+    let best = regionPolesRef.current[0], bestDot = -Infinity;
     for (const rd of regionPolesRef.current) {
-      const d = rd.pole[0] * x_w + rd.pole[1] * y_w + rd.pole[2] * z_w;
+      const d = rd.pole[0]*x_w + rd.pole[1]*y_w + rd.pole[2]*z_w;
       if (d > bestDot) { bestDot = d; best = rd; }
     }
     return best.name;
@@ -960,8 +1050,7 @@ export default function WorldSphere() {
       rotRef.current.y += (e.clientX - dragRef.current.lx) * 0.005;
       rotRef.current.x -= (e.clientY - dragRef.current.ly) * 0.005;
       rotRef.current.x  = Math.max(-1.2, Math.min(1.2, rotRef.current.x));
-      dragRef.current.lx    = e.clientX;
-      dragRef.current.ly    = e.clientY;
+      dragRef.current.lx = e.clientX; dragRef.current.ly = e.clientY;
       dragRef.current.moved = true;
       hoveredRef.current    = null;
 
@@ -975,10 +1064,8 @@ export default function WorldSphere() {
           const sz2 =  py * Math.sin(drx) + sz1 * Math.cos(drx);
           if (sz2 < 0) {
             autoSelectedRef.current = false;
-            selectedSubgenreRef.current = null;
-            setSelectedSubgenre(null);
-            zoomSubgenreRef.current = null;
-            setZoomSubgenre(null);
+            selectedSubgenreRef.current = null; setSelectedSubgenre(null);
+            zoomSubgenreRef.current     = null; setZoomSubgenre(null);
             setSelected(null);
           }
         }
@@ -989,14 +1076,11 @@ export default function WorldSphere() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    const mx   = e.clientX - rect.left;
-    const my   = e.clientY - rect.top;
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
 
     for (const h of labelHitsRef.current) {
       if (mx >= h.x1 && mx <= h.x2 && my >= h.y1 && my <= h.y2) {
-        hoveredRef.current = h.subgenre
-          ? { genre: h.name, subgenre: h.subgenre }
-          : { genre: h.name };
+        hoveredRef.current = h.subgenre ? { genre: h.name, subgenre: h.subgenre } : { genre: h.name };
         return;
       }
     }
@@ -1006,13 +1090,11 @@ export default function WorldSphere() {
 
     if (selected !== null && zoomRef.current >= 2.0 &&
         genreName === selected && subPolesRef.current.length > 0) {
-      const canvas2 = canvasRef.current!;
-      const W2 = canvas2.clientWidth, H2 = canvas2.clientHeight;
+      const W2 = canvas.clientWidth, H2 = canvas.clientHeight;
       const R2 = Math.min(W2, H2) * 0.38 * zoomRef.current;
-      const nx2 = (mx - W2 / 2) / R2;
-      const ny2 = (my - H2 / 2) / R2;
-      if (nx2 * nx2 + ny2 * ny2 <= 1) {
-        const nz2 = Math.sqrt(Math.max(0, 1 - nx2 * nx2 - ny2 * ny2));
+      const nx2 = (mx - W2/2) / R2, ny2 = (my - H2/2) / R2;
+      if (nx2*nx2 + ny2*ny2 <= 1) {
+        const nz2 = Math.sqrt(Math.max(0, 1 - nx2*nx2 - ny2*ny2));
         const rx2 = rotRef.current.x, ry2 = rotRef.current.y;
         const y_w = ny2 * Math.cos(rx2) + nz2 * Math.sin(rx2);
         const z1  = -ny2 * Math.sin(rx2) + nz2 * Math.cos(rx2);
@@ -1020,7 +1102,7 @@ export default function WorldSphere() {
         const z_w = nx2 * Math.sin(ry2) + z1 * Math.cos(ry2);
         let bestSub = subPolesRef.current[0], bestDot = -Infinity;
         for (const sp of subPolesRef.current) {
-          const d = sp.pole[0] * x_w + sp.pole[1] * y_w + sp.pole[2] * z_w;
+          const d = sp.pole[0]*x_w + sp.pole[1]*y_w + sp.pole[2]*z_w;
           if (d > bestDot) { bestDot = d; bestSub = sp; }
         }
         hoveredRef.current = { genre: genreName, subgenre: bestSub.name };
@@ -1031,54 +1113,46 @@ export default function WorldSphere() {
     hoveredRef.current = { genre: genreName };
   };
 
-  const stopDrag = () => { dragRef.current.active = false; };
+  const stopDrag   = () => { dragRef.current.active = false; };
   const onMouseLeave = () => { dragRef.current.active = false; hoveredRef.current = null; };
 
-  // ── Click → genre selection ───────────────────────────────────────────────
+  // ── Click → genre / subgenre selection ───────────────────────────────────
 
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (dragRef.current.moved) return;
 
     const canvas = canvasRef.current!;
     const rect   = canvas.getBoundingClientRect();
-    const mx     = e.clientX - rect.left;
-    const my     = e.clientY - rect.top;
+    const mx     = e.clientX - rect.left, my = e.clientY - rect.top;
 
     for (const h of labelHitsRef.current) {
       if (mx >= h.x1 && mx <= h.x2 && my >= h.y1 && my <= h.y2) {
         if (h.subgenre) {
           const next = selectedSubgenreRef.current === h.subgenre ? null : h.subgenre;
-          selectedSubgenreRef.current = next;
-          setSelectedSubgenre(next);
+          selectedSubgenreRef.current = next; setSelectedSubgenre(next);
         } else {
           autoSelectedRef.current = false;
-          selectedSubgenreRef.current = null;
-          setSelectedSubgenre(null);
-          zoomSubgenreRef.current = null;
-          setZoomSubgenre(null);
+          selectedSubgenreRef.current = null; setSelectedSubgenre(null);
+          zoomSubgenreRef.current     = null; setZoomSubgenre(null);
           setSelected(prev => prev === h.name ? null : h.name);
         }
         return;
       }
     }
 
-    const W  = canvas.clientWidth, H = canvas.clientHeight;
-    const R  = Math.min(W, H) * 0.38 * zoomRef.current;
-    const cx = W / 2, cy = H / 2;
-    const nx = (mx - cx) / R;
-    const ny = (my - cy) / R;
-    if (nx * nx + ny * ny > 1) {
+    const W = canvas.clientWidth, H = canvas.clientHeight;
+    const R = Math.min(W, H) * 0.38 * zoomRef.current;
+    const cx = W/2, cy = H/2;
+    const nx = (mx - cx) / R, ny = (my - cy) / R;
+    if (nx*nx + ny*ny > 1) {
       autoSelectedRef.current = false;
-      selectedSubgenreRef.current = null;
-      setSelectedSubgenre(null);
-      zoomSubgenreRef.current = null;
-      setZoomSubgenre(null);
+      selectedSubgenreRef.current = null; setSelectedSubgenre(null);
+      zoomSubgenreRef.current     = null; setZoomSubgenre(null);
       setSelected(null);
       return;
     }
 
-    const nz = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
-
+    const nz  = Math.sqrt(Math.max(0, 1 - nx*nx - ny*ny));
     const rx  = rotRef.current.x, ry = rotRef.current.y;
     const y_w = ny * Math.cos(rx) + nz * Math.sin(rx);
     const z1  = -ny * Math.sin(rx) + nz * Math.cos(rx);
@@ -1087,32 +1161,27 @@ export default function WorldSphere() {
 
     if (regionPolesRef.current.length === 0) return;
 
-    let best    = regionPolesRef.current[0];
-    let bestDot = -Infinity;
+    let best = regionPolesRef.current[0], bestDot = -Infinity;
     for (const rd of regionPolesRef.current) {
-      const d = rd.pole[0] * x_w + rd.pole[1] * y_w + rd.pole[2] * z_w;
+      const d = rd.pole[0]*x_w + rd.pole[1]*y_w + rd.pole[2]*z_w;
       if (d > bestDot) { bestDot = d; best = rd; }
     }
 
     if (selected !== null && zoomRef.current >= 2.0 &&
         best.name === selected && subPolesRef.current.length > 0) {
-      let bestSub    = subPolesRef.current[0];
-      let bestSubDot = -Infinity;
+      let bestSub = subPolesRef.current[0], bestSubDot = -Infinity;
       for (const sp of subPolesRef.current) {
-        const d = sp.pole[0] * x_w + sp.pole[1] * y_w + sp.pole[2] * z_w;
+        const d = sp.pole[0]*x_w + sp.pole[1]*y_w + sp.pole[2]*z_w;
         if (d > bestSubDot) { bestSubDot = d; bestSub = sp; }
       }
       const next = selectedSubgenreRef.current === bestSub.name ? null : bestSub.name;
-      selectedSubgenreRef.current = next;
-      setSelectedSubgenre(next);
+      selectedSubgenreRef.current = next; setSelectedSubgenre(next);
       return;
     }
 
     autoSelectedRef.current = false;
-    selectedSubgenreRef.current = null;
-    setSelectedSubgenre(null);
-    zoomSubgenreRef.current = null;
-    setZoomSubgenre(null);
+    selectedSubgenreRef.current = null; setSelectedSubgenre(null);
+    zoomSubgenreRef.current     = null; setZoomSubgenre(null);
     setSelected(prev => prev === best.name ? null : best.name);
   };
 
@@ -1126,8 +1195,8 @@ export default function WorldSphere() {
     );
   }
 
-  const selectedColor = selected ? (COLORS[selected] ?? "#ffffff") : "#ffffff";
-  const [sr, sg, sb]  = selected ? hexRgb(COLORS[selected] ?? "#ffffff") : [255, 255, 255];
+  const selectedColor   = selected ? (COLORS[selected] ?? "#ffffff") : "#ffffff";
+  const [sr, sg, sb]    = selected ? hexRgb(COLORS[selected] ?? "#ffffff") : [255, 255, 255];
   const focusedSubgenre = hoveredSubgenre ?? selectedSubgenre ?? zoomSubgenre;
   const displayedTracks = focusedSubgenre
     ? tracks.filter(t => t.blueprintSubgenre === focusedSubgenre)
@@ -1180,18 +1249,17 @@ export default function WorldSphere() {
         <div
           className="flex-shrink-0 flex flex-col overflow-hidden"
           style={{
-            width: "42%",
+            width:      "42%",
             borderLeft: `1px solid rgba(${sr},${sg},${sb},0.14)`,
             background: "rgba(4,4,8,0.98)",
           }}
         >
           {selected ? (
             <>
-              <div
-                className="flex-shrink-0"
-                style={{ height: 2, background: selectedColor, opacity: 0.85 }}
-              />
+              {/* Thin genre-color accent strip */}
+              <div className="flex-shrink-0" style={{ height: 2, background: selectedColor, opacity: 0.85 }} />
 
+              {/* Shelf header */}
               <div className="flex-shrink-0 px-7 pt-5 pb-4 flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   {focusedSubgenre ? (
@@ -1199,16 +1267,19 @@ export default function WorldSphere() {
                       <button
                         onClick={() => {
                           setSelectedSubgenre(null); selectedSubgenreRef.current = null;
-                          setZoomSubgenre(null); zoomSubgenreRef.current = null;
+                          setZoomSubgenre(null);     zoomSubgenreRef.current     = null;
                         }}
                         className="text-xs mb-3 flex items-center gap-1.5 transition-opacity hover:opacity-100"
                         style={{ color: `rgba(${sr},${sg},${sb},0.45)` }}
                       >
-                        ← {selected}
+                        ← {shortLabel(selected)}
                       </button>
-                      <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>
-                        {focusedSubgenre}
-                      </h2>
+                      <div className="flex items-center justify-between gap-4">
+                        <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>
+                          {focusedSubgenre}
+                        </h2>
+                        <SpotifyLogoButton track={playingTrack} />
+                      </div>
                     </>
                   ) : (
                     <>
@@ -1216,27 +1287,21 @@ export default function WorldSphere() {
                         style={{ color: `rgba(${sr},${sg},${sb},0.38)` }}>
                         Now exploring
                       </p>
-                      <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>
-                        {selected}
-                      </h2>
+                      <div className="flex items-center justify-between gap-4">
+                        <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>
+                          {shortLabel(selected)}
+                        </h2>
+                        <SpotifyLogoButton track={playingTrack} />
+                      </div>
                     </>
                   )}
                   <p className="text-zinc-600 text-xs mt-1.5">
                     {tracksLoading ? "—" : `${displayedTracks.length} tracks`}
                   </p>
                 </div>
-                <button
-                  onClick={() => {
-                    setSelected(null); setSelectedSubgenre(null); selectedSubgenreRef.current = null;
-                    setZoomSubgenre(null); zoomSubgenreRef.current = null; autoSelectedRef.current = false;
-                  }}
-                  className="flex-shrink-0 text-zinc-600 hover:text-zinc-300 text-sm transition-colors mt-0.5"
-                  aria-label="Close panel"
-                >
-                  ✕
-                </button>
               </div>
 
+              {/* Subgenre filter row */}
               {subgenres.length > 0 && (
                 <div
                   className="flex-shrink-0 flex gap-1.5 px-7 pb-4 overflow-x-auto"
@@ -1255,10 +1320,8 @@ export default function WorldSphere() {
                         className="flex-shrink-0 text-xs px-3 py-1 rounded-full whitespace-nowrap transition-all"
                         style={{
                           background: active ? `rgba(${sr},${sg},${sb},0.18)` : "transparent",
-                          color: active
-                            ? `rgb(${sr},${sg},${sb})`
-                            : "rgba(255,255,255,0.30)",
-                          border: `1px solid rgba(${sr},${sg},${sb},${active ? 0.45 : 0.10})`,
+                          color:      active ? `rgb(${sr},${sg},${sb})` : "rgba(255,255,255,0.30)",
+                          border:     `1px solid rgba(${sr},${sg},${sb},${active ? 0.45 : 0.10})`,
                         }}
                       >
                         {sub.name}
@@ -1268,9 +1331,9 @@ export default function WorldSphere() {
                 </div>
               )}
 
-              <div className="flex-shrink-0 mx-7"
-                style={{ height: 1, background: "rgba(255,255,255,0.05)" }} />
+              <div className="flex-shrink-0 mx-7" style={{ height: 1, background: "rgba(255,255,255,0.05)" }} />
 
+              {/* Track shelf */}
               <div className="overflow-y-auto flex-1"
                 style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(255,255,255,0.08) transparent" }}
               >
@@ -1280,30 +1343,84 @@ export default function WorldSphere() {
                   <p className="text-zinc-700 text-xs px-7 py-8 text-center">No tracks</p>
                 ) : (
                   <div className="flex flex-col pt-1 pb-6">
-                    {displayedTracks.map((t, idx) => (
-                      <div
-                        key={t.id}
-                        className="flex items-center gap-4 px-7 py-2.5 group"
-                        style={{ borderBottom: "1px solid rgba(255,255,255,0.035)" }}
-                      >
-                        <span className="text-xs font-mono w-5 text-right flex-shrink-0"
-                          style={{ color: "rgba(255,255,255,0.13)" }}>
-                          {idx + 1}
-                        </span>
-                        <div className="flex flex-col min-w-0 flex-1">
-                          <span className="text-white text-sm font-medium truncate leading-snug">
-                            {t.name}
+                    {displayedTracks.map((t, idx) => {
+                      const canPlay  = !!(deezerPreviews[t.id] || t.previewUrl);
+                      const isPending = pendingTrackId === t.id;
+                      const isActive  = nowPlayingId === t.id || isPending;
+                      return (
+                        <div
+                          key={t.id}
+                          className="flex items-center gap-3 px-7 py-2 cursor-pointer"
+                          style={{ borderBottom: "1px solid rgba(255,255,255,0.035)" }}
+                          onClick={() => playTrack(t)}
+                        >
+                          {/* Track number */}
+                          <span style={{
+                            flexShrink: 0, width: 20, textAlign: "center",
+                            fontSize: 11, lineHeight: 1, userSelect: "none",
+                            color: isActive ? selectedColor : "rgba(255,255,255,0.22)",
+                          }}>
+                            {idx + 1}
                           </span>
-                          <span className="text-zinc-500 text-xs truncate">{t.artist}</span>
+                          {/* Album art */}
+                          <div className="flex-shrink-0" style={{
+                            width: 36, height: 36, borderRadius: 4, overflow: "hidden",
+                            background: `rgba(${sr},${sg},${sb},0.10)`,
+                          }}>
+                            {t.imageUrl && (
+                              <img
+                                src={t.imageUrl}
+                                alt=""
+                                width={36}
+                                height={36}
+                                style={{ width: 36, height: 36, objectFit: "cover", display: "block" }}
+                                onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                              />
+                            )}
+                          </div>
+                          {/* Title / artist */}
+                          <div className="flex flex-col min-w-0 flex-1">
+                            <span
+                              className="text-sm font-medium truncate leading-snug"
+                              style={{ color: isActive ? selectedColor : "#ffffff" }}
+                            >
+                              {t.name}
+                            </span>
+                            <span className="text-zinc-500 text-xs truncate">
+                              {t.artist}
+                              {isPending ? (
+                                <span style={{ color: "rgba(255,255,255,0.32)", marginLeft: 4 }}>(Loading…)</span>
+                              ) : !canPlay ? (
+                                <span style={{ color: "rgba(255,255,255,0.22)", marginLeft: 4 }}>(No Preview)</span>
+                              ) : null}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
 
+              {/* Close button */}
+              <div className="flex-shrink-0 flex justify-end px-6 py-3"
+                style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
+                <button
+                  onClick={() => {
+                    setSelected(null); setSelectedSubgenre(null); selectedSubgenreRef.current = null;
+                    setZoomSubgenre(null); zoomSubgenreRef.current = null; autoSelectedRef.current = false;
+                    // Stop audio when closing panel
+                    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+                    setNowPlayingId(null); setAudioPlaying(false); setPlayingTrack(null);
+                  }}
+                  className="text-zinc-700 hover:text-zinc-400 text-xs transition-colors"
+                >
+                  close ✕
+                </button>
+              </div>
             </>
           ) : (
+            /* Overview state */
             <>
               <div className="flex-shrink-0 px-7 pt-6 pb-4">
                 <p className="text-xs tracking-widest uppercase mb-2"
@@ -1316,8 +1433,7 @@ export default function WorldSphere() {
                 </p>
               </div>
 
-              <div className="flex-shrink-0 mx-7"
-                style={{ height: 1, background: "rgba(255,255,255,0.05)" }} />
+              <div className="flex-shrink-0 mx-7" style={{ height: 1, background: "rgba(255,255,255,0.05)" }} />
 
               <div className="overflow-y-auto flex-1"
                 style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(255,255,255,0.08) transparent" }}
@@ -1334,13 +1450,10 @@ export default function WorldSphere() {
                           style={{ borderBottom: "1px solid rgba(255,255,255,0.035)" }}
                           onClick={() => { autoSelectedRef.current = false; setSelected(name); }}
                         >
-                          <div
-                            className="w-2 h-2 rounded-full flex-shrink-0"
-                            style={{ background: color }}
-                          />
+                          <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: color }} />
                           <div className="flex flex-col min-w-0 flex-1">
                             <span className="text-white text-sm font-medium truncate leading-snug">
-                              {name}
+                              {shortLabel(name)}
                             </span>
                             <span className="text-zinc-500 text-xs">{count} tracks</span>
                           </div>
