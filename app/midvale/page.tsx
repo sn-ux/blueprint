@@ -2,6 +2,11 @@ import { prisma } from "@/lib/prisma";
 import Footer from "@/components/Footer";
 import WorldCard from "@/components/WorldCard";
 
+// Always fetch fresh data — never serve a cached version of this page.
+// Without this, Next.js may return a stale static snapshot after a new user
+// imports their tracks (track count would still show 0 on the card).
+export const dynamic = "force-dynamic";
+
 // ── Slot config ───────────────────────────────────────────────────────────────
 // Midvale shows exactly 4 worlds.  Users from the DB fill slots in the order
 // they registered (oldest first = Surya in slot 0).  Empty slots fall back to

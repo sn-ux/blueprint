@@ -61,12 +61,16 @@ export default function MidvaleWelcomePage() {
 
         if (body.noLikedSongs || (body.imported ?? 0) === 0) {
           setPhase("no_songs");
+          router.refresh();
           setTimeout(() => router.replace("/midvale"), 6000);
           return;
         }
 
         setImported(body.imported ?? 0);
         setPhase("done");
+        // Invalidate the Next.js router cache so Midvale re-fetches fresh
+        // server-component data (track counts) when we navigate there.
+        router.refresh();
         // Brief pause so "World created" is readable, then land on Midvale.
         setTimeout(() => router.replace("/midvale"), 1800);
       })

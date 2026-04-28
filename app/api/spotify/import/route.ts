@@ -182,6 +182,11 @@ export async function GET() {
       return NextResponse.json({ error: "Missing Spotify access token" }, { status: 400 });
     }
 
+    // ── Pre-import DB snapshot ────────────────────────────────────────────────
+
+    const dbTrackCountBefore = await prisma.track.count({ where: { userId: user.id } });
+    console.log(`[import][pre] DB track count BEFORE import for userId=${user.id}: ${dbTrackCountBefore}`);
+
     // ── STAGE 2: Liked Songs (/v1/me/tracks) ─────────────────────────────────
 
     const likedItems: LikedTrackItem[] = [];
@@ -428,7 +433,13 @@ export async function GET() {
     // ── STAGE 8: Final DB count + diagnostics ─────────────────────────────────
 
     const dbTrackCount = await prisma.track.count({ where: { userId: user.id } });
-    console.log(`[import][stage8] DB track count for user after upsert: ${dbTrackCount}`);
+    console.log("[import][stage8] DB track count delta:", {
+      userId:   user.id,
+      before:   dbTrackCountBefore,
+      after:    dbTrackCount,
+      delta:    dbTrackCount - dbTrackCountBefore,
+      expected: allTracks.length,
+    });
 
     const worldCounts: Record<string, number> = {};
     const otherExamples: { track: string; artists: string[]; genres: string[] }[] = [];
@@ -469,7 +480,9 @@ export async function GET() {
       playlistsScanned:     playlists.length,
       uniqueTracksImported: allTracks.length,
       skippedTracks,
+      dbTrackCountBefore,
       dbTrackCount,
+      dbDelta:              dbTrackCount - dbTrackCountBefore,
       genreDistribution:    worldCounts,
       debug: { playlistFetchError },
     });

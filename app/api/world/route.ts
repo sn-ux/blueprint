@@ -37,5 +37,7 @@ export async function GET(req: NextRequest) {
     Object.entries(worlds).sort((a, b) => b[1] - a[1])
   );
 
-  return NextResponse.json(sortedWorlds);
+  return NextResponse.json(sortedWorlds, {
+    headers: { "Cache-Control": "no-store" },
+  });
 }
