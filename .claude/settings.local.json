@@ -50,7 +50,8 @@
       "Bash(curl -s http://localhost:3000/api/world)",
       "Bash(curl -s \"http://localhost:3000/api/debug\")",
       "Bash(npx tsx *)",
-      "Bash(npx ts-node *)"
+      "Bash(npx ts-node *)",
+      "Bash(xargs cat *)"
     ]
   }
 }
