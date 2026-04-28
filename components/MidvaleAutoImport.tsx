@@ -1,25 +1,23 @@
 "use client";
 
 // MidvaleAutoImport — triggered when a roommate returns to /midvale after
-// completing Spotify OAuth.  The flow that lands here:
+// completing Spotify OAuth (?import=1 in the URL).
 //
-//   RoommateCard clicks "Connect Spotify"
-//     → signOut (clears existing session)
-//     → signIn("spotify", { callbackUrl: "/midvale?import=1" }, { show_dialog: "true" })
-//     → Spotify account chooser (forced by show_dialog)
-//     → roommate picks their Spotify account
-//     → NextAuth creates/finds User + Account for that Spotify profile
-//     → browser session cookie is set for the NEW user
-//     → redirect to /midvale?import=1
-//     → this component detects ?import=1 + authenticated session
-//     → calls /api/spotify/import (runs for the session user = the roommate)
-//     → router.replace("/midvale") + router.refresh() → page shows new card
+// Phases:
+//   idle      — no import running (component renders nothing)
+//   importing — fetch in progress
+//   done      — tracks imported successfully
+//   no_songs  — OAuth worked but 0 liked songs on Spotify
+//   error     — network / auth failure
+//
+// Closure note: router.replace/refresh delays are scheduled inside .then/.catch
+// rather than .finally so they use the correct outcome value, not stale state.
 
 import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-type Phase = "idle" | "importing" | "done" | "error";
+type Phase = "idle" | "importing" | "done" | "no_songs" | "error";
 
 export default function MidvaleAutoImport() {
   const { data: session, status } = useSession();
@@ -28,18 +26,15 @@ export default function MidvaleAutoImport() {
   const didImport    = useRef(false);
   const [phase, setPhase]   = useState<Phase>("idle");
   const [errMsg, setErrMsg] = useState("");
+  const [imported, setImported] = useState(0);
 
   useEffect(() => {
-    // Guard: only fire when authenticated and the ?import=1 flag is present.
     if (status !== "authenticated") return;
     if (searchParams.get("import") !== "1") return;
     if (didImport.current) return;
     didImport.current = true;
 
-    // ── Debug: log exactly who we are about to import for ──────────────────
-    // session.user doesn't expose `id` in the default NextAuth types, but the
-    // name and email are enough to confirm the right account is active.
-    console.log("[MidvaleAutoImport] session user:", {
+    console.log("[MidvaleAutoImport] starting import for session user:", {
       name:  session?.user?.name  ?? "(no name)",
       email: session?.user?.email ?? "(no email)",
     });
@@ -49,35 +44,42 @@ export default function MidvaleAutoImport() {
     fetch("/api/spotify/import")
       .then(async r => {
         const body = await r.json();
+
         if (!r.ok) {
-          // 401 most likely means the OAuth didn't create a new session —
-          // the browser still has no valid auth cookie.
+          // HTTP error (401 = no session, 400 = no token, 500 = server crash)
           const msg = body?.error ?? `HTTP ${r.status}`;
           console.error("[MidvaleAutoImport] import failed:", msg, body);
           setErrMsg(msg);
           setPhase("error");
-        } else {
-          console.log("[MidvaleAutoImport] import complete:", {
-            imported:          body.imported,
-            uniqueArtists:     body.uniqueArtists,
-            genreDistribution: body.genreDistribution,
-          });
-          setPhase("done");
+          // Give user time to read error before redirecting
+          setTimeout(() => { router.replace("/midvale"); router.refresh(); }, 4000);
+          return;
         }
+
+        console.log("[MidvaleAutoImport] import response:", {
+          imported:     body.imported,
+          dbTrackCount: body.dbTrackCount,
+          noLikedSongs: body.noLikedSongs,
+        });
+
+        if (body.noLikedSongs || (body.imported ?? 0) === 0) {
+          // OAuth worked but Spotify returned no saved tracks.
+          // The user exists in DB but has 0 tracks → won't appear on Midvale.
+          setPhase("no_songs");
+          setTimeout(() => { router.replace("/midvale"); router.refresh(); }, 5000);
+          return;
+        }
+
+        setImported(body.imported ?? 0);
+        setPhase("done");
+        // Short pause so "World created" is readable before the page refreshes
+        setTimeout(() => { router.replace("/midvale"); router.refresh(); }, 1500);
       })
       .catch(err => {
         console.error("[MidvaleAutoImport] fetch error:", err);
         setErrMsg(String(err));
         setPhase("error");
-      })
-      .finally(() => {
-        // Clean the ?import=1 param and re-run the server component so the
-        // new world card appears.  We do this even on error so the user is not
-        // stuck on the import screen.
-        setTimeout(() => {
-          router.replace("/midvale");
-          router.refresh();
-        }, phase === "error" ? 3000 : 1200);
+        setTimeout(() => { router.replace("/midvale"); router.refresh(); }, 4000);
       });
   }, [status, searchParams, router, session]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -99,15 +101,11 @@ export default function MidvaleAutoImport() {
     >
       {phase === "importing" && (
         <>
-          <div
-            style={{
-              width:        8,
-              height:       8,
-              borderRadius: "50%",
-              background:   "#22d3ee",
-              animation:    "midvale-pulse 1.4s ease-in-out infinite",
-            }}
-          />
+          <div style={{
+            width: 8, height: 8, borderRadius: "50%",
+            background: "#22d3ee",
+            animation: "midvale-pulse 1.4s ease-in-out infinite",
+          }} />
           <p style={{ color: "rgba(255,255,255,0.80)", fontSize: 17, fontWeight: 500, margin: 0 }}>
             Building your music world…
           </p>
@@ -118,9 +116,30 @@ export default function MidvaleAutoImport() {
       )}
 
       {phase === "done" && (
-        <p style={{ color: "rgba(255,255,255,0.80)", fontSize: 17, fontWeight: 500 }}>
-          World created ✓
-        </p>
+        <>
+          <p style={{ color: "rgba(255,255,255,0.80)", fontSize: 17, fontWeight: 500, margin: 0 }}>
+            World created ✓
+          </p>
+          {imported > 0 && (
+            <p style={{ color: "rgba(255,255,255,0.30)", fontSize: 12, margin: 0 }}>
+              {imported.toLocaleString()} tracks imported
+            </p>
+          )}
+        </>
+      )}
+
+      {phase === "no_songs" && (
+        <>
+          <p style={{ color: "#fbbf24", fontSize: 16, fontWeight: 500, margin: 0 }}>
+            Spotify connected, but no liked songs found
+          </p>
+          <p style={{ color: "rgba(255,255,255,0.35)", fontSize: 13, margin: 0, maxWidth: 340, textAlign: "center" }}>
+            Like songs on Spotify first, then reconnect. Only your Liked Songs library is imported.
+          </p>
+          <p style={{ color: "rgba(255,255,255,0.20)", fontSize: 11, margin: 0 }}>
+            Returning to Midvale…
+          </p>
+        </>
       )}
 
       {phase === "error" && (

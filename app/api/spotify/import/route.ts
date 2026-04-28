@@ -217,8 +217,28 @@ export async function GET() {
       );
     }
 
+    // ── Real DB count after upserts ──────────────────────────────────────────
+    // allItems.length is tracks fetched from Spotify, but some are skipped
+    // (null track.id / null firstArtist).  Count the actual rows in the DB.
+    const dbTrackCount = await prisma.track.count({ where: { userId: user.id } });
+
+    // ── Early-exit: no liked songs ────────────────────────────────────────────
+    if (allItems.length === 0) {
+      console.warn("[import] 0 liked songs returned by Spotify for user:", {
+        id:   user.id,
+        name: user.name,
+      });
+      return NextResponse.json({
+        success:      true,
+        imported:     0,
+        noLikedSongs: true,
+        uniqueArtists: 0,
+        dbTrackCount,
+        genreDistribution: {},
+      });
+    }
+
     // ── Diagnostics ─────────────────────────────────────────────────────────
-    // Log genre distribution so classification quality is visible in server logs.
     const worldCounts: Record<string, number> = {};
     const otherExamples: { track: string; artists: string[]; genres: string[] }[] = [];
 
@@ -250,15 +270,17 @@ export async function GET() {
     // ────────────────────────────────────────────────────────────────────────
 
     console.log("[import] finished for user:", {
-      id:           user.id,
-      name:         user.name,
-      tracksTotal:  allItems.length,
+      id:            user.id,
+      name:          user.name,
+      spotifyFetched: allItems.length,
+      dbTrackCount,
       uniqueArtists: uniqueArtistIds.length,
     });
 
     return NextResponse.json({
-      success: true,
-      imported: allItems.length,
+      success:      true,
+      imported:     allItems.length,
+      dbTrackCount,
       uniqueArtists: uniqueArtistIds.length,
       genreDistribution: worldCounts,
     });
