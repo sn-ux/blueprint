@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import axios from "axios";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/current-user";
-import { mapSpotifyGenre } from "@/lib/blueprint-taxonomy";
+import { classifyGenres } from "@/lib/blueprint-taxonomy";
 
 type SpotifyTrackItem = {
   track: {
@@ -130,15 +130,20 @@ export async function GET() {
       url = res.data.next;
     }
 
+    // Collect every artist ID that appears on any track — not just the primary
+    // artist — so that featured artists' genre tags are also available when
+    // classifying collaboration tracks.
     const uniqueArtistIds = Array.from(
       new Set(
         allItems
-          .map((item) => item.track?.artists?.[0]?.id)
+          .flatMap((item) => (item.track?.artists ?? []).map((a) => a.id))
           .filter(Boolean)
       )
     ) as string[];
 
-    const artistGenreMap = new Map<string, string>();
+    // Store the full genres array (not just [0]) so classifyGenres() can
+    // try every tag in priority order.
+    const artistGenreMap = new Map<string, string[]>();
 
     for (let i = 0; i < uniqueArtistIds.length; i += 50) {
       const chunk = uniqueArtistIds.slice(i, i + 50);
@@ -148,7 +153,7 @@ export async function GET() {
       );
 
       for (const artist of res.data.artists ?? []) {
-        artistGenreMap.set(artist.id, artist?.genres?.[0] || "unknown");
+        artistGenreMap.set(artist.id, artist?.genres ?? []);
       }
     }
 
@@ -162,8 +167,13 @@ export async function GET() {
 
           if (!track?.id || !firstArtist?.id) return;
 
-          const rawGenre = artistGenreMap.get(firstArtist.id) || "unknown";
-          const { blueprintWorld, blueprintSubgenre } = mapSpotifyGenre(rawGenre);
+          // Gather all Spotify genre tags from every credited artist, preserving
+          // primary-artist order so their tags are tried first.
+          const allGenres = (track.artists ?? []).flatMap(
+            (a) => artistGenreMap.get(a.id) ?? []
+          );
+          const { rawGenre, blueprintWorld, blueprintSubgenre } =
+            classifyGenres(allGenres);
 
           await prisma.track.upsert({
             where: {
@@ -199,10 +209,43 @@ export async function GET() {
       );
     }
 
+    // ── Diagnostics ─────────────────────────────────────────────────────────
+    // Log genre distribution so classification quality is visible in server logs.
+    const worldCounts: Record<string, number> = {};
+    const otherExamples: { track: string; artists: string[]; genres: string[] }[] = [];
+
+    for (const item of allItems) {
+      const track = item.track;
+      if (!track?.id) continue;
+      const allGenres = (track.artists ?? []).flatMap(
+        (a) => artistGenreMap.get(a.id) ?? []
+      );
+      const { blueprintWorld } = classifyGenres(allGenres);
+      worldCounts[blueprintWorld] = (worldCounts[blueprintWorld] ?? 0) + 1;
+      if (blueprintWorld === "Other" && otherExamples.length < 20) {
+        otherExamples.push({
+          track:   track.name,
+          artists: (track.artists ?? []).map((a) => a.name),
+          genres:  allGenres.slice(0, 6),
+        });
+      }
+    }
+
+    console.log("[import] Genre distribution:", worldCounts);
+    console.log(
+      `[import] Other: ${worldCounts["Other"] ?? 0} / ${allItems.length} tracks` +
+      ` (${(((worldCounts["Other"] ?? 0) / allItems.length) * 100).toFixed(1)}%)`
+    );
+    if (otherExamples.length > 0) {
+      console.log("[import] Sample 'Other' tracks (up to 20):", otherExamples);
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
     return NextResponse.json({
       success: true,
       imported: allItems.length,
       uniqueArtists: uniqueArtistIds.length,
+      genreDistribution: worldCounts,
     });
   } catch (error) {
     console.error("IMPORT ROUTE ERROR:", error);
