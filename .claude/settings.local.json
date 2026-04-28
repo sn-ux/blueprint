@@ -45,7 +45,12 @@
       "Bash(curl -sI \"https://cdnt-preview.dzcdn.net/api/1/1/f/0/f/0/f0fc31e524543feefc9901f8d5f6bb03.mp3?hdnea=exp=1776981142~acl=/api/1/1/f/0/f/0/f0fc31e524543feefc9901f8d5f6bb03.mp3*~data=user_id=0,application_id=42~hmac=ad2fd95af77f92079e66168441e9b24953df1bf5d4ae377b391c1a2197aa1c70\")",
       "WebFetch(domain:commons.wikimedia.org)",
       "WebSearch",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/api/world)",
+      "Bash(curl -s http://localhost:3000/api/world)",
+      "Bash(curl -s \"http://localhost:3000/api/debug\")",
+      "Bash(npx tsx *)",
+      "Bash(npx ts-node *)"
     ]
   }
 }
