@@ -211,8 +211,8 @@ function FullWorldCard({
 
 // ── RoommateCard — placeholder for users who have not yet connected ────────────
 // Shows the auto-rotating sphere (dimmed) and a "Connect Spotify" button that
-// starts the NextAuth Spotify OAuth flow.  callbackUrl includes ?import=1 so
-// that MidvaleAutoImport can trigger the library import automatically on return.
+// starts the NextAuth Spotify OAuth flow.  After OAuth the browser lands on
+// /midvale/welcome which fires the import immediately on mount.
 
 function RoommateCard({ name, rotSeed = 0 }: { name: string; rotSeed: number }) {
   const [connecting, setConnecting] = useState(false);
@@ -236,10 +236,12 @@ function RoommateCard({ name, rotSeed = 0 }: { name: string; rotSeed: number }) 
     // This lets the roommate pick THEIR account instead of silently reusing
     // whatever Spotify session is active.
     //
-    // callbackUrl includes ?import=1 so MidvaleAutoImport fires on return.
+    // callbackUrl is /midvale/welcome — a dedicated page that fires the import
+    // immediately on mount, bypassing all the useSession/useSearchParams timing
+    // issues that plagued the old ?import=1 query-param mechanism.
     await signIn(
       "spotify",
-      { callbackUrl: "/midvale?import=1" },
+      { callbackUrl: "/midvale/welcome" },
       { show_dialog: "true" },
     );
 

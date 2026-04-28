@@ -1,8 +1,6 @@
-import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import Footer from "@/components/Footer";
 import WorldCard from "@/components/WorldCard";
-import MidvaleAutoImport from "@/components/MidvaleAutoImport";
 
 // ── Slot config ───────────────────────────────────────────────────────────────
 // Midvale shows exactly 4 worlds.  Users from the DB fill slots in the order
@@ -46,16 +44,6 @@ export default async function MidvalePage() {
 
   return (
     <>
-      {/*
-        MidvaleAutoImport is a client component that detects ?import=1 in the
-        URL (set by RoommateCard after Spotify OAuth) and triggers the library
-        import for the freshly authenticated user.  Suspense is required because
-        it calls useSearchParams() which needs a boundary in the App Router.
-      */}
-      <Suspense>
-        <MidvaleAutoImport />
-      </Suspense>
-
       <main style={{ minHeight: "100vh", paddingTop: 80, paddingBottom: 80 }}>
 
         {/* ── Header ──────────────────────────────────────────────────────── */}
