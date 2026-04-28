@@ -1,17 +1,61 @@
+import { Suspense } from "react";
+import { prisma } from "@/lib/prisma";
 import Footer from "@/components/Footer";
 import WorldCard from "@/components/WorldCard";
+import MidvaleAutoImport from "@/components/MidvaleAutoImport";
 
-// ── Roommate placeholders ──────────────────────────────────────────────────────
-// rotSeed gives each sphere a distinct initial orientation + rotation phase.
-const PLACEHOLDERS = [
-  { name: "Roommate 1", rotSeed: 1 },
-  { name: "Roommate 2", rotSeed: 2 },
-  { name: "Roommate 3", rotSeed: 3 },
-];
+// ── Slot config ───────────────────────────────────────────────────────────────
+// Midvale shows exactly 4 worlds.  Users from the DB fill slots in the order
+// they registered (oldest first = Surya in slot 0).  Empty slots fall back to
+// these display names and show the "Connect Spotify" placeholder card.
 
-export default function MidvalePage() {
+const MAX_SLOTS  = 4;
+const SLOT_NAMES = ["Surya", "Roommate 1", "Roommate 2", "Roommate 3"] as const;
+
+export default async function MidvalePage() {
+  // Fetch all users ordered by id (CUIDs are time-sortable — first registered
+  // ends up in slot 0 as Surya).
+  const users = await prisma.user.findMany({
+    orderBy: { id: "asc" },
+    select:  { id: true, name: true },
+  });
+
+  // Track counts per user — one grouped query is cheaper than N individual ones.
+  const trackGroups =
+    users.length > 0
+      ? await prisma.track.groupBy({
+          by:    ["userId"],
+          _count: { id: true },
+          where: { userId: { in: users.map(u => u.id) } },
+        })
+      : [];
+
+  const countMap = new Map(trackGroups.map(t => [t.userId, t._count.id]));
+
+  // Build 4 display slots regardless of how many users exist.
+  const slots = Array.from({ length: MAX_SLOTS }, (_, i) => {
+    const user       = users[i];
+    const trackCount = user ? (countMap.get(user.id) ?? 0) : 0;
+    return {
+      name:     user?.name ?? SLOT_NAMES[i],
+      userId:   user?.id   ?? null,
+      hasWorld: trackCount > 0,
+      rotSeed:  i,
+    };
+  });
+
   return (
     <>
+      {/*
+        MidvaleAutoImport is a client component that detects ?import=1 in the
+        URL (set by RoommateCard after Spotify OAuth) and triggers the library
+        import for the freshly authenticated user.  Suspense is required because
+        it calls useSearchParams() which needs a boundary in the App Router.
+      */}
+      <Suspense>
+        <MidvaleAutoImport />
+      </Suspense>
+
       <main style={{ minHeight: "100vh", paddingTop: 80, paddingBottom: 80 }}>
 
         {/* ── Header ──────────────────────────────────────────────────────── */}
@@ -43,12 +87,6 @@ export default function MidvalePage() {
         </div>
 
         {/* ── 2 × 2 sphere grid ───────────────────────────────────────────── */}
-        {/*
-          Mobile  (< 640px): single column, cards stack vertically.
-          Desktop (≥ 640px): two columns.
-          We use a CSS custom property + media query via a <style> block so we
-          can keep the rest of the layout in plain inline styles.
-        */}
         <style>{`
           .midvale-grid {
             display: grid;
@@ -64,16 +102,18 @@ export default function MidvalePage() {
         `}</style>
 
         <div className="midvale-grid">
-
-          {/* Surya — real data from /api/world */}
-          <WorldCard name="Surya" isSurya rotSeed={0} />
-
-          {/* Roommates — placeholders */}
-          {PLACEHOLDERS.map(({ name, rotSeed }) => (
-            <WorldCard key={name} name={name} rotSeed={rotSeed} />
+          {slots.map(slot => (
+            <WorldCard
+              key={slot.userId ?? slot.name}
+              name={slot.name}
+              userId={slot.userId}
+              worldHref={slot.userId ? `/midvale/${slot.userId}` : undefined}
+              hasWorld={slot.hasWorld}
+              rotSeed={slot.rotSeed}
+            />
           ))}
-
         </div>
+
       </main>
 
       <Footer />

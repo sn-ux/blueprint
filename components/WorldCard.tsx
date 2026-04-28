@@ -5,7 +5,7 @@ import { signIn } from "next-auth/react";
 import { useEffect, useRef, useState } from "react";
 import SphereCanvas from "./SphereCanvas";
 
-// ── Genre palette — matches world/page.tsx ────────────────────────────────────
+// ── Genre palette — matches WorldSphere ───────────────────────────────────────
 const COLORS: Record<string, string> = {
   "Rap / Hip-Hop":                  "#a78bfa",
   "R&B / Soul / Funk":              "#fb923c",
@@ -22,10 +22,21 @@ interface Props {
   /** Display name shown in the card header. */
   name: string;
   /**
-   * If true: fetches real genre data from /api/world, makes the full card a
-   * link to /world, and shows the track-count + genre-dot footer strip.
+   * The userId this card represents.  When provided the card fetches real genre
+   * data from /api/world?userId=<id> and, together with hasWorld=true, renders
+   * the full interactive FullWorldCard variant.
    */
-  isSurya?: boolean;
+  userId?: string | null;
+  /**
+   * Where clicking the card should navigate.  Defaults to "/world" when
+   * userId is not provided (legacy Surya behaviour preserved).
+   */
+  worldHref?: string;
+  /**
+   * True when this user has already imported their library.  Controls whether
+   * a FullWorldCard or a RoommateCard (placeholder) is rendered.
+   */
+  hasWorld?: boolean;
   /**
    * Offsets each sphere's initial rotation so the four cards look distinct.
    * Value in radians; each card gets a different seed (0, 1, 2, 3).
@@ -33,37 +44,45 @@ interface Props {
   rotSeed?: number;
 }
 
-// ── Surya card ────────────────────────────────────────────────────────────────
-// The entire card is a <Link> that navigates to /world.  Hover state drives a
-// subtle border + shadow lift so it reads as interactive without being flashy.
+// ── FullWorldCard — any user who has an imported library ──────────────────────
+// The entire card is a <Link> that navigates to worldHref.
 
-function SuryaCard({ name, rotSeed = 0 }: { name: string; rotSeed: number }) {
+function FullWorldCard({
+  name,
+  userId,
+  worldHref,
+  rotSeed = 0,
+}: {
+  name: string;
+  userId: string;
+  worldHref: string;
+  rotSeed: number;
+}) {
   const [worlds,  setWorlds]  = useState<Record<string, number> | null>(null);
   const [hovered, setHovered] = useState(false);
 
   useEffect(() => {
-    fetch("/api/world")
+    fetch(`/api/world?userId=${encodeURIComponent(userId)}`)
       .then(r => r.json())
       .then((d: Record<string, number>) => setWorlds(d))
       .catch(() => {});
-  }, []);
+  }, [userId]);
 
   const totalTracks = worlds
     ? Object.values(worlds).reduce((s, c) => s + c, 0)
     : null;
 
-  const topGenre = worlds
+  const topGenre    = worlds
     ? (Object.entries(worlds).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null)
     : null;
   const accentHex   = topGenre ? (COLORS[topGenre] ?? "#ffffff") : "#ffffff";
-  // Box-shadow accent fades on hover to reinforce the lift
   const accentShadow = hovered
     ? `inset 0 1px 0 ${accentHex}55, 0 8px 28px rgba(0,0,0,0.35)`
     : `inset 0 1px 0 ${accentHex}33`;
 
   return (
     <Link
-      href="/world"
+      href={worldHref}
       style={{ textDecoration: "none", display: "block" }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -83,7 +102,7 @@ function SuryaCard({ name, rotSeed = 0 }: { name: string; rotSeed: number }) {
           transition:    "border-color 0.18s ease, box-shadow 0.22s ease, transform 0.18s ease",
         }}
       >
-        {/* ── Header ──────────────────────────────────────────────────── */}
+        {/* ── Header ──────────────────────────────────────────────────────── */}
         <div style={{
           flexShrink:     0,
           padding:        "15px 18px 0",
@@ -108,7 +127,7 @@ function SuryaCard({ name, rotSeed = 0 }: { name: string; rotSeed: number }) {
           )}
         </div>
 
-        {/* ── Sphere — auto-rotating, decorative ──────────────────────── */}
+        {/* ── Sphere ──────────────────────────────────────────────────────── */}
         <div style={{ flex: 1, position: "relative" }}>
           <SphereCanvas
             className="absolute inset-0 w-full h-full"
@@ -119,7 +138,7 @@ function SuryaCard({ name, rotSeed = 0 }: { name: string; rotSeed: number }) {
             initialRotY={rotSeed * 1.4}
           />
 
-          {/* Hover overlay: subtle "Explore" hint that fades in on hover */}
+          {/* Hover overlay */}
           <div style={{
             position:       "absolute",
             inset:          0,
@@ -146,7 +165,7 @@ function SuryaCard({ name, rotSeed = 0 }: { name: string; rotSeed: number }) {
           </div>
         </div>
 
-        {/* ── Footer strip: genre dots + "Explore" label ──────────────── */}
+        {/* ── Footer strip ────────────────────────────────────────────────── */}
         <div style={{
           flexShrink:     0,
           padding:        "9px 18px 13px",
@@ -190,10 +209,10 @@ function SuryaCard({ name, rotSeed = 0 }: { name: string; rotSeed: number }) {
   );
 }
 
-// ── Roommate placeholder card ─────────────────────────────────────────────────
-// Shows the auto-rotating sphere (dimmed) and a real "Connect Spotify" button
-// that triggers the NextAuth Spotify OAuth flow.  callbackUrl returns the user
-// to /midvale after they authenticate so they land back in context.
+// ── RoommateCard — placeholder for users who have not yet connected ────────────
+// Shows the auto-rotating sphere (dimmed) and a "Connect Spotify" button that
+// starts the NextAuth Spotify OAuth flow.  callbackUrl includes ?import=1 so
+// that MidvaleAutoImport can trigger the library import automatically on return.
 
 function RoommateCard({ name, rotSeed = 0 }: { name: string; rotSeed: number }) {
   const [connecting, setConnecting] = useState(false);
@@ -201,11 +220,8 @@ function RoommateCard({ name, rotSeed = 0 }: { name: string; rotSeed: number }) 
 
   const handleConnect = async () => {
     setConnecting(true);
-    // signIn starts the real Spotify OAuth flow via NextAuth.
-    // PrismaAdapter will create a new User + Account row on first sign-in,
-    // or find the existing User if this Spotify account has connected before.
-    await signIn("spotify", { callbackUrl: "/midvale" });
-    // signIn redirects away, so the line below only runs if it somehow resolves.
+    // callbackUrl includes ?import=1 so MidvaleAutoImport fires on redirect.
+    await signIn("spotify", { callbackUrl: "/midvale?import=1" });
     setConnecting(false);
   };
 
@@ -223,7 +239,7 @@ function RoommateCard({ name, rotSeed = 0 }: { name: string; rotSeed: number }) 
         boxShadow:     "inset 0 1px 0 rgba(255,255,255,0.04)",
       }}
     >
-      {/* ── Header ──────────────────────────────────────────────────────── */}
+      {/* ── Header ──────────────────────────────────────────────────────────── */}
       <div style={{ flexShrink: 0, padding: "15px 18px 0" }}>
         <p style={{
           margin:        0,
@@ -237,7 +253,7 @@ function RoommateCard({ name, rotSeed = 0 }: { name: string; rotSeed: number }) 
         </p>
       </div>
 
-      {/* ── Sphere — slow, dimmed ────────────────────────────────────────── */}
+      {/* ── Sphere — slow, dimmed ────────────────────────────────────────────── */}
       <div style={{ flex: 1, position: "relative" }}>
         <SphereCanvas
           className="absolute inset-0 w-full h-full"
@@ -280,14 +296,14 @@ function RoommateCard({ name, rotSeed = 0 }: { name: string; rotSeed: number }) 
             }}
             onMouseEnter={e => {
               if (connecting) return;
-              e.currentTarget.style.background    = "rgba(255,255,255,0.11)";
-              e.currentTarget.style.borderColor   = "rgba(255,255,255,0.26)";
-              e.currentTarget.style.color         = "rgba(255,255,255,0.92)";
+              e.currentTarget.style.background  = "rgba(255,255,255,0.11)";
+              e.currentTarget.style.borderColor = "rgba(255,255,255,0.26)";
+              e.currentTarget.style.color       = "rgba(255,255,255,0.92)";
             }}
             onMouseLeave={e => {
-              e.currentTarget.style.background    = "rgba(255,255,255,0.06)";
-              e.currentTarget.style.borderColor   = "rgba(255,255,255,0.14)";
-              e.currentTarget.style.color         = "rgba(255,255,255,0.70)";
+              e.currentTarget.style.background  = "rgba(255,255,255,0.06)";
+              e.currentTarget.style.borderColor = "rgba(255,255,255,0.14)";
+              e.currentTarget.style.color       = "rgba(255,255,255,0.70)";
             }}
           >
             {connecting ? "Connecting…" : "Connect Spotify"}
@@ -298,9 +314,27 @@ function RoommateCard({ name, rotSeed = 0 }: { name: string; rotSeed: number }) 
   );
 }
 
-// ── Public export — routes to the correct card variant ───────────────────────
+// ── Public export ─────────────────────────────────────────────────────────────
+// Routes to the correct card variant:
+//   • userId + hasWorld → FullWorldCard  (real genre data, clickable)
+//   • otherwise          → RoommateCard  (placeholder, Connect Spotify button)
 
-export default function WorldCard({ name, isSurya = false, rotSeed = 0 }: Props) {
-  if (isSurya) return <SuryaCard name={name} rotSeed={rotSeed} />;
+export default function WorldCard({
+  name,
+  userId,
+  worldHref,
+  hasWorld = false,
+  rotSeed  = 0,
+}: Props) {
+  if (userId && hasWorld) {
+    return (
+      <FullWorldCard
+        name={name}
+        userId={userId}
+        worldHref={worldHref ?? `/midvale/${userId}`}
+        rotSeed={rotSeed}
+      />
+    );
+  }
   return <RoommateCard name={name} rotSeed={rotSeed} />;
 }

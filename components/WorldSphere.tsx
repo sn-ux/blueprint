@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { SPHERE_INIT_RX, SPHERE_INIT_RY } from "@/lib/sphereConfig";
 
 // ── Short display labels ───────────────────────────────────────────────────────
@@ -181,7 +182,14 @@ function SpotifyLogoButton({ track, size=22 }: { track:{name:string;spotifyId?:s
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function WorldSphere() {
+interface WorldSphereProps {
+  /** If set, load data for this specific user instead of the session user. */
+  userId?: string;
+  /** If set, show a back-navigation button pointing at this href (e.g. "/midvale"). */
+  backHref?: string;
+}
+
+export default function WorldSphere({ userId, backHref }: WorldSphereProps = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -306,10 +314,13 @@ export default function WorldSphere() {
 
   // ── Data fetching ─────────────────────────────────────────────────────────
 
+  // Appends ?userId=<id> when this component is rendering a specific user's world.
+  const userParam = userId ? `?userId=${encodeURIComponent(userId)}` : "";
+
   async function loadWorld() {
     try {
       setLoading(true); setError(null);
-      const res = await fetch("/api/world");
+      const res = await fetch(`/api/world${userParam}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "World fetch failed");
       setWorlds(data);
@@ -348,7 +359,7 @@ export default function WorldSphere() {
 
     const enc = encodeURIComponent(selected);
     setTracksLoading(true);
-    fetch(`/api/world/${enc}`).then(r=>r.json()).then(d => {
+    fetch(`/api/world/${enc}${userParam}`).then(r=>r.json()).then(d => {
       const loaded: TrackItem[] = d.tracks ?? [];
       setTracks(loaded);
       const fetchPrev = (t: TrackItem) =>
@@ -359,7 +370,7 @@ export default function WorldSphere() {
       (async()=>{for(let i=0;i<loaded.length;i+=5)await Promise.all(loaded.slice(i,i+5).map(fetchPrev));})();
     }).catch(()=>setTracks([])).finally(()=>setTracksLoading(false));
 
-    fetch(`/api/world/${enc}/subgenres`).then(r=>r.json()).then(d=>setSubgenres(d.subgenres??[])).catch(()=>setSubgenres([]));
+    fetch(`/api/world/${enc}/subgenres${userParam}`).then(r=>r.json()).then(d=>setSubgenres(d.subgenres??[])).catch(()=>setSubgenres([]));
   }, [selected]);
 
   // ── Poll hoveredRef → hoveredSubgenre state ───────────────────────────────
@@ -953,6 +964,44 @@ export default function WorldSphere() {
   return (
     <main className="h-screen bg-black text-white flex flex-col overflow-hidden">
 
+      {/* ── Back button — fixed, below the 56px global Navbar, Midvale worlds only */}
+      {backHref && (
+        <Link
+          href={backHref}
+          style={{
+            position:      "fixed",
+            top:           68,
+            left:          24,
+            zIndex:        199,
+            display:       "flex",
+            alignItems:    "center",
+            gap:           5,
+            fontSize:      12,
+            fontWeight:    500,
+            letterSpacing: "0.04em",
+            color:         "rgba(255,255,255,0.40)",
+            textDecoration:"none",
+            padding:       "4px 10px",
+            borderRadius:  20,
+            background:    "rgba(255,255,255,0.04)",
+            border:        "1px solid rgba(255,255,255,0.08)",
+            backdropFilter:"blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+            transition:    "color 0.15s ease, background 0.15s ease",
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.color = "rgba(255,255,255,0.80)";
+            e.currentTarget.style.background = "rgba(255,255,255,0.09)";
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.color = "rgba(255,255,255,0.40)";
+            e.currentTarget.style.background = "rgba(255,255,255,0.04)";
+          }}
+        >
+          ← Midvale
+        </Link>
+      )}
+
       {/* ── Utility bar ──────────────────────────────────────────────────────── */}
       <div className="flex-shrink-0 flex items-center justify-between px-6 py-2.5">
         <span className="text-xs tracking-widest uppercase text-zinc-700 font-medium select-none">
@@ -960,13 +1009,16 @@ export default function WorldSphere() {
         </span>
         <div className="flex items-center gap-3">
           {error && <span className="text-red-500 text-xs">{error}</span>}
-          <button
-            onClick={refreshFromSpotify}
-            disabled={refreshing}
-            className="text-zinc-600 hover:text-zinc-300 disabled:opacity-40 text-xs transition-colors"
-          >
-            {refreshing ? "syncing…" : "sync library"}
-          </button>
+          {/* Hide sync button when viewing someone else's world */}
+          {!userId && (
+            <button
+              onClick={refreshFromSpotify}
+              disabled={refreshing}
+              className="text-zinc-600 hover:text-zinc-300 disabled:opacity-40 text-xs transition-colors"
+            >
+              {refreshing ? "syncing…" : "sync library"}
+            </button>
+          )}
         </div>
       </div>
 

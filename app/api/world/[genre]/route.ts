@@ -1,15 +1,23 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/current-user";
 
 export async function GET(
-  _req: Request,
+  req: NextRequest,
   context: { params: Promise<{ genre: string }> },
 ) {
-  const authed = await getCurrentUser();
-  const user =
-    authed ??
-    (await prisma.user.findFirst({ where: { tracks: { some: {} } } }));
+  const { searchParams } = new URL(req.url);
+  const queryUserId = searchParams.get("userId");
+
+  let user;
+  if (queryUserId) {
+    user = await prisma.user.findUnique({ where: { id: queryUserId } });
+  } else {
+    const authed = await getCurrentUser();
+    user =
+      authed ??
+      (await prisma.user.findFirst({ where: { tracks: { some: {} } } }));
+  }
 
   const { genre } = await context.params;
   const blueprintWorld = decodeURIComponent(genre);
