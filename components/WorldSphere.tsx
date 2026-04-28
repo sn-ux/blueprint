@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { SPHERE_INIT_RX, SPHERE_INIT_RY } from "@/lib/sphereConfig";
 
 // ── Short display labels ───────────────────────────────────────────────────────
 
@@ -230,7 +231,7 @@ export default function WorldSphere() {
   // ── Rotation / zoom refs ──────────────────────────────────────────────────
   // Initial rotation: rx=0.3, ry=π — flipped 180° from y=0 so "Other" (which
   // lands near the default front face) is rotated to the back.
-  const rotMatRef     = useRef<number[]>(matFromEuler(0.3, Math.PI));
+  const rotMatRef     = useRef<number[]>(matFromEuler(SPHERE_INIT_RX, SPHERE_INIT_RY));
   const grabVecRef    = useRef<V3 | null>(null);
   const pinchStateRef = useRef({ active: false, dist0: 0, zoom0: 1 });
   const zoomRef       = useRef(1);
@@ -982,13 +983,42 @@ export default function WorldSphere() {
             <canvas
               ref={canvasRef}
               className="absolute inset-0 w-full h-full cursor-pointer"
-              style={{ display: "block" }}
+              style={{
+                display: "block",
+                // Mobile: pull the sphere up by 15% — identical offset to homepage
+                // so the sphere sits at the same vertical position on both pages.
+                transform: isMobile ? "translateY(-15%)" : undefined,
+                transition: "none",
+              }}
               onMouseDown={onMouseDown}
               onMouseMove={onMouseMove}
               onMouseUp={stopDrag}
               onMouseLeave={onMouseLeave}
               onClick={handleClick}
             />
+          )}
+
+          {/* Mobile headline — "Surya's Music" anchored 20% from bottom,
+              matching the homepage headline position/style exactly. */}
+          {isMobile && (
+            <div
+              className="absolute z-10 flex flex-col pointer-events-none"
+              style={{
+                bottom:     "20%",
+                left:       0,
+                right:      0,
+                alignItems: "center",
+                textAlign:  "center",
+                padding:    "0 24px",
+              }}
+            >
+              <h1
+                className="font-semibold leading-[1.06] text-white mb-3"
+                style={{ letterSpacing: "-0.02em", fontSize: 19 }}
+              >
+                {"Surya's Music"}
+              </h1>
+            </div>
           )}
         </div>
 

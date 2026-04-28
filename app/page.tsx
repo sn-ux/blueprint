@@ -6,6 +6,7 @@ import SphereCanvas from "@/components/SphereCanvas";
 import MiniSphere from "@/components/MiniSphere";
 import MapVisual from "@/components/MapVisual";
 import Footer from "@/components/Footer";
+import { SPHERE_INIT_RX, SPHERE_INIT_RY } from "@/lib/sphereConfig";
 
 // ── Genre display-name overrides (short labels for sphere + UI) ───────────────
 // Keys are the full canonical genre names used as data keys everywhere.
@@ -648,10 +649,10 @@ export default function LandingPage() {
   const subRegionRef     = useRef<Map<number, number>>(new Map());
   const activeSubsRef    = useRef<SubItem[]>([]);
   const subPolesRef      = useRef<{ name: string; pole: V3 }[]>([]);
-  const rotRef           = useRef({ x: -0.49, y: -2.29 });
+  const rotRef           = useRef({ x: SPHERE_INIT_RX, y: SPHERE_INIT_RY });
   // Full 3×3 rotation matrix — single source of truth for rendering & hit-tests.
   // Both desktop and mobile drag update this via the shared arcball model.
-  const rotMatRef        = useRef<number[]>(matFromEuler(-0.49, -2.29));
+  const rotMatRef        = useRef<number[]>(matFromEuler(SPHERE_INIT_RX, SPHERE_INIT_RY));
   const dragRef          = useRef({ active: false, lx: 0, ly: 0, moved: false });
   // Arcball grab vector — the 3-D point on the unit sphere where the drag started.
   // Updated every pointer-move frame so each step is a small incremental rotation.
