@@ -187,9 +187,26 @@ interface WorldSphereProps {
   userId?: string;
   /** If set, show a back-navigation button pointing at this href (e.g. "/midvale"). */
   backHref?: string;
+  /**
+   * Display name for the mobile headline ("Chris's Music" / "Chris' Music").
+   * When omitted the headline is suppressed.
+   */
+  userName?: string;
 }
 
-export default function WorldSphere({ userId, backHref }: WorldSphereProps = {}) {
+/**
+ * Formats a user's first name into possessive form:
+ *   "Surya"  → "Surya's Music"
+ *   "Chris"  → "Chris' Music"   (already ends in s)
+ *   ""/ null → "Music"
+ */
+function possessiveHeadline(name: string | undefined): string {
+  if (!name) return "Music";
+  const first = name.split(" ")[0];
+  return first.endsWith("s") ? `${first}' Music` : `${first}'s Music`;
+}
+
+export default function WorldSphere({ userId, backHref, userName }: WorldSphereProps = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -1050,13 +1067,14 @@ export default function WorldSphere({ userId, backHref }: WorldSphereProps = {})
             />
           )}
 
-          {/* Mobile headline — "Surya's Music" anchored 20% from bottom,
-              matching the homepage headline position/style exactly. */}
-          {isMobile && (
+          {/* Mobile headline — "<Name>'s Music" anchored above the sphere midline.
+              userName is passed from the server page (never hardcoded here).
+              Rendered only when userName is provided. */}
+          {isMobile && userName && (
             <div
               className="absolute z-10 flex flex-col pointer-events-none"
               style={{
-                bottom:     "20%",
+                bottom:     "26%",
                 left:       0,
                 right:      0,
                 alignItems: "center",
@@ -1068,7 +1086,7 @@ export default function WorldSphere({ userId, backHref }: WorldSphereProps = {})
                 className="font-semibold leading-[1.06] text-white mb-3"
                 style={{ letterSpacing: "-0.02em", fontSize: 19 }}
               >
-                {"Surya's Music"}
+                {possessiveHeadline(userName)}
               </h1>
             </div>
           )}
