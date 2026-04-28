@@ -162,26 +162,41 @@ export async function GET() {
       email: user.email,
     });
 
+    // ── STAGE 1: Account + scope check ───────────────────────────────────────
+
     const account = await prisma.account.findFirst({
       where:  { userId: user.id, provider: "spotify" },
-      select: { id: true, access_token: true, refresh_token: true },
+      select: { id: true, access_token: true, refresh_token: true, scope: true },
     });
+
+    console.log("[import][stage1] account row:", {
+      found:        !!account,
+      hasToken:     !!account?.access_token,
+      hasRefresh:   !!account?.refresh_token,
+      scope:        account?.scope ?? "(null)",
+      hasPlaylistPrivate:       account?.scope?.includes("playlist-read-private")       ?? false,
+      hasPlaylistCollaborative: account?.scope?.includes("playlist-read-collaborative") ?? false,
+    });
+
     if (!account?.access_token) {
       return NextResponse.json({ error: "Missing Spotify access token" }, { status: 400 });
     }
 
-    // ── 1. Liked Songs (/v1/me/tracks) ───────────────────────────────────────
+    // ── STAGE 2: Liked Songs (/v1/me/tracks) ─────────────────────────────────
 
     const likedItems: LikedTrackItem[] = [];
     let likedUrl: string | null = "https://api.spotify.com/v1/me/tracks?limit=50";
+    let likedPages = 0;
     while (likedUrl) {
       const res = await spotifyGet(likedUrl, account);
-      likedItems.push(...(res.data.items ?? []));
+      const page: LikedTrackItem[] = res.data.items ?? [];
+      likedItems.push(...page);
+      likedPages++;
       likedUrl = res.data.next ?? null;
     }
-    console.log(`[import] liked songs fetched: ${likedItems.length}`);
+    console.log(`[import][stage2] liked songs: ${likedItems.length} tracks across ${likedPages} page(s)`);
 
-    // ── 2. Playlists + their tracks ──────────────────────────────────────────
+    // ── STAGE 3: Playlists + their tracks ────────────────────────────────────
 
     const playlists: SpotifyPlaylist[] = [];
     let playlistUrl: string | null =
@@ -189,79 +204,141 @@ export async function GET() {
 
     let playlistTracksFetched = 0;
     let skippedTracks = 0;
+    let playlistFetchError: string | null = null;
     const playlistItems: PlaylistTrackItem[] = [];
 
+    // Per-playlist diagnostics for stage 3 logging
+    type PlaylistDiag = {
+      id: string; name: string; owner: string;
+      public: boolean | null; collaborative: boolean;
+      rawItems: number; validTracks: number;
+      skippedNull: number; skippedLocal: number;
+      skippedEpisode: number; skippedNoId: number;
+      pages: number;
+    };
+    const playlistDiags: PlaylistDiag[] = [];
+
     try {
-      // 2a. Collect all playlist stubs
+      // 3a. Collect all playlist stubs (paginated)
+      let playlistPages = 0;
       while (playlistUrl) {
         const res = await spotifyGet(playlistUrl, account);
+        playlistPages++;
+        const raw = res.data.items ?? [];
         playlists.push(
-          ...(res.data.items ?? []).map((p: { id: string; name: string }) => ({
+          ...raw.map((p: { id: string; name: string }) => ({
             id:   p.id,
             name: p.name,
           }))
         );
+        console.log(`[import][stage3a] playlists page ${playlistPages}: ${raw.length} items, next=${!!res.data.next}`);
         playlistUrl = res.data.next ?? null;
       }
-      console.log(`[import] playlists found: ${playlists.length}`);
+      console.log(`[import][stage3a] total playlists found: ${playlists.length} across ${playlistPages} page(s)`);
 
-      // 2b. Fetch tracks for every playlist.
-      // Use the fields parameter to request only the properties we need,
-      // cutting response size substantially for large playlists.
+      if (playlists.length > 0) {
+        console.log("[import][stage3a] first 5 playlists:", playlists.slice(0, 5).map(p => ({ id: p.id, name: p.name })));
+      }
+
+      // 3b. Fetch tracks for every playlist (paginated)
       for (const playlist of playlists) {
+        const diag: PlaylistDiag = {
+          id: playlist.id, name: playlist.name,
+          owner: "", public: null, collaborative: false,
+          rawItems: 0, validTracks: 0,
+          skippedNull: 0, skippedLocal: 0,
+          skippedEpisode: 0, skippedNoId: 0,
+          pages: 0,
+        };
+
         let ptUrl: string | null =
           `https://api.spotify.com/v1/playlists/${playlist.id}/tracks` +
           `?limit=100` +
           `&fields=items(is_local,track(id,name,type,preview_url,album(name,images),artists(id,name))),next`;
-        while (ptUrl) {
-          const res = await spotifyGet(ptUrl, account);
-          const items: PlaylistTrackItem[] = res.data.items ?? [];
-          playlistItems.push(...items);
-          playlistTracksFetched += items.length;
-          ptUrl = res.data.next ?? null;
+
+        try {
+          while (ptUrl) {
+            const res = await spotifyGet(ptUrl, account);
+            diag.pages++;
+            const items: PlaylistTrackItem[] = res.data.items ?? [];
+            diag.rawItems += items.length;
+            playlistTracksFetched += items.length;
+
+            for (const item of items) {
+              if (item.is_local)                                               { diag.skippedLocal++;   continue; }
+              if (!item.track)                                                 { diag.skippedNull++;    continue; }
+              if (item.track.type && item.track.type !== "track")              { diag.skippedEpisode++; continue; }
+              if (!item.track.id || !item.track.artists?.[0]?.id)             { diag.skippedNoId++;    continue; }
+              diag.validTracks++;
+            }
+            playlistItems.push(...items);
+            ptUrl = res.data.next ?? null;
+          }
+        } catch (ptErr: unknown) {
+          const ptStatus = (ptErr as { response?: { status?: number } })?.response?.status;
+          console.warn(`[import][stage3b] FAILED to fetch tracks for playlist "${playlist.name}" (${playlist.id}), status=${ptStatus ?? "?"}`, ptErr);
         }
+
+        playlistDiags.push(diag);
       }
-      console.log(`[import] playlist tracks fetched (raw): ${playlistTracksFetched}`);
+
+      // Log per-playlist summary (all playlists, not truncated)
+      console.log("[import][stage3b] per-playlist breakdown:");
+      for (const d of playlistDiags) {
+        console.log(
+          `  "${d.name}" (${d.id}): rawItems=${d.rawItems} valid=${d.validTracks} ` +
+          `skipped(null=${d.skippedNull} local=${d.skippedLocal} episode=${d.skippedEpisode} noId=${d.skippedNoId}) pages=${d.pages}`,
+        );
+      }
+
+      const totalValidFromPlaylists = playlistDiags.reduce((s, d) => s + d.validTracks, 0);
+      console.log(`[import][stage3b] summary: playlistTracksFetched(raw)=${playlistTracksFetched} totalValid=${totalValidFromPlaylists}`);
+
     } catch (err: unknown) {
-      // Gracefully degrade: if playlist scopes are missing (403) or any other
-      // error, continue with liked songs only and warn in the logs.
       const status = (err as { response?: { status?: number } })?.response?.status;
+      playlistFetchError = `status=${status ?? "?"} — ${String(err)}`;
       console.warn(
-        `[import] playlist fetch failed (status=${status ?? "?"}) — ` +
+        `[import][stage3] playlist fetch FAILED (status=${status ?? "?"}) — ` +
         `continuing with liked songs only. ` +
-        `If status=403, user needs to re-authorize with playlist scopes.`,
+        (status === 403 ? "STATUS 403 = SCOPE ISSUE — user must re-authorize." : ""),
         status === 403 ? "(scope issue)" : err,
       );
     }
 
-    // ── 3. Normalize + deduplicate into a single Map ─────────────────────────
-    // Liked songs go in first. Playlist tracks are added only if the spotifyId
-    // is not already present. This means:
-    //   • a track liked AND in a playlist → stored once (liked-song entry wins)
-    //   • a track only in playlists → stored from the playlist entry
-    // The @@unique([userId, spotifyId]) DB constraint is the final safety net.
+    // ── STAGE 4: Deduplicate ──────────────────────────────────────────────────
 
     const trackMap = new Map<string, NormalizedTrack>();
 
+    let likedSkipped = 0;
     for (const item of likedItems) {
-      if (!item.track || !item.track.id || !item.track.artists?.[0]?.id) continue;
+      if (!item.track || !item.track.id || !item.track.artists?.[0]?.id) { likedSkipped++; continue; }
       trackMap.set(item.track.id, normalize(item.track));
     }
 
+    let deduped = 0;
     for (const item of playlistItems) {
-      if (item.is_local) { skippedTracks++; continue; }
-      if (!item.track)   { skippedTracks++; continue; }
-      // Skip podcast episodes and anything that isn't a proper track
-      if (item.track.type && item.track.type !== "track") { skippedTracks++; continue; }
-      if (!item.track.id || !item.track.artists?.[0]?.id) { skippedTracks++; continue; }
-      if (trackMap.has(item.track.id)) continue; // already in map from liked songs
+      if (item.is_local)                                              { skippedTracks++; continue; }
+      if (!item.track)                                               { skippedTracks++; continue; }
+      if (item.track.type && item.track.type !== "track")            { skippedTracks++; continue; }
+      if (!item.track.id || !item.track.artists?.[0]?.id)           { skippedTracks++; continue; }
+      if (trackMap.has(item.track.id))                               { deduped++;       continue; }
       trackMap.set(item.track.id, normalize(item.track));
     }
 
     const allTracks = Array.from(trackMap.values());
-    console.log(`[import] unique tracks after dedup: ${allTracks.length}  (skipped: ${skippedTracks})`);
 
-    // ── 4. Early exit if nothing to import ───────────────────────────────────
+    console.log("[import][stage4] dedup summary:", {
+      likedSongsRaw:          likedItems.length,
+      likedSongsSkippedBadData: likedSkipped,
+      likedSongsAddedToMap:   likedItems.length - likedSkipped,
+      playlistItemsRaw:       playlistItems.length,
+      playlistItemsSkipped:   skippedTracks,
+      playlistItemsDeduped:   deduped,
+      playlistItemsNewToMap:  playlistItems.length - skippedTracks - deduped,
+      uniqueTracksTotal:      allTracks.length,
+    });
+
+    // ── STAGE 5 (early exit): nothing to import ───────────────────────────────
 
     if (allTracks.length === 0) {
       const dbTrackCount = await prisma.track.count({ where: { userId: user.id } });
@@ -277,18 +354,18 @@ export async function GET() {
         skippedTracks,
         dbTrackCount,
         genreDistribution:    {},
+        debug: { playlistFetchError },
       });
     }
 
-    // ── 5. Collect all unique artist IDs ─────────────────────────────────────
+    // ── STAGE 6: Artist genre fetch ───────────────────────────────────────────
 
     const uniqueArtistIds = Array.from(
       new Set(
         allTracks.flatMap(t => t.artists.map(a => a.id)).filter(Boolean)
       )
     );
-
-    // ── 6. Batch-fetch artist genres (50 per request) ─────────────────────────
+    console.log(`[import][stage6] unique artists to fetch genres for: ${uniqueArtistIds.length}`);
 
     const artistGenreMap = new Map<string, string[]>();
     for (let i = 0; i < uniqueArtistIds.length; i += 50) {
@@ -301,10 +378,12 @@ export async function GET() {
         artistGenreMap.set(artist.id, artist?.genres ?? []);
       }
     }
+    console.log(`[import][stage6] artist genres loaded for ${artistGenreMap.size} artists`);
 
-    // ── 7. Upsert all tracks in parallel batches of 25 ───────────────────────
+    // ── STAGE 7: Upsert all tracks ────────────────────────────────────────────
 
     const BATCH_SIZE = 25;
+    let upsertCount = 0;
     for (let i = 0; i < allTracks.length; i += BATCH_SIZE) {
       await Promise.all(
         allTracks.slice(i, i + BATCH_SIZE).map(async t => {
@@ -340,13 +419,16 @@ export async function GET() {
               blueprintSubgenre,
             },
           });
+          upsertCount++;
         })
       );
     }
+    console.log(`[import][stage7] upserted ${upsertCount} tracks to DB`);
 
-    // ── 8. Final DB count + diagnostics ──────────────────────────────────────
+    // ── STAGE 8: Final DB count + diagnostics ─────────────────────────────────
 
     const dbTrackCount = await prisma.track.count({ where: { userId: user.id } });
+    console.log(`[import][stage8] DB track count for user after upsert: ${dbTrackCount}`);
 
     const worldCounts: Record<string, number> = {};
     const otherExamples: { track: string; artists: string[]; genres: string[] }[] = [];
@@ -381,7 +463,7 @@ export async function GET() {
 
     return NextResponse.json({
       success:              true,
-      imported:             allTracks.length,  // total unique tracks sent to DB
+      imported:             allTracks.length,
       likedTracksFetched:   likedItems.length,
       playlistTracksFetched,
       playlistsScanned:     playlists.length,
@@ -389,6 +471,7 @@ export async function GET() {
       skippedTracks,
       dbTrackCount,
       genreDistribution:    worldCounts,
+      debug: { playlistFetchError },
     });
   } catch (error) {
     console.error("[import] ROUTE ERROR:", error);
