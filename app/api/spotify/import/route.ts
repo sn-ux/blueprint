@@ -31,7 +31,7 @@ type PlaylistTrackItem = {
   } | null;
 };
 
-type SpotifyPlaylist = { id: string; name: string };
+type SpotifyPlaylist = { id: string; name: string; ownerId: string };
 
 /** Internal canonical form — one entry per unique spotifyId. */
 type NormalizedTrack = {
@@ -182,6 +182,17 @@ export async function GET() {
       return NextResponse.json({ error: "Missing Spotify access token" }, { status: 400 });
     }
 
+    // ── STAGE 1b: Spotify user identity ──────────────────────────────────────
+    // Fetch the user's own Spotify ID so we can filter playlists to owned-only.
+    // /v1/me requires no extra scope beyond what is already granted.
+
+    const meRes = await spotifyGet("https://api.spotify.com/v1/me", account);
+    const spotifyUserId: string = meRes.data.id;
+    console.log("[import][stage1b] Spotify user identity:", {
+      spotifyUserId,
+      displayName: meRes.data.display_name ?? "(none)",
+    });
+
     // ── Pre-import DB snapshot ────────────────────────────────────────────────
 
     const dbTrackCountBefore = await prisma.track.count({ where: { userId: user.id } });
@@ -211,6 +222,8 @@ export async function GET() {
     let skippedTracks = 0;
     let playlistFetchError: string | null = null;
     const playlistItems: PlaylistTrackItem[] = [];
+    // Declared outside try so it's accessible in the final log/response.
+    let skippedPlaylists: { id: string; name: string; ownerId: string }[] = [];
 
     // Per-playlist diagnostics for stage 3 logging
     type PlaylistDiag = {
@@ -224,25 +237,49 @@ export async function GET() {
     const playlistDiags: PlaylistDiag[] = [];
 
     try {
-      // 3a. Collect all playlist stubs (paginated)
+      // 3a. Collect all playlist stubs (paginated), then filter to owned-only.
+      // We request owner.id in the fields so we can compare against spotifyUserId.
       let playlistPages = 0;
+      const allReturnedPlaylists: SpotifyPlaylist[] = [];
+
       while (playlistUrl) {
         const res = await spotifyGet(playlistUrl, account);
         playlistPages++;
-        const raw = res.data.items ?? [];
-        playlists.push(
-          ...raw.map((p: { id: string; name: string }) => ({
-            id:   p.id,
-            name: p.name,
-          }))
+        const raw: { id: string; name: string; owner: { id: string } }[] =
+          res.data.items ?? [];
+
+        for (const p of raw) {
+          const entry = { id: p.id, name: p.name, ownerId: p.owner?.id ?? "" };
+          allReturnedPlaylists.push(entry);
+          if (entry.ownerId === spotifyUserId) {
+            playlists.push(entry);
+          } else {
+            skippedPlaylists.push(entry);
+          }
+        }
+        console.log(
+          `[import][stage3a] playlists page ${playlistPages}: ${raw.length} total, ` +
+          `${raw.filter(p => p.owner?.id === spotifyUserId).length} owned, ` +
+          `next=${!!res.data.next}`,
         );
-        console.log(`[import][stage3a] playlists page ${playlistPages}: ${raw.length} items, next=${!!res.data.next}`);
         playlistUrl = res.data.next ?? null;
       }
-      console.log(`[import][stage3a] total playlists found: ${playlists.length} across ${playlistPages} page(s)`);
 
+      console.log("[import][stage3a] playlist filter summary:", {
+        totalReturned: allReturnedPlaylists.length,
+        ownedImporting: playlists.length,
+        nonOwnedSkipped: skippedPlaylists.length,
+      });
+      if (skippedPlaylists.length > 0) {
+        console.log(
+          "[import][stage3a] first 10 skipped (non-owned) playlists:",
+          skippedPlaylists.slice(0, 10).map(p => ({
+            name: p.name, ownerId: p.ownerId,
+          })),
+        );
+      }
       if (playlists.length > 0) {
-        console.log("[import][stage3a] first 5 playlists:", playlists.slice(0, 5).map(p => ({ id: p.id, name: p.name })));
+        console.log("[import][stage3a] first 5 owned playlists:", playlists.slice(0, 5).map(p => ({ id: p.id, name: p.name })));
       }
 
       // 3b. Fetch tracks for every playlist (paginated)
@@ -310,37 +347,86 @@ export async function GET() {
       );
     }
 
-    // ── STAGE 4: Deduplicate ──────────────────────────────────────────────────
+    // ── STAGE 4: Deduplicate + provenance ────────────────────────────────────
+    // provenanceMap tracks where each spotifyId came from:
+    //   source: "liked" | "playlist" | "both"
+    //   playlists: list of {id, name} it appeared in
+    type Provenance = { source: "liked" | "playlist" | "both"; playlists: { id: string; name: string }[] };
+    const provenanceMap = new Map<string, Provenance>();
 
     const trackMap = new Map<string, NormalizedTrack>();
+
+    // Build a fast lookup: playlistItem index → which playlist it belongs to.
+    // We walk playlistItems in the same order they were appended during stage 3b
+    // so we need to re-derive the association.  We build it up front here using
+    // a parallel index array filled during stage 3b insertion.
+    // Because we push all items from a playlist before moving on, we can
+    // replay the per-playlist diag counts to slice playlistItems.
+    let playlistItemCursor = 0;
+    const playlistItemSource: { id: string; name: string }[] = new Array(playlistItems.length);
+    for (const diag of playlistDiags) {
+      for (let j = 0; j < diag.rawItems; j++) {
+        playlistItemSource[playlistItemCursor++] = { id: diag.id, name: diag.name };
+      }
+    }
 
     let likedSkipped = 0;
     for (const item of likedItems) {
       if (!item.track || !item.track.id || !item.track.artists?.[0]?.id) { likedSkipped++; continue; }
       trackMap.set(item.track.id, normalize(item.track));
+      provenanceMap.set(item.track.id, { source: "liked", playlists: [] });
     }
 
     let deduped = 0;
-    for (const item of playlistItems) {
+    for (let idx = 0; idx < playlistItems.length; idx++) {
+      const item = playlistItems[idx];
+      const src  = playlistItemSource[idx] ?? { id: "unknown", name: "unknown" };
       if (item.is_local)                                              { skippedTracks++; continue; }
       if (!item.track)                                               { skippedTracks++; continue; }
       if (item.track.type && item.track.type !== "track")            { skippedTracks++; continue; }
       if (!item.track.id || !item.track.artists?.[0]?.id)           { skippedTracks++; continue; }
-      if (trackMap.has(item.track.id))                               { deduped++;       continue; }
+
+      const existing = provenanceMap.get(item.track.id);
+      if (existing) {
+        // Already in map (liked or earlier playlist) — mark "both" if it was liked,
+        // otherwise just append this playlist to the list.
+        if (existing.source === "liked") {
+          existing.source = "both";
+        }
+        if (!existing.playlists.find(p => p.id === src.id)) {
+          existing.playlists.push(src);
+        }
+        deduped++;
+        continue;
+      }
       trackMap.set(item.track.id, normalize(item.track));
+      provenanceMap.set(item.track.id, { source: "playlist", playlists: [src] });
     }
 
     const allTracks = Array.from(trackMap.values());
 
+    // Provenance summary counts
+    let provenanceLikedOnly = 0, provenanceBoth = 0, provenancePlaylistOnly = 0;
+    for (const p of provenanceMap.values()) {
+      if (p.source === "liked")   provenanceLikedOnly++;
+      else if (p.source === "both") provenanceBoth++;
+      else                          provenancePlaylistOnly++;
+    }
+
     console.log("[import][stage4] dedup summary:", {
-      likedSongsRaw:          likedItems.length,
+      likedSongsRaw:            likedItems.length,
       likedSongsSkippedBadData: likedSkipped,
-      likedSongsAddedToMap:   likedItems.length - likedSkipped,
-      playlistItemsRaw:       playlistItems.length,
-      playlistItemsSkipped:   skippedTracks,
-      playlistItemsDeduped:   deduped,
-      playlistItemsNewToMap:  playlistItems.length - skippedTracks - deduped,
-      uniqueTracksTotal:      allTracks.length,
+      likedSongsAddedToMap:     likedItems.length - likedSkipped,
+      playlistItemsRaw:         playlistItems.length,
+      playlistItemsSkipped:     skippedTracks,
+      playlistItemsDeduped:     deduped,
+      playlistItemsNewToMap:    playlistItems.length - skippedTracks - deduped,
+      uniqueTracksTotal:        allTracks.length,
+    });
+    console.log("[import][stage4] provenance breakdown:", {
+      likedOnly:    provenanceLikedOnly,
+      both:         provenanceBoth,
+      playlistOnly: provenancePlaylistOnly,
     });
 
     // ── STAGE 5 (early exit): nothing to import ───────────────────────────────
@@ -430,10 +516,30 @@ export async function GET() {
     }
     console.log(`[import][stage7] upserted ${upsertCount} tracks to DB`);
 
-    // ── STAGE 8: Final DB count + diagnostics ─────────────────────────────────
+    // ── STAGE 8: Stale-track purge ────────────────────────────────────────────
+    // Delete any Track rows for this user whose spotifyId is NOT in the current
+    // liked+playlist source set.  This removes tracks the user has since unliked
+    // or removed from all their playlists, preventing "ghost" songs from lingering.
+    //
+    // Safety: scoped to this userId only — no other user's tracks are touched.
+    // The `notIn` list is the complete authoritative set fetched this run.
+    const currentSpotifyIds = allTracks.map(t => t.id);
+    const staleDeleteResult = await prisma.track.deleteMany({
+      where: {
+        userId:    user.id,
+        spotifyId: { notIn: currentSpotifyIds },
+      },
+    });
+    console.log("[import][stage8] stale track purge:", {
+      userId:        user.id,
+      staleDeleted:  staleDeleteResult.count,
+      keptInDb:      currentSpotifyIds.length,
+    });
+
+    // ── STAGE 9: Final DB count + diagnostics ─────────────────────────────────
 
     const dbTrackCount = await prisma.track.count({ where: { userId: user.id } });
-    console.log("[import][stage8] DB track count delta:", {
+    console.log("[import][stage9] DB track count delta:", {
       userId:   user.id,
       before:   dbTrackCountBefore,
       after:    dbTrackCount,
@@ -462,28 +568,44 @@ export async function GET() {
       console.log("[import] sample 'Other' tracks (up to 20):", otherExamples);
     }
     console.log("[import] finished for user:", {
-      id:                   user.id,
-      name:                 user.name,
-      likedTracksFetched:   likedItems.length,
-      playlistsScanned:     playlists.length,
+      id:                       user.id,
+      name:                     user.name,
+      spotifyUserId,
+      likedTracksFetched:       likedItems.length,
+      playlistsTotal:           playlists.length + skippedPlaylists.length,
+      playlistsOwned:           playlists.length,
+      playlistsSkippedNonOwned: skippedPlaylists.length,
       playlistTracksFetched,
-      uniqueTracksImported: allTracks.length,
+      uniqueTracksImported:     allTracks.length,
+      provenanceLikedOnly,
+      provenanceBoth,
+      provenancePlaylistOnly,
+      staleDeleted:             staleDeleteResult.count,
       skippedTracks,
       dbTrackCount,
     });
 
     return NextResponse.json({
-      success:              true,
-      imported:             allTracks.length,
-      likedTracksFetched:   likedItems.length,
+      success:                true,
+      spotifyUserId,
+      imported:               allTracks.length,
+      likedTracksFetched:     likedItems.length,
       playlistTracksFetched,
-      playlistsScanned:     playlists.length,
-      uniqueTracksImported: allTracks.length,
+      playlistsTotal:         playlists.length + skippedPlaylists.length,
+      playlistsOwned:         playlists.length,
+      playlistsSkippedNonOwned: skippedPlaylists.length,
+      uniqueTracksImported:   allTracks.length,
+      provenance: {
+        likedOnly:    provenanceLikedOnly,
+        both:         provenanceBoth,
+        playlistOnly: provenancePlaylistOnly,
+      },
+      staleDeleted:           staleDeleteResult.count,
       skippedTracks,
       dbTrackCountBefore,
       dbTrackCount,
-      dbDelta:              dbTrackCount - dbTrackCountBefore,
-      genreDistribution:    worldCounts,
+      dbDelta:                dbTrackCount - dbTrackCountBefore,
+      genreDistribution:      worldCounts,
       debug: { playlistFetchError },
     });
   } catch (error) {
