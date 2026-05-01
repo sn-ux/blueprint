@@ -1,5 +1,4 @@
 // DELETE /api/admin/midvale/users/[userId]  — remove user + all their data
-// PATCH  /api/admin/midvale/users/[userId]  — toggle midvaleHidden
 // Admin-only.
 
 import { NextRequest, NextResponse } from "next/server";
@@ -45,26 +44,3 @@ export async function DELETE(_req: NextRequest, ctx: Ctx) {
   });
 }
 
-export async function PATCH(req: NextRequest, ctx: Ctx) {
-  const me = await getCurrentUser();
-  if (!isAdmin(me?.id)) {
-    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
-  }
-
-  const { userId } = await ctx.params;
-  const body: { midvaleHidden?: boolean } = await req.json().catch(() => ({}));
-
-  if (typeof body.midvaleHidden !== "boolean") {
-    return NextResponse.json({ error: "midvaleHidden (boolean) required" }, { status: 400 });
-  }
-
-  const updated = await prisma.user.update({
-    where: { id: userId },
-    data:  { midvaleHidden: body.midvaleHidden },
-    select: { id: true, name: true, midvaleHidden: true },
-  });
-
-  console.log(`[admin] user ${userId} (${updated.name}) midvaleHidden → ${updated.midvaleHidden}`);
-
-  return NextResponse.json({ success: true, user: updated });
-}

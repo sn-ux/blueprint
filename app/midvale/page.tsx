@@ -6,8 +6,8 @@ import WorldCard from "@/components/WorldCard";
 export const dynamic = "force-dynamic";
 
 // ── Slot config ───────────────────────────────────────────────────────────────
-// Midvale shows up to MAX_SLOTS worlds.  Visible users (midvaleHidden=false) fill
-// slots in registration order.  Empty slots show "Connect Spotify" placeholders.
+// Midvale shows up to MAX_SLOTS worlds.  Users fill slots in registration order.
+// Empty slots show "Connect Spotify" placeholders.
 
 const MAX_SLOTS  = 5;
 const SLOT_NAMES = ["Surya", "Roommate 1", "Roommate 2", "Roommate 3", "Roommate 4"] as const;
@@ -15,7 +15,6 @@ const SLOT_NAMES = ["Surya", "Roommate 1", "Roommate 2", "Roommate 3", "Roommate
 export default async function MidvalePage() {
   // Fetch non-hidden users only, ordered by id (CUIDs are time-sortable).
   const users = await prisma.user.findMany({
-    where:   { midvaleHidden: false },
     orderBy: { id: "asc" },
     select:  { id: true, name: true },
   });

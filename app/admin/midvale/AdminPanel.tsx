@@ -10,7 +10,6 @@ type UserRow = {
   name:            string | null;
   email:           string | null;
   image:           string | null;
-  midvaleHidden:   boolean;
   trackCount:      number;
   spotifyConnected: boolean;
   spotifyScope:    string | null;
@@ -101,26 +100,6 @@ export default function AdminPanel({ adminId }: { adminId: string }) {
     }
   }
 
-  async function handleToggleHidden(u: UserRow) {
-    setBusyFor(u.id, true);
-    try {
-      const res  = await fetch(`/api/admin/midvale/users/${u.id}`, {
-        method:  "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ midvaleHidden: !u.midvaleHidden }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setLogFor(u.id, `✓ ${data.user.midvaleHidden ? "Hidden" : "Visible"}`);
-        await fetchUsers();
-      } else {
-        setLogFor(u.id, `✗ ${data.error}`);
-      }
-    } finally {
-      setBusyFor(u.id, false);
-    }
-  }
-
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
@@ -151,10 +130,9 @@ export default function AdminPanel({ adminId }: { adminId: string }) {
             style={{
               marginBottom: 16,
               padding: "14px 16px",
-              background:   u.midvaleHidden ? "#111" : "#141414",
-              border:       `1px solid ${u.midvaleHidden ? "#2a2a2a" : "#222"}`,
+              background:   "#141414",
+              border:       "1px solid #222",
               borderRadius: 8,
-              opacity:      u.midvaleHidden ? 0.6 : 1,
             }}
           >
             {/* Header row */}
@@ -165,7 +143,6 @@ export default function AdminPanel({ adminId }: { adminId: string }) {
               )}
               <span style={{ fontWeight: 700, color: "#fff" }}>{u.name ?? "(no name)"}</span>
               {isAdmin && <span style={{ color: "#fbbf24", fontSize: 11 }}>YOU</span>}
-              {u.midvaleHidden && <span style={{ color: "#f87171", fontSize: 11 }}>HIDDEN</span>}
               <span style={{ color: "#555", fontSize: 11, marginLeft: "auto" }}>slot {u.slot}</span>
             </div>
 
@@ -192,14 +169,6 @@ export default function AdminPanel({ adminId }: { adminId: string }) {
                 {isBusy ? "…" : "↻ Refresh"}
               </button>
 
-              <button
-                onClick={() => handleToggleHidden(u)}
-                disabled={isBusy}
-                style={btn(u.midvaleHidden ? "#374151" : "#1e3a5f", isBusy)}
-              >
-                {u.midvaleHidden ? "Show on Midvale" : "Hide from Midvale"}
-              </button>
-
               {!isAdmin && (
                 <button
                   onClick={() => handleDelete(u)}
@@ -222,7 +191,6 @@ export default function AdminPanel({ adminId }: { adminId: string }) {
 
       <div style={{ marginTop: 24, color: "#333", fontSize: 11 }}>
         Refresh re-runs liked-songs-only import for that user using their stored Spotify token. •
-        Hide removes the user from /midvale without deleting data. •
         Delete removes all data permanently.
       </div>
     </main>

@@ -1,5 +1,5 @@
 // GET /api/admin/midvale/users
-// Returns all users with track counts, account status, and hidden flag.
+// Returns all users with track counts and account status.
 // Admin-only.
 
 import { NextResponse } from "next/server";
@@ -15,7 +15,7 @@ export async function GET() {
 
   const users = await prisma.user.findMany({
     orderBy: { id: "asc" },
-    select:  { id: true, name: true, email: true, image: true, midvaleHidden: true },
+    select:  { id: true, name: true, email: true, image: true },
   });
 
   const [trackGroups, accounts] = await Promise.all([
@@ -41,7 +41,6 @@ export async function GET() {
       name:           u.name,
       email:          u.email,
       image:          u.image,
-      midvaleHidden:  u.midvaleHidden,
       trackCount:     countMap.get(u.id) ?? 0,
       spotifyConnected: !!acc,
       spotifyScope:   acc?.scope ?? null,
