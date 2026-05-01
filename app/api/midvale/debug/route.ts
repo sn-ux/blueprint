@@ -11,7 +11,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-const MAX_SLOTS = 4;
+const MAX_SLOTS = 5;
 
 export async function GET() {
   // All users, ordered the same way as /midvale
