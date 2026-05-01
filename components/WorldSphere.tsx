@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { SPHERE_INIT_RX, SPHERE_INIT_RY } from "@/lib/sphereConfig";
 
@@ -207,6 +208,13 @@ function possessiveHeadline(name: string | undefined): string {
 }
 
 export default function WorldSphere({ userId, backHref, userName }: WorldSphereProps = {}) {
+  const { data: session } = useSession();
+  const sessionUserId = session?.user?.id ?? null;
+
+  // True when viewing our own world (no userId prop, or userId matches session).
+  // Used to gate auto-sync — roommate worlds must never auto-sync.
+  const isOwnWorld = !userId || userId === sessionUserId;
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -376,10 +384,14 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
   // always call the latest version without stale closures.
 
   const autoSync = async () => {
-    if (userId) return;                          // never auto-sync roommate worlds
+    if (!isOwnWorld) {
+      console.log("[autoSync] blocked", { userId, sessionUserId, isOwnWorld });
+      return;
+    }
     if (refreshingRef.current) return;           // manual sync already running
     if (Date.now() < backoffUntilRef.current) return; // rate-limit backoff
 
+    console.log("[autoSync] running");
     try {
       setSyncStatus("syncing");
       const r = await fetch("/api/spotify/sync", { method: "POST" });
@@ -421,9 +433,10 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
   // Keep ref up-to-date so interval/event callbacks always use the latest closure
   autoSyncRef.current = autoSync;
 
-  // Poll every 90 s while page is visible
+  // Poll every 90 s while page is visible — mount/teardown whenever isOwnWorld changes
   useEffect(() => {
-    if (userId) return; // roommate worlds — no polling
+    console.log("[autoSync] mounted", { userId, sessionUserId, isOwnWorld });
+    if (!isOwnWorld) return; // roommate worlds — no polling
     const INTERVAL_MS = 90_000;
     const id = setInterval(() => {
       if (Date.now() - lastSyncRef.current >= INTERVAL_MS) {
@@ -431,11 +444,11 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
       }
     }, INTERVAL_MS);
     return () => clearInterval(id);
-  }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isOwnWorld]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Trigger once when the tab becomes visible again (after switching away)
   useEffect(() => {
-    if (userId) return;
+    if (!isOwnWorld) return;
     const onVisible = () => {
       if (document.visibilityState === "visible" &&
           Date.now() - lastSyncRef.current >= 60_000) {
@@ -444,7 +457,7 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
-  }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isOwnWorld]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Fetch tracks + subgenres + Deezer previews when genre selected ────────
   useEffect(() => {

@@ -16,5 +16,13 @@ export const authOptions: NextAuthOptions = {
   session: {
     strategy: "database",
   },
+  callbacks: {
+    // Expose the database user id on the client-side session object so
+    // components can compare session.user.id against a viewed userId prop.
+    session({ session, user }) {
+      if (session.user) session.user.id = user.id;
+      return session;
+    },
+  },
   secret: process.env.NEXTAUTH_SECRET,
 };
