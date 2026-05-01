@@ -88,6 +88,7 @@ function FullWorldCard({
       onMouseLeave={() => setHovered(false)}
     >
       <div
+        className="w-full aspect-[16/10]"
         style={{
           borderRadius:  20,
           border:        `1px solid rgba(255,255,255,${hovered ? 0.18 : 0.10})`,
@@ -95,7 +96,6 @@ function FullWorldCard({
           overflow:      "hidden",
           display:       "flex",
           flexDirection: "column",
-          height:        380,
           cursor:        "pointer",
           boxShadow:     accentShadow,
           transform:     hovered ? "translateY(-2px)" : "translateY(0)",
@@ -251,6 +251,7 @@ function RoommateCard({ name, rotSeed = 0 }: { name: string; rotSeed: number }) 
 
   return (
     <div
+      className="w-full aspect-[16/10]"
       style={{
         borderRadius:  20,
         border:        "1px solid rgba(255,255,255,0.05)",
@@ -258,7 +259,6 @@ function RoommateCard({ name, rotSeed = 0 }: { name: string; rotSeed: number }) 
         overflow:      "hidden",
         display:       "flex",
         flexDirection: "column",
-        height:        380,
         opacity:       0.50,
         boxShadow:     "inset 0 1px 0 rgba(255,255,255,0.04)",
       }}

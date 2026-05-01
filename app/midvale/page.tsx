@@ -76,36 +76,17 @@ export default async function MidvalePage() {
         </div>
 
         {/* ── 2-column sphere grid (5 slots = 2+2+1) ──────────────────────── */}
-        <style>{`
-          .midvale-grid {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 16px;
-          }
-          @media (min-width: 640px) {
-            .midvale-grid {
-              grid-template-columns: repeat(2, 1fr);
-              gap: 20px;
-            }
-            /* Centre the lone 5th card on desktop */
-            .midvale-grid > *:last-child:nth-child(odd) {
-              grid-column: 1 / -1;
-              max-width: calc(50% - 10px);
-              justify-self: center;
-            }
-          }
-        `}</style>
-
-        <div className="midvale-grid">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {slots.map(slot => (
-            <WorldCard
-              key={slot.userId ?? slot.name}
-              name={slot.name}
-              userId={slot.userId}
-              worldHref={slot.userId ? `/midvale/${slot.userId}` : undefined}
-              hasWorld={slot.hasWorld}
-              rotSeed={slot.rotSeed}
-            />
+            <div key={slot.userId ?? slot.name} className="w-full">
+              <WorldCard
+                name={slot.name}
+                userId={slot.userId}
+                worldHref={slot.userId ? `/midvale/${slot.userId}` : undefined}
+                hasWorld={slot.hasWorld}
+                rotSeed={slot.rotSeed}
+              />
+            </div>
           ))}
         </div>
 
