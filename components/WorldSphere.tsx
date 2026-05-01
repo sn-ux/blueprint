@@ -210,8 +210,17 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const refreshingRef               = useRef(false);
+  refreshingRef.current             = refreshing;
   const [worlds,     setWorlds]     = useState<Record<string, number>>({});
   const [error,      setError]      = useState<string | null>(null);
+
+  // ── Auto-sync state (homepage only) ──────────────────────────────────────
+  const [syncStatus,    setSyncStatus]    = useState<"idle" | "syncing" | "synced">("idle");
+  const syncStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const backoffUntilRef    = useRef(0);      // epoch ms — respect Retry-After
+  const lastSyncRef        = useRef(0);      // epoch ms — last successful sync
+  const autoSyncRef        = useRef<() => Promise<void>>(async () => {});
 
   // ── Genre / subgenre state ────────────────────────────────────────────────
   const [selected,         setSelected]         = useState<string | null>(null);
@@ -359,6 +368,83 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
   }
 
   useEffect(() => { loadWorld(); }, []);
+
+  // ── Auto-sync (homepage / own-world only, not Midvale roommate views) ─────
+  //
+  // autoSync is redefined on every render so it always closes over fresh state.
+  // autoSyncRef.current is updated each render so interval/event handlers
+  // always call the latest version without stale closures.
+
+  const autoSync = async () => {
+    if (userId) return;                          // never auto-sync roommate worlds
+    if (refreshingRef.current) return;           // manual sync already running
+    if (Date.now() < backoffUntilRef.current) return; // rate-limit backoff
+
+    try {
+      setSyncStatus("syncing");
+      const r = await fetch("/api/spotify/sync", { method: "POST" });
+
+      if (r.status === 429) {
+        const retryAfter = parseInt(r.headers.get("Retry-After") ?? "60", 10);
+        backoffUntilRef.current = Date.now() + retryAfter * 1_000;
+        console.warn(`[autoSync] rate limited — backing off ${retryAfter}s`);
+        setSyncStatus("idle");
+        return;
+      }
+
+      if (!r.ok) { setSyncStatus("idle"); return; }
+
+      // Refresh world counts (drives sphere geometry + desktop panel counts)
+      await loadWorld();
+
+      // If a genre is zoomed in, silently refresh its tracks + subgenres
+      if (selectedRef.current) {
+        const enc = encodeURIComponent(selectedRef.current);
+        fetch(`/api/world/${enc}`)
+          .then(res => res.json())
+          .then(d  => setTracks(d.tracks ?? []))
+          .catch(() => {});
+        fetch(`/api/world/${enc}/subgenres`)
+          .then(res => res.json())
+          .then(d  => setSubgenres(d.subgenres ?? []))
+          .catch(() => {});
+      }
+
+      lastSyncRef.current = Date.now();
+      setSyncStatus("synced");
+      if (syncStatusTimerRef.current) clearTimeout(syncStatusTimerRef.current);
+      syncStatusTimerRef.current = setTimeout(() => setSyncStatus("idle"), 2_500);
+    } catch {
+      setSyncStatus("idle");
+    }
+  };
+  // Keep ref up-to-date so interval/event callbacks always use the latest closure
+  autoSyncRef.current = autoSync;
+
+  // Poll every 90 s while page is visible
+  useEffect(() => {
+    if (userId) return; // roommate worlds — no polling
+    const INTERVAL_MS = 90_000;
+    const id = setInterval(() => {
+      if (Date.now() - lastSyncRef.current >= INTERVAL_MS) {
+        autoSyncRef.current();
+      }
+    }, INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Trigger once when the tab becomes visible again (after switching away)
+  useEffect(() => {
+    if (userId) return;
+    const onVisible = () => {
+      if (document.visibilityState === "visible" &&
+          Date.now() - lastSyncRef.current >= 60_000) {
+        autoSyncRef.current();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Fetch tracks + subgenres + Deezer previews when genre selected ────────
   useEffect(() => {
@@ -1026,14 +1112,23 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
         </span>
         <div className="flex items-center gap-3">
           {error && <span className="text-red-500 text-xs">{error}</span>}
+          {/* Auto-sync status pill — fades in when synced, hidden otherwise */}
+          {!userId && syncStatus === "synced" && (
+            <span
+              className="text-zinc-600 text-xs select-none"
+              style={{ transition: "opacity 0.4s ease" }}
+            >
+              synced
+            </span>
+          )}
           {/* Hide sync button when viewing someone else's world */}
           {!userId && (
             <button
               onClick={refreshFromSpotify}
-              disabled={refreshing}
+              disabled={refreshing || syncStatus === "syncing"}
               className="text-zinc-600 hover:text-zinc-300 disabled:opacity-40 text-xs transition-colors"
             >
-              {refreshing ? "syncing…" : "sync library"}
+              {refreshing || syncStatus === "syncing" ? "syncing…" : "sync library"}
             </button>
           )}
         </div>
