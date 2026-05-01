@@ -178,7 +178,7 @@ function FullWorldCard({
           <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
             {worlds && Object.entries(worlds)
               .sort((a, b) => b[1] - a[1])
-              .slice(0, 4)
+              .slice(0, 5)
               .map(([genre]) => (
                 <div
                   key={genre}
