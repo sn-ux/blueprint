@@ -29,17 +29,17 @@ type NormalizedTrack = {
 };
 
 export interface ImportResult {
-  success:               boolean;
-  userId:                string;
-  likedSongsFetched:     number;
-  importedLikedTracks:   number;
-  removedNonLikedTracks: number;
-  dbTrackCountBefore:    number;
-  dbTrackCountAfter:     number;
-  dbDelta:               number;
-  noLikedSongs?:         boolean;
-  genreDistribution:     Record<string, number>;
-  error?:                string;
+  success:            boolean;
+  userId:             string;
+  likedSongsFetched:  number;
+  tracksUpserted:     number;
+  tracksRemoved:      number;
+  dbTrackCountBefore: number;
+  dbTrackCountAfter:  number;
+  dbDelta:            number;
+  noLikedSongs?:      boolean;
+  genreDistribution:  Record<string, number>;
+  error?:             string;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -113,7 +113,7 @@ export async function runLikedSongsImport(userId: string): Promise<ImportResult>
 
   if (!account?.access_token) {
     return { success: false, userId, error: "Missing Spotify access token",
-      likedSongsFetched: 0, importedLikedTracks: 0, removedNonLikedTracks: 0,
+      likedSongsFetched: 0, tracksUpserted: 0, tracksRemoved: 0,
       dbTrackCountBefore: 0, dbTrackCountAfter: 0, dbDelta: 0, genreDistribution: {} };
   }
 
@@ -149,8 +149,8 @@ export async function runLikedSongsImport(userId: string): Promise<ImportResult>
     const dbTrackCountAfter = await prisma.track.count({ where: { userId } });
     return {
       success: true, userId, noLikedSongs: likedItems.length === 0,
-      likedSongsFetched: likedItems.length, importedLikedTracks: 0,
-      removedNonLikedTracks: 0, dbTrackCountBefore, dbTrackCountAfter,
+      likedSongsFetched: likedItems.length, tracksUpserted: 0,
+      tracksRemoved: 0, dbTrackCountBefore, dbTrackCountAfter,
       dbDelta: 0, genreDistribution: {},
     };
   }
@@ -213,13 +213,20 @@ export async function runLikedSongsImport(userId: string): Promise<ImportResult>
     genreDistribution[blueprintWorld] = (genreDistribution[blueprintWorld] ?? 0) + 1;
   }
 
-  console.log(`[import] finished: userId=${userId} liked=${allTracks.length} purged=${purge.count} after=${dbTrackCountAfter}`);
+  console.log(
+    `[import] finished: userId=${userId}` +
+    ` likedSongsFetched=${likedItems.length}` +
+    ` dbTrackCountBefore=${dbTrackCountBefore}` +
+    ` tracksUpserted=${allTracks.length}` +
+    ` tracksRemoved=${purge.count}` +
+    ` dbTrackCountAfter=${dbTrackCountAfter}`
+  );
 
   return {
     success: true, userId,
     likedSongsFetched:     likedItems.length,
-    importedLikedTracks:   allTracks.length,
-    removedNonLikedTracks: purge.count,
+    tracksUpserted: allTracks.length,
+    tracksRemoved:  purge.count,
     dbTrackCountBefore, dbTrackCountAfter,
     dbDelta: dbTrackCountAfter - dbTrackCountBefore,
     genreDistribution,

@@ -88,8 +88,8 @@ export default function AdminPanel({ adminId }: { adminId: string }) {
       const data = await res.json();
       if (res.ok) {
         setLogFor(u.id,
-          `✓ Done. liked=${data.likedSongsFetched} imported=${data.importedLikedTracks} ` +
-          `purged=${data.removedNonLikedTracks} dbAfter=${data.dbTrackCountAfter}`
+          `✓ liked=${data.likedSongsFetched} before=${data.dbTrackCountBefore}` +
+          ` upserted=${data.tracksUpserted} removed=${data.tracksRemoved} after=${data.dbTrackCountAfter}`
         );
         await fetchUsers();
       } else {
