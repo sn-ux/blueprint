@@ -3,22 +3,19 @@ import Footer from "@/components/Footer";
 import WorldCard from "@/components/WorldCard";
 
 // Always fetch fresh data — never serve a cached version of this page.
-// Without this, Next.js may return a stale static snapshot after a new user
-// imports their tracks (track count would still show 0 on the card).
 export const dynamic = "force-dynamic";
 
 // ── Slot config ───────────────────────────────────────────────────────────────
-// Midvale shows exactly 4 worlds.  Users from the DB fill slots in the order
-// they registered (oldest first = Surya in slot 0).  Empty slots fall back to
-// these display names and show the "Connect Spotify" placeholder card.
+// Midvale shows up to MAX_SLOTS worlds.  Visible users (midvaleHidden=false) fill
+// slots in registration order.  Empty slots show "Connect Spotify" placeholders.
 
-const MAX_SLOTS  = 4;
-const SLOT_NAMES = ["Surya", "Roommate 1", "Roommate 2", "Roommate 3"] as const;
+const MAX_SLOTS  = 5;
+const SLOT_NAMES = ["Surya", "Roommate 1", "Roommate 2", "Roommate 3", "Roommate 4"] as const;
 
 export default async function MidvalePage() {
-  // Fetch all users ordered by id (CUIDs are time-sortable — first registered
-  // ends up in slot 0 as Surya).
+  // Fetch non-hidden users only, ordered by id (CUIDs are time-sortable).
   const users = await prisma.user.findMany({
+    where:   { midvaleHidden: false },
     orderBy: { id: "asc" },
     select:  { id: true, name: true },
   });
@@ -35,7 +32,7 @@ export default async function MidvalePage() {
 
   const countMap = new Map(trackGroups.map(t => [t.userId, t._count.id]));
 
-  // Build 4 display slots regardless of how many users exist.
+  // Build MAX_SLOTS display slots regardless of how many users exist.
   const slots = Array.from({ length: MAX_SLOTS }, (_, i) => {
     const user       = users[i];
     const trackCount = user ? (countMap.get(user.id) ?? 0) : 0;
@@ -75,11 +72,11 @@ export default async function MidvalePage() {
               lineHeight:    1.5,
             }}
           >
-            Four music worlds under one roof.
+            Five music worlds under one roof.
           </p>
         </div>
 
-        {/* ── 2 × 2 sphere grid ───────────────────────────────────────────── */}
+        {/* ── 2-column sphere grid (5 slots = 2+2+1) ──────────────────────── */}
         <style>{`
           .midvale-grid {
             display: grid;
@@ -90,6 +87,12 @@ export default async function MidvalePage() {
             .midvale-grid {
               grid-template-columns: repeat(2, 1fr);
               gap: 20px;
+            }
+            /* Centre the lone 5th card on desktop */
+            .midvale-grid > *:last-child:nth-child(odd) {
+              grid-column: 1 / -1;
+              max-width: calc(50% - 10px);
+              justify-self: center;
             }
           }
         `}</style>
