@@ -293,7 +293,7 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
   const [tracksLoading,    setTracksLoading]     = useState(false);
   const [subgenres,        setSubgenres]         = useState<SubgenreItem[]>([]);
   const [selectedSubgenre, setSelectedSubgenre]  = useState<string | null>(null);
-  const [socialSort,        setSocialSort]        = useState(false);
+  const [socialSort,        setSocialSort]        = useState(true);
   const [popoverData, setPopoverData] = useState<{
     trackId: string;
     users:   { id: string; name: string | null }[];
