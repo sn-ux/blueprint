@@ -41,33 +41,39 @@ export async function GET(
     orderBy: [{ artist: "asc" }, { name: "asc" }],
   });
 
-  // ── Social popularity: count other Midvale users who also have each track ──
-  // One grouped query — not one query per track.
+  // ── Social popularity: find other Midvale users who also have each track ──
+  // One query fetches all matching tracks with their owner's id + name.
   // Because (userId, spotifyId) is a unique index, each row = one distinct user.
-  // So _count.id === number of other users who have that spotifyId.
 
   const spotifyIds = tracks
     .map(t => t.spotifyId)
     .filter((id): id is string => !!id);
 
-  let socialMap = new Map<string, number>();
+  // Map from spotifyId → array of { id, name } for users who have that track
+  const socialUsersMap = new Map<string, { id: string; name: string | null }[]>();
   if (spotifyIds.length > 0) {
-    const groups = await prisma.track.groupBy({
-      by:    ["spotifyId"],
-      _count: { id: true },
+    const otherTracks = await prisma.track.findMany({
       where: {
         spotifyId: { in: spotifyIds },
         userId:    { not: user.id },   // exclude the viewed user themselves
       },
+      select: {
+        spotifyId: true,
+        user:      { select: { id: true, name: true } },
+      },
     });
-    socialMap = new Map(
-      groups.map(g => [g.spotifyId as string, g._count.id])
-    );
+    for (const ot of otherTracks) {
+      if (!ot.spotifyId) continue;
+      const list = socialUsersMap.get(ot.spotifyId) ?? [];
+      list.push(ot.user);
+      socialUsersMap.set(ot.spotifyId, list);
+    }
   }
 
   const tracksWithSocial = tracks.map(t => ({
     ...t,
-    socialCount: socialMap.get(t.spotifyId ?? "") ?? 0,
+    socialCount: socialUsersMap.get(t.spotifyId ?? "")?.length ?? 0,
+    socialUsers: socialUsersMap.get(t.spotifyId ?? "") ?? [],
   }));
 
   return NextResponse.json({ genre: blueprintWorld, tracks: tracksWithSocial });

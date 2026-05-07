@@ -41,6 +41,7 @@ type TrackItem = {
   imageUrl?: string | null; previewUrl?: string | null; spotifyId?: string | null;
   blueprintSubgenre: string;
   socialCount?: number;
+  socialUsers?: { id: string; name: string | null }[];
 };
 type SubgenreItem = { name: string; count: number };
 type V3  = [number, number, number];
@@ -333,6 +334,12 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
   const [subgenres,        setSubgenres]         = useState<SubgenreItem[]>([]);
   const [selectedSubgenre, setSelectedSubgenre]  = useState<string | null>(null);
   const [socialSort,        setSocialSort]        = useState(false);
+  const [popoverData, setPopoverData] = useState<{
+    trackId: string;
+    users:   { id: string; name: string | null }[];
+    top:     number;
+    right:   number;
+  } | null>(null);
   const selectedSubgenreRef = useRef<string | null>(null);
   const [zoomSubgenre,     setZoomSubgenre]      = useState<string | null>(null);
   const zoomSubgenreRef    = useRef<string | null>(null);
@@ -1391,7 +1398,22 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
                               <div className="flex items-center gap-2 min-w-0">
                                 <span className="text-sm font-medium truncate leading-snug flex-1" style={{ color: isActive ? selectedColor : "#ffffff" }}>{t.name}</span>
                                 {socialSort && (t.socialCount ?? 0) > 0 && (
-                                  <TallyMarks n={t.socialCount!} color={`rgba(${sr},${sg},${sb},0.55)`} />
+                                  <button
+                                    aria-label={`${t.socialCount} other user${t.socialCount === 1 ? "" : "s"} have this track`}
+                                    onClick={e => {
+                                      e.stopPropagation();
+                                      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                      setPopoverData({
+                                        trackId: t.id,
+                                        users:   t.socialUsers ?? [],
+                                        top:     rect.bottom + 6,
+                                        right:   window.innerWidth - rect.right,
+                                      });
+                                    }}
+                                    style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", flexShrink: 0 }}
+                                  >
+                                    <TallyMarks n={t.socialCount!} color={`rgba(${sr},${sg},${sb},0.55)`} />
+                                  </button>
                                 )}
                               </div>
                               <span className="text-zinc-500 text-xs truncate">{t.artist}{isPending ? <span style={{ color: "rgba(255,255,255,0.32)", marginLeft: 4 }}>(Loading…)</span> : !canPlay ? <span style={{ color: "rgba(255,255,255,0.22)", marginLeft: 4 }}>(No Preview)</span> : null}</span>
@@ -1496,7 +1518,22 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
                           <div className="flex items-center gap-2 min-w-0">
                             <span className="text-sm font-medium truncate leading-snug flex-1" style={{ color: isActive ? selectedColor : "#ffffff" }}>{t.name}</span>
                             {socialSort && (t.socialCount ?? 0) > 0 && (
-                              <TallyMarks n={t.socialCount!} color={`rgba(${sr},${sg},${sb},0.55)`} />
+                              <button
+                                aria-label={`${t.socialCount} other user${t.socialCount === 1 ? "" : "s"} have this track`}
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                  setPopoverData({
+                                    trackId: t.id,
+                                    users:   t.socialUsers ?? [],
+                                    top:     rect.bottom + 6,
+                                    right:   window.innerWidth - rect.right,
+                                  });
+                                }}
+                                style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", flexShrink: 0 }}
+                              >
+                                <TallyMarks n={t.socialCount!} color={`rgba(${sr},${sg},${sb},0.55)`} />
+                              </button>
                             )}
                           </div>
                           <span className="text-zinc-500 text-xs truncate">{t.artist}{isPending ? <span style={{ color: "rgba(255,255,255,0.32)", marginLeft: 4 }}>(Loading…)</span> : !canPlay ? <span style={{ color: "rgba(255,255,255,0.22)", marginLeft: 4 }}>(No Preview)</span> : null}</span>
@@ -1520,6 +1557,55 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
           {!zoomAbove2 && <div style={{ width: 24, height: 1, background: "rgba(255,255,255,0.10)" }} />}
           <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); handleZoomMinus(); }} style={{ width: 44, height: zoomAbove2 ? 44 : 46, background: "none", border: "none", color: "rgba(255,255,255,0.88)", fontSize: 22, fontWeight: 300, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1, userSelect: "none" }} aria-label="Zoom out">−</button>
         </div>
+      )}
+
+      {/* ── Social tally popover ─────────────────────────────────────────────── */}
+      {popoverData && (
+        <>
+          {/* Invisible backdrop to close on outside click */}
+          <div
+            onClick={() => setPopoverData(null)}
+            style={{ position: "fixed", inset: 0, zIndex: 300 }}
+          />
+          {/* Popover card */}
+          <div
+            style={{
+              position:        "fixed",
+              top:             popoverData.top,
+              right:           popoverData.right,
+              zIndex:          301,
+              background:      "rgba(12,12,18,0.97)",
+              border:          "1px solid rgba(255,255,255,0.10)",
+              borderRadius:    10,
+              padding:         "10px 14px",
+              minWidth:        140,
+              maxWidth:        220,
+              backdropFilter:  "blur(16px)",
+              WebkitBackdropFilter: "blur(16px)",
+              boxShadow:       "0 8px 32px rgba(0,0,0,0.55)",
+            }}
+          >
+            <p style={{ fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.30)", marginBottom: 8, lineHeight: 1 }}>
+              Also in Midvale
+            </p>
+            {popoverData.users.length === 0 ? (
+              <p style={{ fontSize: 12, color: "rgba(255,255,255,0.45)" }}>No one else</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {popoverData.users.map(u => (
+                  <Link
+                    key={u.id}
+                    href={`/midvale/${u.id}`}
+                    onClick={() => setPopoverData(null)}
+                    style={{ fontSize: 13, fontWeight: 500, color: "rgba(255,255,255,0.88)", textDecoration: "none", display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+                  >
+                    {u.name ?? "Unknown"}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
       )}
 
     </main>
