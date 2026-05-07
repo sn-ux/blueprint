@@ -86,7 +86,6 @@ export default function AdminMidvalePage() {
     setStatus("loading");
     try {
       const res  = await fetch("/api/admin/midvale/users");
-      if (res.status === 403) { setStatus("unauth"); return; }
       if (!res.ok)            { setErrMsg(`HTTP ${res.status}`); setStatus("error"); return; }
       const data = await res.json();
       setUsers(data.users ?? []);
@@ -131,10 +130,6 @@ export default function AdminMidvalePage() {
 
       {status === "loading" && (
         <p style={{ color: "#888" }}>Loading users…</p>
-      )}
-
-      {status === "unauth" && (
-        <p style={{ color: "#f87171", fontSize: 15 }}>Not authorized.</p>
       )}
 
       {status === "error" && (
