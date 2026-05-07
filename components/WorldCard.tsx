@@ -338,6 +338,174 @@ function RoommateCard({ name, rotSeed = 0 }: { name: string; rotSeed: number }) 
   );
 }
 
+// ── FriendsWorldCard ──────────────────────────────────────────────────────────
+// Larger card that aggregates all Midvale users' tracks.
+// Fetches from /api/world/friends; links to /midvale/friends.
+
+export function FriendsWorldCard() {
+  const [worlds,  setWorlds]  = useState<Record<string, number> | null>(null);
+  const [hovered, setHovered] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/world/friends")
+      .then(r => r.json())
+      .then((d: Record<string, number>) => setWorlds(d))
+      .catch(() => {});
+  }, []);
+
+  const totalTracks = worlds
+    ? Object.values(worlds).reduce((s, c) => s + c, 0)
+    : null;
+
+  const topGenre   = worlds
+    ? (Object.entries(worlds).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null)
+    : null;
+  const accentHex    = topGenre ? (COLORS[topGenre] ?? "#ffffff") : "#ffffff";
+  const accentShadow = hovered
+    ? `inset 0 1px 0 ${accentHex}55, 0 12px 40px rgba(0,0,0,0.40)`
+    : `inset 0 1px 0 ${accentHex}33`;
+
+  return (
+    <Link
+      href="/midvale/friends"
+      style={{ textDecoration: "none", display: "block" }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <div
+        className="w-full"
+        style={{
+          aspectRatio:   "21 / 8",
+          borderRadius:  24,
+          border:        `1px solid rgba(255,255,255,${hovered ? 0.20 : 0.12})`,
+          background:    "rgba(255,255,255,0.018)",
+          overflow:      "hidden",
+          display:       "flex",
+          flexDirection: "column",
+          cursor:        "pointer",
+          boxShadow:     accentShadow,
+          transform:     hovered ? "translateY(-2px)" : "translateY(0)",
+          transition:    "border-color 0.18s ease, box-shadow 0.22s ease, transform 0.18s ease",
+        }}
+      >
+        {/* Header */}
+        <div style={{
+          flexShrink:     0,
+          padding:        "18px 22px 0",
+          display:        "flex",
+          alignItems:     "center",
+          justifyContent: "space-between",
+        }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+            <p style={{
+              margin:        0,
+              fontSize:      13,
+              fontWeight:    700,
+              letterSpacing: "0.07em",
+              textTransform: "uppercase",
+              color:         "rgba(255,255,255,0.70)",
+            }}>
+              Friends
+            </p>
+            <span style={{
+              fontSize:      11,
+              fontWeight:    400,
+              letterSpacing: "0.04em",
+              textTransform: "uppercase",
+              color:         "rgba(255,255,255,0.22)",
+            }}>
+              Combined World
+            </span>
+          </div>
+          {totalTracks !== null && (
+            <span style={{ fontSize: 11, color: "rgba(255,255,255,0.22)", letterSpacing: "0.01em" }}>
+              {totalTracks.toLocaleString()} unique tracks
+            </span>
+          )}
+        </div>
+
+        {/* Sphere */}
+        <div style={{ flex: 1, position: "relative" }}>
+          <SphereCanvas
+            className="absolute inset-0 w-full h-full"
+            interactive={false}
+            showLabels={false}
+            rotSpeed={0.0016}
+            initialRotX={0.35}
+            initialRotY={0.9}
+          />
+
+          {/* Hover overlay */}
+          <div style={{
+            position:       "absolute",
+            inset:          0,
+            display:        "flex",
+            alignItems:     "center",
+            justifyContent: "center",
+            opacity:        hovered ? 1 : 0,
+            transition:     "opacity 0.20s ease",
+            pointerEvents:  "none",
+          }}>
+            <span style={{
+              fontSize:      13,
+              fontWeight:    500,
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+              color:         "rgba(255,255,255,0.70)",
+              background:    "rgba(0,0,0,0.55)",
+              padding:       "7px 16px",
+              borderRadius:  20,
+              backdropFilter:"blur(4px)",
+            }}>
+              Explore Friends World →
+            </span>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{
+          flexShrink:     0,
+          padding:        "9px 22px 14px",
+          borderTop:      "1px solid rgba(255,255,255,0.05)",
+          display:        "flex",
+          alignItems:     "center",
+          justifyContent: "space-between",
+        }}>
+          {/* Genre colour dots */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {worlds && Object.entries(worlds)
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 8)
+              .map(([genre]) => (
+                <div
+                  key={genre}
+                  title={genre}
+                  style={{
+                    width:        7,
+                    height:       7,
+                    borderRadius: "50%",
+                    background:   COLORS[genre] ?? "#71717a",
+                    opacity:      hovered ? 0.90 : 0.55,
+                    flexShrink:   0,
+                    transition:   "opacity 0.18s ease",
+                  }}
+                />
+              ))}
+          </div>
+          <span style={{
+            fontSize:      12,
+            color:         `rgba(255,255,255,${hovered ? 0.70 : 0.30})`,
+            letterSpacing: "0.02em",
+            transition:    "color 0.18s ease",
+          }}>
+            Explore →
+          </span>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
 // ── Public export ─────────────────────────────────────────────────────────────
 // Routes to the correct card variant:
 //   • userId + hasWorld → FullWorldCard  (real genre data, clickable)

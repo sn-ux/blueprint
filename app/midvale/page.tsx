@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import Footer from "@/components/Footer";
-import WorldCard from "@/components/WorldCard";
+import WorldCard, { FriendsWorldCard } from "@/components/WorldCard";
 
 // Always fetch fresh data — never serve a cached version of this page.
 export const dynamic = "force-dynamic";
@@ -73,6 +73,11 @@ export default async function MidvalePage() {
           >
             Five music worlds under one roof.
           </p>
+        </div>
+
+        {/* ── Friends World — full-width card above individual worlds ────── */}
+        <div style={{ marginBottom: 32 }}>
+          <FriendsWorldCard />
         </div>
 
         {/* ── 2-column sphere grid (5 slots = 2+2+1) ──────────────────────── */}

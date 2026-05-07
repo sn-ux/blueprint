@@ -250,6 +250,11 @@ interface WorldSphereProps {
    * When omitted the headline is suppressed.
    */
   userName?: string;
+  /**
+   * When true, the sphere loads the combined Friends World (/api/world/friends/…)
+   * instead of a per-user world.  Auto-sync is disabled in this mode.
+   */
+  friendsWorld?: boolean;
 }
 
 /**
@@ -264,13 +269,13 @@ function possessiveHeadline(name: string | undefined): string {
   return first.endsWith("s") ? `${first}' Music` : `${first}'s Music`;
 }
 
-export default function WorldSphere({ userId, backHref, userName }: WorldSphereProps = {}) {
+export default function WorldSphere({ userId, backHref, userName, friendsWorld = false }: WorldSphereProps = {}) {
   const { data: session } = useSession();
   const sessionUserId = session?.user?.id ?? null;
 
   // True when viewing our own world (no userId prop, or userId matches session).
-  // Used to gate auto-sync — roommate worlds must never auto-sync.
-  const isOwnWorld = !userId || userId === sessionUserId;
+  // Friends World is never "own world" — auto-sync must never run there.
+  const isOwnWorld = !friendsWorld && (!userId || userId === sessionUserId);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [loading,    setLoading]    = useState(true);
@@ -415,10 +420,22 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
   // Appends ?userId=<id> when this component is rendering a specific user's world.
   const userParam = userId ? `?userId=${encodeURIComponent(userId)}` : "";
 
+  // URL builders — Friends World uses a separate API tree; user worlds use the
+  // standard /api/world/… paths with an optional ?userId param.
+  const worldUrl    = friendsWorld
+    ? "/api/world/friends"
+    : `/api/world${userParam}`;
+  const genreUrl    = (enc: string) => friendsWorld
+    ? `/api/world/friends/${enc}`
+    : `/api/world/${enc}${userParam}`;
+  const subgenreUrl = (enc: string) => friendsWorld
+    ? `/api/world/friends/${enc}/subgenres`
+    : `/api/world/${enc}/subgenres${userParam}`;
+
   async function loadWorld() {
     try {
       setLoading(true); setError(null);
-      const res = await fetch(`/api/world${userParam}`);
+      const res = await fetch(worldUrl);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "World fetch failed");
       setWorlds(data);
@@ -534,14 +551,14 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
       setSocialSort(false);
       return;
     }
-    setSocialSort(false);
+    setSocialSort(true);
     setSelectedSubgenre(null); selectedSubgenreRef.current = null;
     setZoomSubgenre(null);     zoomSubgenreRef.current     = null;
     deezerPreviewsRef.current = {}; setDeezerPreviews({});
 
     const enc = encodeURIComponent(selected);
     setTracksLoading(true);
-    fetch(`/api/world/${enc}${userParam}`).then(r=>r.json()).then(d => {
+    fetch(genreUrl(enc)).then(r=>r.json()).then(d => {
       const loaded: TrackItem[] = d.tracks ?? [];
       setTracks(loaded);
       const fetchPrev = (t: TrackItem) =>
@@ -552,7 +569,7 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
       (async()=>{for(let i=0;i<loaded.length;i+=5)await Promise.all(loaded.slice(i,i+5).map(fetchPrev));})();
     }).catch(()=>setTracks([])).finally(()=>setTracksLoading(false));
 
-    fetch(`/api/world/${enc}/subgenres${userParam}`).then(r=>r.json()).then(d=>setSubgenres(d.subgenres??[])).catch(()=>setSubgenres([]));
+    fetch(subgenreUrl(enc)).then(r=>r.json()).then(d=>setSubgenres(d.subgenres??[])).catch(()=>setSubgenres([]));
   }, [selected]);
 
   // ── Poll hoveredRef → hoveredSubgenre state ───────────────────────────────
