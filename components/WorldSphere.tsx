@@ -1185,6 +1185,48 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
   return (
     <main className="h-screen bg-black text-white flex flex-col overflow-hidden">
 
+      {/* ── Back button — always-fixed, above every layer ────────────────────────
+          Must NOT live inside the canvas div or any flex/overflow container.
+          position:fixed anchors it to the viewport regardless of:
+            - selected genre / subgenre
+            - zoom level
+            - mobile sheet snap state
+            - canvas transforms
+          z-index 210 > zoom pill (120) > mobile sheet (100). */}
+      {backHref && (
+        <Link
+          href={backHref}
+          aria-label="Back to Midvale"
+          style={{
+            position:      "fixed",
+            top:           "env(safe-area-inset-top, 0px)",
+            marginTop:     20,
+            left:          16,
+            zIndex:        210,
+            display:       "flex",
+            alignItems:    "center",
+            justifyContent:"center",
+            color:         "rgba(255,255,255,0.88)",
+            textDecoration:"none",
+            width:         36,
+            height:        36,
+            borderRadius:  "50%",
+            background:    "rgba(0,0,0,0.80)",
+            border:        "1px solid rgba(255,255,255,0.10)",
+            backdropFilter:"blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+            transition:    "background 0.15s ease",
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = "rgba(50,50,50,0.90)"; }}
+          onMouseLeave={e => { e.currentTarget.style.background = "rgba(0,0,0,0.80)"; }}
+        >
+          <svg width={13} height={13} viewBox="0 0 10 10" fill="none" stroke="currentColor"
+            strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <polyline points="6.5,1.5 2.5,5 6.5,8.5" />
+          </svg>
+        </Link>
+      )}
+
       {/* ── Utility bar ──────────────────────────────────────────────────────── */}
       <div className="flex-shrink-0 flex items-center justify-between px-6 py-2.5">
         <span className="text-xs tracking-widest uppercase text-zinc-700 font-medium select-none">
@@ -1266,44 +1308,6 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
             </div>
           )}
 
-          {/* ── Back button — Midvale worlds only ───────────────────────────────
-              Mobile:  position:absolute inside this relative sphere div.
-                       Pure overlay — takes zero layout space, never compresses sphere.
-              Desktop: position:fixed relative to viewport (md:fixed restores this),
-                       same top/left as before so desktop layout is unchanged.        */}
-          {backHref && (
-            <Link
-              href={backHref}
-              className="absolute top-5 left-4 md:fixed md:top-[68px] md:left-6"
-              style={{
-                zIndex:        199,
-                display:       "flex",
-                alignItems:    "center",
-                justifyContent:"center",
-                color:         "rgba(255,255,255,0.88)",
-                textDecoration:"none",
-                width:         36,
-                height:        36,
-                borderRadius:  "50%",
-                background:    "rgba(0,0,0,0.80)",
-                border:        "1px solid rgba(255,255,255,0.10)",
-                backdropFilter:"blur(8px)",
-                WebkitBackdropFilter: "blur(8px)",
-                transition:    "background 0.15s ease",
-              }}
-              onMouseEnter={e => {
-                e.currentTarget.style.background = "rgba(50,50,50,0.90)";
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.background = "rgba(0,0,0,0.80)";
-              }}
-            >
-              {/* Left chevron — SVG for crisp rendering at small sizes */}
-              <svg width={13} height={13} viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <polyline points="6.5,1.5 2.5,5 6.5,8.5" />
-              </svg>
-            </Link>
-          )}
         </div>
 
         {/* ── Desktop right panel (hidden on mobile) ─────────────────────────── */}
