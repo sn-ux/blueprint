@@ -42,6 +42,8 @@ type TrackItem = {
   blueprintSubgenre: string;
   socialCount?: number;
   socialUsers?: { id: string; name: string | null }[];
+  // Attached at render-time when Live Events mode is active
+  liveEvent?: LiveEvent;
 };
 type SubgenreItem = { name: string; count: number };
 type LiveEvent = {
@@ -1243,29 +1245,30 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
   // Use socialUsers.length as authoritative count — always equals socialCount from the API.
   const tallyCount = (t: TrackItem) => t.socialUsers?.length ?? t.socialCount ?? 0;
 
-  // ── Compound sort ─────────────────────────────────────────────────────────
-  // Priority: live events > social count > original order.
-  // When liveMode is on:  tracks with a CA event float to the top (sorted by
-  //   event date asc); the rest stay in social or original order below.
-  // When only socialSort: descending social count.
+  // ── Compound sort + live-event enrichment ────────────────────────────────
+  // Enrich each track with t.liveEvent from the session map so JSX can use
+  // t.liveEvent directly (avoids IIFE lookups and keeps null checks explicit).
+  // Sort priority: live events first (date asc) > social count > original order.
   const sortedTracks = (() => {
+    // Attach liveEvent to each track when mode is on
+    const enrich = (t: TrackItem): TrackItem => {
+      if (!liveMode) return t;
+      const ev = liveEventMap[normalizeArtist(t.artist)];
+      return ev ? { ...t, liveEvent: ev } : { ...t, liveEvent: undefined };
+    };
+
     if (!liveMode && !socialSort) return displayedTracks;
 
-    const base = [...displayedTracks];
+    const base = displayedTracks.map(enrich);
 
     if (liveMode) {
-      const hasEv  = (t: TrackItem) => !!liveEventMap[normalizeArtist(t.artist)];
-      const withEv = base.filter(hasEv);
-      const noEv   = base.filter(t => !hasEv(t));
+      const withEv = base.filter(t => !!t.liveEvent);
+      const noEv   = base.filter(t => !t.liveEvent);
 
-      // Events: sort by earliest date
-      withEv.sort((a, b) => {
-        const da = liveEventMap[normalizeArtist(a.artist)]?.date ?? "";
-        const db = liveEventMap[normalizeArtist(b.artist)]?.date ?? "";
-        return da.localeCompare(db);
-      });
+      // Events: earliest date first
+      withEv.sort((a, b) => (a.liveEvent!.date).localeCompare(b.liveEvent!.date));
 
-      // Non-events: apply social sort if active
+      // Non-events: social sort if active, else original order
       if (socialSort) noEv.sort((a, b) => tallyCount(b) - tallyCount(a));
 
       return [...withEv, ...noEv];
@@ -1276,37 +1279,62 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
   })();
 
   // ── Live-events toggle handler ────────────────────────────────────────────
-  // Clicking the pin button:
-  //   • If mode is ON  → turn off (no fetch).
-  //   • If mode is OFF → turn on, then fetch any artists not already in the
-  //     session-level liveEventMap (avoids duplicate Ticketmaster calls).
+  // • Mode OFF → ON : fetch uncached artists, merge into liveEventMap, log results.
+  // • Mode ON  → OFF: just clear the flag; map is kept as session cache.
   const handleLiveToggle = async () => {
     if (liveMode) { setLiveMode(false); return; }
 
     setLiveMode(true);
 
-    // Artists in the current visible tracklist that haven't been looked up yet
-    const needed = [
-      ...new Set(
-        displayedTracks
-          .map(t => normalizeArtist(t.artist))
-          .filter(a => !(a in liveEventMap)),
-      ),
-    ];
+    // Unique normalized artist names that haven't been looked up this session
+    const allArtists = [...new Set(displayedTracks.map(t => normalizeArtist(t.artist)))];
+    const needed     = allArtists.filter(a => !(a in liveEventMap));
 
-    if (needed.length === 0) return;  // everything already cached client-side
+    console.log("[live-events] mode ON — artists in view:", allArtists.length,
+      "| uncached:", needed.length, needed.slice(0, 10));
+
+    if (needed.length === 0) {
+      // All already cached — just log current mappings
+      const sample = displayedTracks.slice(0, 10).map(t => {
+        const key = normalizeArtist(t.artist);
+        const ev  = liveEventMap[key];
+        return `"${t.name}" / ${t.artist} → ${ev ? `✓ ${ev.eventName} (${ev.date})` : "no event"}`;
+      });
+      console.log("[live-events] (all cached) first 10 track→event:", sample);
+      return;
+    }
 
     setLiveLoading(true);
     try {
-      const res = await fetch(
-        `/api/events/live?artists=${encodeURIComponent(needed.join(","))}`,
-      );
-      if (res.ok) {
-        const data: Record<string, LiveEvent | null> = await res.json();
-        setLiveEventMap(prev => ({ ...prev, ...data }));
+      const url = `/api/events/live?artists=${encodeURIComponent(needed.join(","))}`;
+      console.log("[live-events] fetching:", url.slice(0, 120));
+      const res = await fetch(url);
+
+      if (!res.ok) {
+        console.warn("[live-events] API error", res.status, await res.text().catch(() => ""));
+        return;
       }
-    } catch {
-      // Silent fail — no events shown, user can retry by toggling again
+
+      const data: Record<string, LiveEvent | null> = await res.json();
+
+      const hits = Object.entries(data).filter(([, v]) => v !== null);
+      console.log(`[live-events] response: ${hits.length} events found out of ${Object.keys(data).length} artists queried`);
+      if (hits.length > 0) {
+        console.log("[live-events] matches:", hits.map(([k, v]) => `${k}: ${v!.eventName} @ ${v!.venue}, ${v!.city} (${v!.date})`));
+      }
+
+      const merged = { ...liveEventMap, ...data };
+      setLiveEventMap(merged);
+
+      // Log track→event for first 10 visible tracks using the merged map
+      const sample = displayedTracks.slice(0, 10).map(t => {
+        const key = normalizeArtist(t.artist);
+        const ev  = merged[key];
+        return `"${t.name}" / ${t.artist} → ${ev ? `✓ ${ev.eventName} (${ev.date})` : "no event"}`;
+      });
+      console.log("[live-events] first 10 track→event mappings:", sample);
+    } catch (err) {
+      console.error("[live-events] fetch failed:", err);
     } finally {
       setLiveLoading(false);
     }
@@ -1522,6 +1550,24 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                             <div className="flex flex-col min-w-0 flex-1">
                               <div className="flex items-center gap-2 min-w-0">
                                 <span className="text-sm font-medium truncate leading-snug flex-1" style={{ color: isActive ? selectedColor : "#ffffff" }}>{t.name}</span>
+                                {/* Pin BEFORE social badge */}
+                                {t.liveEvent && (
+                                  <button
+                                    aria-label="Open live event booking page"
+                                    title={`${t.liveEvent.eventName} · ${t.liveEvent.venue}, ${t.liveEvent.city} · ${t.liveEvent.date}`}
+                                    onClick={e => {
+                                      e.stopPropagation();
+                                      if (window.confirm("Open live event booking page?")) {
+                                        window.open(t.liveEvent!.url, "_blank", "noopener,noreferrer");
+                                      }
+                                    }}
+                                    style={{ background: "none", border: "none", padding: "2px 0", cursor: "pointer", display: "flex", alignItems: "center", flexShrink: 0, color: `rgba(${sr},${sg},${sb},0.85)` }}
+                                  >
+                                    <svg width={10} height={13} viewBox="0 0 10 14" fill="currentColor" aria-hidden="true">
+                                      <path d={PIN_PATH} />
+                                    </svg>
+                                  </button>
+                                )}
                                 {socialSort && tallyCount(t) > 0 && (
                                   <button
                                     aria-label={`${tallyCount(t)} other user${tallyCount(t) === 1 ? "" : "s"} have this track`}
@@ -1542,27 +1588,6 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                                     <SocialBadge count={tallyCount(t)} color={`rgba(${sr},${sg},${sb},0.80)`} />
                                   </button>
                                 )}
-                                {liveMode && (() => {
-                                  const ev = liveEventMap[normalizeArtist(t.artist)];
-                                  if (!ev) return null;
-                                  return (
-                                    <button
-                                      aria-label="Open live event booking page"
-                                      title={`${ev.eventName} · ${ev.venue}, ${ev.city} · ${ev.date}`}
-                                      onClick={e => {
-                                        e.stopPropagation();
-                                        if (window.confirm("Open live event booking page?")) {
-                                          window.open(ev.url, "_blank", "noopener,noreferrer");
-                                        }
-                                      }}
-                                      style={{ background: "none", border: "none", padding: "2px 0", cursor: "pointer", display: "flex", alignItems: "center", flexShrink: 0, color: `rgba(${sr},${sg},${sb},0.85)` }}
-                                    >
-                                      <svg width={10} height={13} viewBox="0 0 10 14" fill="currentColor" aria-hidden="true">
-                                        <path d={PIN_PATH} />
-                                      </svg>
-                                    </button>
-                                  );
-                                })()}
                               </div>
                               <span className="text-zinc-500 text-xs truncate">{t.artist}{isPending ? <span style={{ color: "rgba(255,255,255,0.32)", marginLeft: 4 }}>(Loading…)</span> : !canPlay ? <span style={{ color: "rgba(255,255,255,0.22)", marginLeft: 4 }}>(No Preview)</span> : null}</span>
                             </div>
@@ -1666,6 +1691,24 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                         <div className="flex flex-col min-w-0 flex-1">
                           <div className="flex items-center gap-2 min-w-0">
                             <span className="text-sm font-medium truncate leading-snug flex-1" style={{ color: isActive ? selectedColor : "#ffffff" }}>{t.name}</span>
+                            {/* Pin BEFORE social badge */}
+                            {t.liveEvent && (
+                              <button
+                                aria-label="Open live event booking page"
+                                title={`${t.liveEvent.eventName} · ${t.liveEvent.venue}, ${t.liveEvent.city} · ${t.liveEvent.date}`}
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  if (window.confirm("Open live event booking page?")) {
+                                    window.open(t.liveEvent!.url, "_blank", "noopener,noreferrer");
+                                  }
+                                }}
+                                style={{ background: "none", border: "none", padding: "2px 0", cursor: "pointer", display: "flex", alignItems: "center", flexShrink: 0, color: `rgba(${sr},${sg},${sb},0.85)` }}
+                              >
+                                <svg width={10} height={13} viewBox="0 0 10 14" fill="currentColor" aria-hidden="true">
+                                  <path d={PIN_PATH} />
+                                </svg>
+                              </button>
+                            )}
                             {socialSort && tallyCount(t) > 0 && (
                               <button
                                 aria-label={`${tallyCount(t)} other user${tallyCount(t) === 1 ? "" : "s"} have this track`}
@@ -1686,27 +1729,6 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                                 <SocialBadge count={tallyCount(t)} color={`rgba(${sr},${sg},${sb},0.80)`} />
                               </button>
                             )}
-                            {liveMode && (() => {
-                              const ev = liveEventMap[normalizeArtist(t.artist)];
-                              if (!ev) return null;
-                              return (
-                                <button
-                                  aria-label="Open live event booking page"
-                                  title={`${ev.eventName} · ${ev.venue}, ${ev.city} · ${ev.date}`}
-                                  onClick={e => {
-                                    e.stopPropagation();
-                                    if (window.confirm("Open live event booking page?")) {
-                                      window.open(ev.url, "_blank", "noopener,noreferrer");
-                                    }
-                                  }}
-                                  style={{ background: "none", border: "none", padding: "2px 0", cursor: "pointer", display: "flex", alignItems: "center", flexShrink: 0, color: `rgba(${sr},${sg},${sb},0.85)` }}
-                                >
-                                  <svg width={10} height={13} viewBox="0 0 10 14" fill="currentColor" aria-hidden="true">
-                                    <path d={PIN_PATH} />
-                                  </svg>
-                                </button>
-                              );
-                            })()}
                           </div>
                           <span className="text-zinc-500 text-xs truncate">{t.artist}{isPending ? <span style={{ color: "rgba(255,255,255,0.32)", marginLeft: 4 }}>(Loading…)</span> : !canPlay ? <span style={{ color: "rgba(255,255,255,0.22)", marginLeft: 4 }}>(No Preview)</span> : null}</span>
                         </div>
