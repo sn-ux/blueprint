@@ -17,10 +17,14 @@ export default async function MidvaleUserPage({ params }: Props) {
     select: { name: true },
   });
 
-  // On mobile the root layout applies px-6 gutters that shrink the sphere.
-  // -mx-6 cancels exactly that padding; md:mx-0 restores normal layout on desktop.
+  // The root layout applies responsive padding (px-6 → px-24) at every breakpoint.
+  // Using 100vw + marginLeft: calc(50% - 50vw) breaks out of ALL of them at once:
+  //   • 100vw  = full viewport width regardless of ancestor padding
+  //   • calc(50% - 50vw)  = shifts left edge to the viewport left edge
+  // This replicates the same full-bleed behaviour as the homepage /world page
+  // without touching any shared component or the root layout itself.
   return (
-    <div className="-mx-6 md:mx-0">
+    <div style={{ width: "100vw", marginLeft: "calc(50% - 50vw)" }}>
       <WorldSphere
         userId={userId}
         backHref="/midvale"

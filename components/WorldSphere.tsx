@@ -1198,10 +1198,12 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
           href={backHref}
           aria-label="Back to Midvale"
           style={{
+            // Sits flush below the fixed Navbar (height 56) with a 12 px gap.
+            // left matches the Navbar's own paddingLeft so it aligns with the
+            // Blueprint wordmark above it on every viewport width.
             position:      "fixed",
-            top:           "env(safe-area-inset-top, 0px)",
-            marginTop:     20,
-            left:          16,
+            top:           "calc(56px + 12px + env(safe-area-inset-top, 0px))",
+            left:          "clamp(20px, 5vw, 56px)",
             zIndex:        210,
             display:       "flex",
             alignItems:    "center",
