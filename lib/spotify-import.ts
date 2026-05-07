@@ -1,6 +1,21 @@
-// Core liked-songs import logic.
-// Accepts a userId and runs the full import independently of any HTTP session.
-// Used by both /api/spotify/import (self-import) and /api/admin/midvale/users/[userId]/refresh (admin refresh).
+// Core library import: Liked Songs + playlists OWNED by the user.
+//
+// Sources included:
+//   1. GET /v1/me/tracks          — Liked Songs
+//   2. GET /v1/me/playlists       — user's playlist list (paginated)
+//      filter: playlist.owner.id === spotifyUserId  (owns it, not just following)
+//      GET /v1/playlists/{id}/tracks for each qualifying playlist
+//
+// Sources explicitly excluded:
+//   - Spotify editorial / algorithmic playlists
+//   - Playlists followed but not owned
+//   - Playlists owned by other users / Spotify
+//   - Recently played, top tracks, albums, recommendations
+//
+// Used by:
+//   /api/spotify/import                          (self-import)
+//   /api/spotify/sync                            (auto-poll)
+//   /api/admin/midvale/users/[userId]/refresh    (admin refresh)
 
 import axios from "axios";
 import { prisma } from "@/lib/prisma";
@@ -8,15 +23,14 @@ import { classifyGenres } from "@/lib/blueprint-taxonomy";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type LikedTrackItem = {
-  track: {
-    id: string;
-    name: string;
-    type: string;
-    preview_url: string | null;
-    album?: { name?: string | null; images?: { url: string }[] };
-    artists?: { id: string; name: string }[];
-  } | null;
+type RawTrack = {
+  id: string;
+  name: string;
+  type: string;
+  is_local?: boolean;
+  preview_url: string | null;
+  album?: { name?: string | null; images?: { url: string }[] };
+  artists?: { id: string; name: string }[];
 };
 
 type NormalizedTrack = {
@@ -29,17 +43,25 @@ type NormalizedTrack = {
 };
 
 export interface ImportResult {
-  success:            boolean;
-  userId:             string;
-  likedSongsFetched:  number;
-  tracksUpserted:     number;
-  tracksRemoved:      number;
-  dbTrackCountBefore: number;
-  dbTrackCountAfter:  number;
-  dbDelta:            number;
-  noLikedSongs?:      boolean;
-  genreDistribution:  Record<string, number>;
-  error?:             string;
+  success:                       boolean;
+  userId:                        string;
+  // Liked Songs
+  likedSongsFetched:             number;
+  // Playlists
+  playlistsReturnedBySpotify:    number;
+  ownedPlaylistsCount:           number;
+  skippedNonOwnedPlaylistsCount: number;
+  ownedPlaylistTracksFetched:    number;
+  // Combined
+  uniqueAllowedTracks:           number;
+  tracksUpserted:                number;
+  tracksRemoved:                 number;
+  dbTrackCountBefore:            number;
+  dbTrackCountAfter:             number;
+  dbDelta:                       number;
+  noLikedSongs?:                 boolean;
+  genreDistribution:             Record<string, number>;
+  error?:                        string;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -86,25 +108,30 @@ async function spotifyGet(
   }
 }
 
-function normalize(track: {
-  id: string; name: string; preview_url?: string | null;
-  album?: { name?: string | null; images?: { url: string }[] };
-  artists?: { id: string; name: string }[];
-}): NormalizedTrack {
+function normalizeTrack(t: RawTrack): NormalizedTrack {
   return {
-    id:            track.id,
-    name:          track.name,
-    previewUrl:    track.preview_url ?? null,
-    albumName:     track.album?.name ?? null,
-    albumImageUrl: track.album?.images?.[0]?.url ?? null,
-    artists:       track.artists ?? [],
+    id:            t.id,
+    name:          t.name,
+    previewUrl:    t.preview_url ?? null,
+    albumName:     t.album?.name ?? null,
+    albumImageUrl: t.album?.images?.[0]?.url ?? null,
+    artists:       t.artists ?? [],
   };
+}
+
+function isValidTrack(t: RawTrack | null | undefined): t is RawTrack {
+  if (!t) return false;
+  if (t.is_local) return false;
+  if (t.type && t.type !== "track") return false;
+  if (!t.id) return false;
+  if (!t.artists?.[0]?.id) return false;
+  return true;
 }
 
 // ── Core import ───────────────────────────────────────────────────────────────
 
 export async function runLikedSongsImport(userId: string): Promise<ImportResult> {
-  console.log(`[import] starting for userId=${userId}`);
+  console.log(`\n[import] ════ starting userId=${userId} ════`);
 
   const account = await prisma.account.findFirst({
     where:  { userId, provider: "spotify" },
@@ -112,50 +139,111 @@ export async function runLikedSongsImport(userId: string): Promise<ImportResult>
   });
 
   if (!account?.access_token) {
-    return { success: false, userId, error: "Missing Spotify access token",
-      likedSongsFetched: 0, tracksUpserted: 0, tracksRemoved: 0,
-      dbTrackCountBefore: 0, dbTrackCountAfter: 0, dbDelta: 0, genreDistribution: {} };
-  }
-
-  const dbTrackCountBefore = await prisma.track.count({ where: { userId } });
-
-  // ── Fetch all liked songs ─────────────────────────────────────────────────
-
-  const likedItems: LikedTrackItem[] = [];
-  let url: string | null = "https://api.spotify.com/v1/me/tracks?limit=50";
-  let pages = 0;
-
-  while (url) {
-    const res = await spotifyGet(url, account);
-    likedItems.push(...(res.data.items ?? []));
-    pages++;
-    url = res.data.next ?? null;
-  }
-
-  console.log(`[import] liked songs fetched: ${likedItems.length} across ${pages} page(s) for userId=${userId}`);
-
-  // ── Normalize + dedup ─────────────────────────────────────────────────────
-
-  const trackMap = new Map<string, NormalizedTrack>();
-  for (const item of likedItems) {
-    const t = item.track;
-    if (!t || (t.type && t.type !== "track") || !t.id || !t.artists?.[0]?.id) continue;
-    trackMap.set(t.id, normalize(t));
-  }
-
-  const allTracks = Array.from(trackMap.values());
-
-  if (allTracks.length === 0) {
-    const dbTrackCountAfter = await prisma.track.count({ where: { userId } });
     return {
-      success: true, userId, noLikedSongs: likedItems.length === 0,
-      likedSongsFetched: likedItems.length, tracksUpserted: 0,
-      tracksRemoved: 0, dbTrackCountBefore, dbTrackCountAfter,
-      dbDelta: 0, genreDistribution: {},
+      success: false, userId, error: "Missing Spotify access token",
+      likedSongsFetched: 0, playlistsReturnedBySpotify: 0,
+      ownedPlaylistsCount: 0, skippedNonOwnedPlaylistsCount: 0,
+      ownedPlaylistTracksFetched: 0, uniqueAllowedTracks: 0,
+      tracksUpserted: 0, tracksRemoved: 0,
+      dbTrackCountBefore: 0, dbTrackCountAfter: 0, dbDelta: 0,
+      genreDistribution: {},
     };
   }
 
-  // ── Artist genres ─────────────────────────────────────────────────────────
+  const dbTrackCountBefore = await prisma.track.count({ where: { userId } });
+  console.log(`[import] dbTrackCountBefore=${dbTrackCountBefore}`);
+
+  // ── Stage 1: Get Spotify user identity ───────────────────────────────────
+
+  const meRes = await spotifyGet("https://api.spotify.com/v1/me", account);
+  const spotifyUserId: string = meRes.data.id;
+  console.log(`[import] spotifyUserId=${spotifyUserId}`);
+
+  // ── Stage 2: Fetch all Liked Songs ───────────────────────────────────────
+
+  // trackMap is the single dedup store: spotifyId → NormalizedTrack.
+  // Liked songs and owned-playlist tracks both write into it; duplicates are
+  // kept once (liked-song entry wins on first write, same data either way).
+  const trackMap = new Map<string, NormalizedTrack>();
+
+  let likedSongsFetched = 0;
+  {
+    let url: string | null = "https://api.spotify.com/v1/me/tracks?limit=50";
+    while (url) {
+      const res = await spotifyGet(url, account);
+      for (const item of res.data.items ?? []) {
+        const t: RawTrack | null = item.track ?? null;
+        if (isValidTrack(t) && !trackMap.has(t.id)) {
+          trackMap.set(t.id, normalizeTrack(t));
+        }
+        likedSongsFetched++;
+      }
+      url = res.data.next ?? null;
+    }
+    console.log(`[import] likedSongsFetched=${likedSongsFetched}  (valid+deduped so far: ${trackMap.size})`);
+  }
+
+  // ── Stage 3: Fetch user's playlists + filter to owned only ───────────────
+
+  type PlaylistStub = { id: string; name: string; owner: { id: string } };
+  const allPlaylists: PlaylistStub[] = [];
+
+  {
+    let url: string | null = "https://api.spotify.com/v1/me/playlists?limit=50";
+    while (url) {
+      const res = await spotifyGet(url, account);
+      allPlaylists.push(...(res.data.items ?? []));
+      url = res.data.next ?? null;
+    }
+  }
+
+  const ownedPlaylists  = allPlaylists.filter(p => p.owner?.id === spotifyUserId);
+  const skippedPlaylists = allPlaylists.filter(p => p.owner?.id !== spotifyUserId);
+
+  console.log(
+    `[import] playlistsReturnedBySpotify=${allPlaylists.length}` +
+    `  ownedPlaylistsCount=${ownedPlaylists.length}` +
+    `  skippedNonOwnedPlaylistsCount=${skippedPlaylists.length}`
+  );
+
+  // Log up to 10 skipped playlist names so the caller can verify the filter
+  if (skippedPlaylists.length > 0) {
+    const sample = skippedPlaylists.slice(0, 10);
+    console.log(
+      `[import] skipped (non-owned) playlists (first ${sample.length}):`,
+      sample.map(p => `"${p.name}" owned by ${p.owner?.id ?? "?"}`)
+    );
+  }
+
+  // ── Stage 4: Fetch tracks from owned playlists ───────────────────────────
+
+  let ownedPlaylistTracksFetched = 0;
+
+  for (const playlist of ownedPlaylists) {
+    let url: string | null =
+      `https://api.spotify.com/v1/playlists/${playlist.id}/tracks?limit=50&fields=next,items(track(id,name,type,is_local,preview_url,album(name,images),artists(id,name)))`;
+    while (url) {
+      const res = await spotifyGet(url, account);
+      for (const item of res.data.items ?? []) {
+        ownedPlaylistTracksFetched++;
+        const t: RawTrack | null = item.track ?? null;
+        if (isValidTrack(t) && !trackMap.has(t.id)) {
+          trackMap.set(t.id, normalizeTrack(t));
+        }
+      }
+      url = res.data.next ?? null;
+    }
+    console.log(`[import]   playlist "${playlist.name}" → trackMap.size=${trackMap.size}`);
+  }
+
+  console.log(
+    `[import] ownedPlaylistTracksFetched=${ownedPlaylistTracksFetched}` +
+    `  uniqueAllowedTracks=${trackMap.size}`
+  );
+
+  // ── Stage 5: Resolve artist genres ───────────────────────────────────────
+
+  const allTracks = Array.from(trackMap.values());
 
   const uniqueArtistIds = Array.from(
     new Set(allTracks.flatMap(t => t.artists.map(a => a.id)).filter(Boolean))
@@ -172,7 +260,7 @@ export async function runLikedSongsImport(userId: string): Promise<ImportResult>
     }
   }
 
-  // ── Upsert (batches of 25) ────────────────────────────────────────────────
+  // ── Stage 6: Upsert allowed tracks (batches of 25) ───────────────────────
 
   const BATCH = 25;
   for (let i = 0; i < allTracks.length; i += BATCH) {
@@ -195,16 +283,19 @@ export async function runLikedSongsImport(userId: string): Promise<ImportResult>
     );
   }
 
-  // ── Purge stale / non-liked tracks ───────────────────────────────────────
+  // ── Stage 7: Purge tracks NOT in the allowed set ─────────────────────────
+  // Removes any Track rows for this user whose spotifyId is not in
+  // (liked songs ∪ owned-playlist tracks).  Scoped to userId — never touches
+  // other users' rows.
 
-  const likedSpotifyIds = allTracks.map(t => t.id);
+  const allowedSpotifyIds = allTracks.map(t => t.id);
   const purge = await prisma.track.deleteMany({
-    where: { userId, spotifyId: { notIn: likedSpotifyIds } },
+    where: { userId, spotifyId: { notIn: allowedSpotifyIds } },
   });
 
   const dbTrackCountAfter = await prisma.track.count({ where: { userId } });
 
-  // ── Genre distribution ────────────────────────────────────────────────────
+  // ── Stage 8: Genre distribution ───────────────────────────────────────────
 
   const genreDistribution: Record<string, number> = {};
   for (const t of allTracks) {
@@ -214,20 +305,31 @@ export async function runLikedSongsImport(userId: string): Promise<ImportResult>
   }
 
   console.log(
-    `[import] finished: userId=${userId}` +
-    ` likedSongsFetched=${likedItems.length}` +
-    ` dbTrackCountBefore=${dbTrackCountBefore}` +
-    ` tracksUpserted=${allTracks.length}` +
-    ` tracksRemoved=${purge.count}` +
-    ` dbTrackCountAfter=${dbTrackCountAfter}`
+    `[import] ════ finished userId=${userId} ════\n` +
+    `  spotifyUserId                  = ${spotifyUserId}\n` +
+    `  likedSongsFetched              = ${likedSongsFetched}\n` +
+    `  playlistsReturnedBySpotify     = ${allPlaylists.length}\n` +
+    `  ownedPlaylistsCount            = ${ownedPlaylists.length}\n` +
+    `  skippedNonOwnedPlaylistsCount  = ${skippedPlaylists.length}\n` +
+    `  ownedPlaylistTracksFetched     = ${ownedPlaylistTracksFetched}\n` +
+    `  uniqueAllowedTracks            = ${allTracks.length}\n` +
+    `  dbTrackCountBefore             = ${dbTrackCountBefore}\n` +
+    `  staleTracksRemoved             = ${purge.count}\n` +
+    `  dbTrackCountAfter              = ${dbTrackCountAfter}`
   );
 
   return {
     success: true, userId,
-    likedSongsFetched:     likedItems.length,
-    tracksUpserted: allTracks.length,
-    tracksRemoved:  purge.count,
-    dbTrackCountBefore, dbTrackCountAfter,
+    likedSongsFetched,
+    playlistsReturnedBySpotify:    allPlaylists.length,
+    ownedPlaylistsCount:           ownedPlaylists.length,
+    skippedNonOwnedPlaylistsCount: skippedPlaylists.length,
+    ownedPlaylistTracksFetched,
+    uniqueAllowedTracks:           allTracks.length,
+    tracksUpserted:                allTracks.length,
+    tracksRemoved:                 purge.count,
+    dbTrackCountBefore,
+    dbTrackCountAfter,
     dbDelta: dbTrackCountAfter - dbTrackCountBefore,
     genreDistribution,
   };
