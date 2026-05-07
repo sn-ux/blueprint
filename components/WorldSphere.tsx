@@ -40,6 +40,7 @@ type TrackItem = {
   album: string | null;
   imageUrl?: string | null; previewUrl?: string | null; spotifyId?: string | null;
   blueprintSubgenre: string;
+  socialCount?: number;
 };
 type SubgenreItem = { name: string; count: number };
 type V3  = [number, number, number];
@@ -181,6 +182,37 @@ function SpotifyLogoButton({ track, size=22 }: { track:{name:string;spotifyId?:s
   );
 }
 
+// ── BarChartButton ────────────────────────────────────────────────────────────
+
+function BarChartButton({ active, onClick, color }: { active: boolean; onClick: () => void; color: string }) {
+  return (
+    <button
+      onClick={e => { e.stopPropagation(); onClick(); }}
+      aria-label={active ? "Clear social sort" : "Sort by social popularity"}
+      title={active ? "Sorted by how many Midvale users share this track" : "Sort by Midvale popularity"}
+      style={{
+        flexShrink:  0,
+        background:  "none",
+        border:      "none",
+        padding:     0,
+        cursor:      "pointer",
+        color:       active ? color : "rgba(255,255,255,0.22)",
+        transition:  "color 0.20s ease",
+        display:     "flex",
+        alignItems:  "center",
+        lineHeight:  1,
+      }}
+    >
+      {/* Three ascending bars */}
+      <svg width={15} height={13} viewBox="0 0 12 10" fill="currentColor" aria-hidden="true">
+        <rect x="0"   y="5.5" width="2.8" height="4.5" rx="0.5"/>
+        <rect x="4.6" y="2.5" width="2.8" height="7.5" rx="0.5"/>
+        <rect x="9.2" y="0"   width="2.8" height="10"  rx="0.5"/>
+      </svg>
+    </button>
+  );
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 interface WorldSphereProps {
@@ -236,6 +268,7 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
   const [tracksLoading,    setTracksLoading]     = useState(false);
   const [subgenres,        setSubgenres]         = useState<SubgenreItem[]>([]);
   const [selectedSubgenre, setSelectedSubgenre]  = useState<string | null>(null);
+  const [socialSort,        setSocialSort]        = useState(false);
   const selectedSubgenreRef = useRef<string | null>(null);
   const [zoomSubgenre,     setZoomSubgenre]      = useState<string | null>(null);
   const zoomSubgenreRef    = useRef<string | null>(null);
@@ -467,8 +500,10 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
       setSelectedSubgenre(null); selectedSubgenreRef.current = null;
       setZoomSubgenre(null);     zoomSubgenreRef.current     = null;
       deezerPreviewsRef.current = {}; setDeezerPreviews({});
+      setSocialSort(false);
       return;
     }
+    setSocialSort(false);
     setSelectedSubgenre(null); selectedSubgenreRef.current = null;
     setZoomSubgenre(null);     zoomSubgenreRef.current     = null;
     deezerPreviewsRef.current = {}; setDeezerPreviews({});
@@ -1077,6 +1112,12 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
     ? tracks.filter(t => t.blueprintSubgenre === focusedSubgenre)
     : tracks;
 
+  // When social sort is on, re-order by descending cross-user popularity.
+  // displayedTracks is kept as-is for the count display; sortedTracks drives the list.
+  const sortedTracks = socialSort
+    ? [...displayedTracks].sort((a, b) => (b.socialCount ?? 0) - (a.socialCount ?? 0))
+    : displayedTracks;
+
   return (
     <main className="h-screen bg-black text-white flex flex-col overflow-hidden">
 
@@ -1225,7 +1266,10 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
                       >← {shortLabel(selected)}</button>
                       <div className="flex items-center justify-between gap-4">
                         <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{focusedSubgenre}</h2>
-                        <SpotifyLogoButton track={playingTrack} />
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
+                          <SpotifyLogoButton track={playingTrack} />
+                        </div>
                       </div>
                     </>
                   ) : (
@@ -1233,7 +1277,10 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
                       <p className="text-xs tracking-widest uppercase mb-2" style={{ color: `rgba(${sr},${sg},${sb},0.38)` }}>Now exploring</p>
                       <div className="flex items-center justify-between gap-4">
                         <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{shortLabel(selected)}</h2>
-                        <SpotifyLogoButton track={playingTrack} />
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
+                          <SpotifyLogoButton track={playingTrack} />
+                        </div>
                       </div>
                     </>
                   )}
@@ -1261,7 +1308,7 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
                     <p className="text-zinc-700 text-xs px-7 py-8 text-center">No tracks</p>
                   ) : (
                     <div className="flex flex-col pt-1 pb-6">
-                      {displayedTracks.map((t, idx) => {
+                      {sortedTracks.map((t, idx) => {
                         const canPlay = !!(deezerPreviews[t.id] || t.previewUrl);
                         const isPending = pendingTrackId === t.id;
                         const isActive  = nowPlayingId === t.id || isPending;
@@ -1272,7 +1319,14 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
                               {t.imageUrl && <img src={t.imageUrl} alt="" width={36} height={36} style={{ width: 36, height: 36, objectFit: "cover", display: "block" }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />}
                             </div>
                             <div className="flex flex-col min-w-0 flex-1">
-                              <span className="text-sm font-medium truncate leading-snug" style={{ color: isActive ? selectedColor : "#ffffff" }}>{t.name}</span>
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-sm font-medium truncate leading-snug flex-1" style={{ color: isActive ? selectedColor : "#ffffff" }}>{t.name}</span>
+                                {socialSort && (t.socialCount ?? 0) > 0 && (
+                                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.28)", flexShrink: 0, whiteSpace: "nowrap" }}>
+                                    {t.socialCount} {t.socialCount === 1 ? "other" : "others"}
+                                  </span>
+                                )}
+                              </div>
                               <span className="text-zinc-500 text-xs truncate">{t.artist}{isPending ? <span style={{ color: "rgba(255,255,255,0.32)", marginLeft: 4 }}>(Loading…)</span> : !canPlay ? <span style={{ color: "rgba(255,255,255,0.22)", marginLeft: 4 }}>(No Preview)</span> : null}</span>
                             </div>
                           </div>
@@ -1342,7 +1396,8 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
                   {displayedTracks.length} tracks
                 </span>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 32, flexShrink: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 18, flexShrink: 0 }}>
+                <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
                 <SpotifyLogoButton track={playingTrack} size={36} />
                 <button
                   onClick={() => setSheetSnap(sheetSnap === 1 ? 2 : 1)}
@@ -1360,7 +1415,7 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
                 <p className="text-zinc-700 text-xs px-6 py-8 text-center">No tracks</p>
               ) : (
                 <div className="flex flex-col pt-1 pb-8">
-                  {displayedTracks.map((t, idx) => {
+                  {sortedTracks.map((t, idx) => {
                     const canPlay   = !!(deezerPreviews[t.id] || t.previewUrl);
                     const isPending = pendingTrackId === t.id;
                     const isActive  = nowPlayingId === t.id || isPending;
@@ -1371,7 +1426,14 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
                           {t.imageUrl && <img src={t.imageUrl} alt="" width={36} height={36} style={{ width: 36, height: 36, objectFit: "cover", display: "block" }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />}
                         </div>
                         <div className="flex flex-col min-w-0 flex-1">
-                          <span className="text-sm font-medium truncate leading-snug" style={{ color: isActive ? selectedColor : "#ffffff" }}>{t.name}</span>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-sm font-medium truncate leading-snug flex-1" style={{ color: isActive ? selectedColor : "#ffffff" }}>{t.name}</span>
+                            {socialSort && (t.socialCount ?? 0) > 0 && (
+                              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.28)", flexShrink: 0, whiteSpace: "nowrap" }}>
+                                {t.socialCount} {t.socialCount === 1 ? "other" : "others"}
+                              </span>
+                            )}
+                          </div>
                           <span className="text-zinc-500 text-xs truncate">{t.artist}{isPending ? <span style={{ color: "rgba(255,255,255,0.32)", marginLeft: 4 }}>(Loading…)</span> : !canPlay ? <span style={{ color: "rgba(255,255,255,0.22)", marginLeft: 4 }}>(No Preview)</span> : null}</span>
                         </div>
                       </div>

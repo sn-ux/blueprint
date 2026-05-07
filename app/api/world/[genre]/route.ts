@@ -41,5 +41,34 @@ export async function GET(
     orderBy: [{ artist: "asc" }, { name: "asc" }],
   });
 
-  return NextResponse.json({ genre: blueprintWorld, tracks });
+  // ── Social popularity: count other Midvale users who also have each track ──
+  // One grouped query — not one query per track.
+  // Because (userId, spotifyId) is a unique index, each row = one distinct user.
+  // So _count.id === number of other users who have that spotifyId.
+
+  const spotifyIds = tracks
+    .map(t => t.spotifyId)
+    .filter((id): id is string => !!id);
+
+  let socialMap = new Map<string, number>();
+  if (spotifyIds.length > 0) {
+    const groups = await prisma.track.groupBy({
+      by:    ["spotifyId"],
+      _count: { id: true },
+      where: {
+        spotifyId: { in: spotifyIds },
+        userId:    { not: user.id },   // exclude the viewed user themselves
+      },
+    });
+    socialMap = new Map(
+      groups.map(g => [g.spotifyId as string, g._count.id])
+    );
+  }
+
+  const tracksWithSocial = tracks.map(t => ({
+    ...t,
+    socialCount: socialMap.get(t.spotifyId ?? "") ?? 0,
+  }));
+
+  return NextResponse.json({ genre: blueprintWorld, tracks: tracksWithSocial });
 }
