@@ -1080,44 +1080,6 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
   return (
     <main className="h-screen bg-black text-white flex flex-col overflow-hidden">
 
-      {/* ── Back button — fixed, below the 56px global Navbar, Midvale worlds only */}
-      {backHref && (
-        <Link
-          href={backHref}
-          style={{
-            position:      "fixed",
-            top:           68,
-            left:          24,
-            zIndex:        199,
-            display:       "flex",
-            alignItems:    "center",
-            gap:           5,
-            fontSize:      12,
-            fontWeight:    500,
-            letterSpacing: "0.04em",
-            color:         "rgba(255,255,255,0.40)",
-            textDecoration:"none",
-            padding:       "4px 10px",
-            borderRadius:  20,
-            background:    "rgba(255,255,255,0.04)",
-            border:        "1px solid rgba(255,255,255,0.08)",
-            backdropFilter:"blur(8px)",
-            WebkitBackdropFilter: "blur(8px)",
-            transition:    "color 0.15s ease, background 0.15s ease",
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.color = "rgba(255,255,255,0.80)";
-            e.currentTarget.style.background = "rgba(255,255,255,0.09)";
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.color = "rgba(255,255,255,0.40)";
-            e.currentTarget.style.background = "rgba(255,255,255,0.04)";
-          }}
-        >
-          ← Midvale
-        </Link>
-      )}
-
       {/* ── Utility bar ──────────────────────────────────────────────────────── */}
       <div className="flex-shrink-0 flex items-center justify-between px-6 py-2.5">
         <span className="text-xs tracking-widest uppercase text-zinc-700 font-medium select-none">
@@ -1197,6 +1159,46 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
                 {possessiveHeadline(userName)}
               </h1>
             </div>
+          )}
+
+          {/* ── Back button — Midvale worlds only ───────────────────────────────
+              Mobile:  position:absolute inside this relative sphere div.
+                       Pure overlay — takes zero layout space, never compresses sphere.
+              Desktop: position:fixed relative to viewport (md:fixed restores this),
+                       same top/left as before so desktop layout is unchanged.        */}
+          {backHref && (
+            <Link
+              href={backHref}
+              className="absolute top-5 left-4 md:fixed md:top-[68px] md:left-6"
+              style={{
+                zIndex:        199,
+                display:       "flex",
+                alignItems:    "center",
+                gap:           5,
+                fontSize:      12,
+                fontWeight:    500,
+                letterSpacing: "0.04em",
+                color:         "rgba(255,255,255,0.40)",
+                textDecoration:"none",
+                padding:       "4px 10px",
+                borderRadius:  20,
+                background:    "rgba(255,255,255,0.04)",
+                border:        "1px solid rgba(255,255,255,0.08)",
+                backdropFilter:"blur(8px)",
+                WebkitBackdropFilter: "blur(8px)",
+                transition:    "color 0.15s ease, background 0.15s ease",
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.color = "rgba(255,255,255,0.80)";
+                e.currentTarget.style.background = "rgba(255,255,255,0.09)";
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.color = "rgba(255,255,255,0.40)";
+                e.currentTarget.style.background = "rgba(255,255,255,0.04)";
+              }}
+            >
+              ← Midvale
+            </Link>
           )}
         </div>
 
