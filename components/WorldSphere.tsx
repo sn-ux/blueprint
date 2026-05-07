@@ -165,7 +165,7 @@ function hexRgb(h: string): [number, number, number] {
 
 // ── SpotifyLogoButton ─────────────────────────────────────────────────────────
 
-function SpotifyLogoButton({ track, size=22 }: { track:{name:string;spotifyId?:string|null}|null; size?:number }) {
+function SpotifyLogoButton({ track, size=26 }: { track:{name:string;spotifyId?:string|null}|null; size?:number }) {
   const active=!!track, canOpen=!!(track?.spotifyId);
   const handleClick=(e: React.MouseEvent)=>{
     e.stopPropagation(); if(!canOpen||!track?.spotifyId)return;
@@ -194,7 +194,7 @@ function BarChartButton({ active, onClick, color }: { active: boolean; onClick: 
         flexShrink:  0,
         background:  "none",
         border:      "none",
-        padding:     0,
+        padding:     "2px",
         cursor:      "pointer",
         color:       active ? color : "rgba(255,255,255,0.22)",
         transition:  "color 0.20s ease",
@@ -204,12 +204,76 @@ function BarChartButton({ active, onClick, color }: { active: boolean; onClick: 
       }}
     >
       {/* Three ascending bars */}
-      <svg width={15} height={13} viewBox="0 0 12 10" fill="currentColor" aria-hidden="true">
+      <svg width={19} height={17} viewBox="0 0 12 10" fill="currentColor" aria-hidden="true">
         <rect x="0"   y="5.5" width="2.8" height="4.5" rx="0.5"/>
         <rect x="4.6" y="2.5" width="2.8" height="7.5" rx="0.5"/>
         <rect x="9.2" y="0"   width="2.8" height="10"  rx="0.5"/>
       </svg>
     </button>
+  );
+}
+
+// ── Tally marks ───────────────────────────────────────────────────────────────
+// Renders n as classic tally groups (||||̶ per 5).
+// Rendered as inline SVG so we get crisp diagonal on the 5th stroke.
+
+function TallyMarks({ n, color }: { n: number; color: string }) {
+  if (n <= 0) return null;
+
+  // Build groups of up to 5
+  const fullGroups = Math.floor(n / 5);
+  const remainder  = n % 5;
+
+  const STROKE = 1.5;
+  const H      = 11;          // mark height
+  const GAP    = 3;           // gap between marks within a group
+  const W_MARK = 5;           // width of one vertical mark
+  const GRP_W  = W_MARK * 4 + GAP * 3;   // width of one tally group (4 uprights)
+  const GRP_GAP = 7;          // gap between complete groups and remainder
+
+  // Calculate total SVG width
+  const totalGroups = fullGroups + (remainder > 0 ? 1 : 0);
+  const svgW = fullGroups * (GRP_W + GRP_GAP)
+             + (remainder > 0 ? Math.max(1, remainder - 1) * (W_MARK + GAP) + W_MARK : 0)
+             - (totalGroups > 0 ? GRP_GAP : 0)  // no trailing gap
+             + 2;  // small padding
+
+  const lines: React.ReactNode[] = [];
+  let x = 1;
+
+  const upright = (cx: number, key: string) => (
+    <line key={key} x1={cx} y1={1} x2={cx} y2={H} stroke={color} strokeWidth={STROKE} strokeLinecap="round" />
+  );
+
+  for (let g = 0; g < fullGroups; g++) {
+    // 4 vertical marks
+    for (let i = 0; i < 4; i++) {
+      lines.push(upright(x + i * (W_MARK + GAP), `g${g}u${i}`));
+    }
+    // diagonal slash across all 4 uprights + a bit beyond
+    const x1d = x - 2, x2d = x + 3 * (W_MARK + GAP) + W_MARK + 2;
+    lines.push(
+      <line key={`g${g}d`} x1={x1d} y1={H + 1} x2={x2d} y2={-1}
+        stroke={color} strokeWidth={STROKE} strokeLinecap="round" />
+    );
+    x += GRP_W + GRP_GAP;
+  }
+
+  // Remainder vertical marks (no diagonal)
+  for (let i = 0; i < remainder; i++) {
+    lines.push(upright(x + i * (W_MARK + GAP), `r${i}`));
+  }
+
+  return (
+    <svg
+      width={svgW}
+      height={H + 2}
+      viewBox={`0 0 ${svgW} ${H + 2}`}
+      aria-label={`${n} other${n === 1 ? "" : "s"}`}
+      style={{ display: "inline-block", verticalAlign: "middle", flexShrink: 0 }}
+    >
+      {lines}
+    </svg>
   );
 }
 
@@ -1215,13 +1279,10 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
                 zIndex:        199,
                 display:       "flex",
                 alignItems:    "center",
-                gap:           5,
-                fontSize:      12,
-                fontWeight:    500,
-                letterSpacing: "0.04em",
+                justifyContent:"center",
                 color:         "rgba(255,255,255,0.40)",
                 textDecoration:"none",
-                padding:       "4px 10px",
+                padding:       "6px 9px",
                 borderRadius:  20,
                 background:    "rgba(255,255,255,0.04)",
                 border:        "1px solid rgba(255,255,255,0.08)",
@@ -1238,7 +1299,10 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
                 e.currentTarget.style.background = "rgba(255,255,255,0.04)";
               }}
             >
-              ← Midvale
+              {/* Left chevron — SVG for crisp rendering at small sizes */}
+              <svg width={13} height={13} viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="6.5,1.5 2.5,5 6.5,8.5" />
+              </svg>
             </Link>
           )}
         </div>
@@ -1266,7 +1330,7 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
                       >← {shortLabel(selected)}</button>
                       <div className="flex items-center justify-between gap-4">
                         <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{focusedSubgenre}</h2>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                           <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
                           <SpotifyLogoButton track={playingTrack} />
                         </div>
@@ -1277,7 +1341,7 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
                       <p className="text-xs tracking-widest uppercase mb-2" style={{ color: `rgba(${sr},${sg},${sb},0.38)` }}>Now exploring</p>
                       <div className="flex items-center justify-between gap-4">
                         <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{shortLabel(selected)}</h2>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                           <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
                           <SpotifyLogoButton track={playingTrack} />
                         </div>
@@ -1322,9 +1386,7 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
                               <div className="flex items-center gap-2 min-w-0">
                                 <span className="text-sm font-medium truncate leading-snug flex-1" style={{ color: isActive ? selectedColor : "#ffffff" }}>{t.name}</span>
                                 {socialSort && (t.socialCount ?? 0) > 0 && (
-                                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.28)", flexShrink: 0, whiteSpace: "nowrap" }}>
-                                    {t.socialCount} {t.socialCount === 1 ? "other" : "others"}
-                                  </span>
+                                  <TallyMarks n={t.socialCount!} color={`rgba(${sr},${sg},${sb},0.55)`} />
                                 )}
                               </div>
                               <span className="text-zinc-500 text-xs truncate">{t.artist}{isPending ? <span style={{ color: "rgba(255,255,255,0.32)", marginLeft: 4 }}>(Loading…)</span> : !canPlay ? <span style={{ color: "rgba(255,255,255,0.22)", marginLeft: 4 }}>(No Preview)</span> : null}</span>
