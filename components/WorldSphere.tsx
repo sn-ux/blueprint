@@ -214,67 +214,27 @@ function BarChartButton({ active, onClick, color }: { active: boolean; onClick: 
   );
 }
 
-// ── Tally marks ───────────────────────────────────────────────────────────────
-// Renders n as classic tally groups (||||̶ per 5).
-// Rendered as inline SVG so we get crisp diagonal on the 5th stroke.
+// ── Social badge ──────────────────────────────────────────────────────────────
+// Plain numeric count styled in the genre color. Always equals socialUsers.length.
 
-function TallyMarks({ n, color }: { n: number; color: string }) {
-  if (n <= 0) return null;
-
-  // Build groups of up to 5
-  const fullGroups = Math.floor(n / 5);
-  const remainder  = n % 5;
-
-  const STROKE = 1.5;
-  const H      = 11;          // mark height
-  const GAP    = 3;           // gap between marks within a group
-  const W_MARK = 5;           // width of one vertical mark
-  const GRP_W  = W_MARK * 4 + GAP * 3;   // width of one tally group (4 uprights)
-  const GRP_GAP = 7;          // gap between complete groups and remainder
-
-  // Calculate total SVG width
-  const totalGroups = fullGroups + (remainder > 0 ? 1 : 0);
-  const svgW = fullGroups * (GRP_W + GRP_GAP)
-             + (remainder > 0 ? Math.max(1, remainder - 1) * (W_MARK + GAP) + W_MARK : 0)
-             - (totalGroups > 0 ? GRP_GAP : 0)  // no trailing gap
-             + 2;  // small padding
-
-  const lines: React.ReactNode[] = [];
-  let x = 1;
-
-  const upright = (cx: number, key: string) => (
-    <line key={key} x1={cx} y1={1} x2={cx} y2={H} stroke={color} strokeWidth={STROKE} strokeLinecap="round" />
-  );
-
-  for (let g = 0; g < fullGroups; g++) {
-    // 4 vertical marks
-    for (let i = 0; i < 4; i++) {
-      lines.push(upright(x + i * (W_MARK + GAP), `g${g}u${i}`));
-    }
-    // diagonal slash across all 4 uprights + a bit beyond
-    const x1d = x - 2, x2d = x + 3 * (W_MARK + GAP) + W_MARK + 2;
-    lines.push(
-      <line key={`g${g}d`} x1={x1d} y1={H + 1} x2={x2d} y2={-1}
-        stroke={color} strokeWidth={STROKE} strokeLinecap="round" />
-    );
-    x += GRP_W + GRP_GAP;
-  }
-
-  // Remainder vertical marks (no diagonal)
-  for (let i = 0; i < remainder; i++) {
-    lines.push(upright(x + i * (W_MARK + GAP), `r${i}`));
-  }
-
+function SocialBadge({ count, color }: { count: number; color: string }) {
+  if (count <= 0) return null;
   return (
-    <svg
-      width={svgW}
-      height={H + 2}
-      viewBox={`0 0 ${svgW} ${H + 2}`}
-      aria-label={`${n} other${n === 1 ? "" : "s"}`}
-      style={{ display: "inline-block", verticalAlign: "middle", flexShrink: 0 }}
+    <span
+      aria-hidden="true"
+      style={{
+        fontSize:   11,
+        fontWeight: 600,
+        fontVariantNumeric: "tabular-nums",
+        color,
+        opacity:    0.72,
+        lineHeight: 1,
+        flexShrink: 0,
+        userSelect: "none",
+      }}
     >
-      {lines}
-    </svg>
+      {count}
+    </span>
   );
 }
 
@@ -1185,8 +1145,10 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
 
   // When social sort is on, re-order by descending cross-user popularity.
   // displayedTracks is kept as-is for the count display; sortedTracks drives the list.
+  // Use socialUsers.length as authoritative count — always equals socialCount from the API.
+  const tallyCount = (t: TrackItem) => t.socialUsers?.length ?? t.socialCount ?? 0;
   const sortedTracks = socialSort
-    ? [...displayedTracks].sort((a, b) => (b.socialCount ?? 0) - (a.socialCount ?? 0))
+    ? [...displayedTracks].sort((a, b) => tallyCount(b) - tallyCount(a))
     : displayedTracks;
 
   return (
@@ -1397,22 +1359,24 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
                             <div className="flex flex-col min-w-0 flex-1">
                               <div className="flex items-center gap-2 min-w-0">
                                 <span className="text-sm font-medium truncate leading-snug flex-1" style={{ color: isActive ? selectedColor : "#ffffff" }}>{t.name}</span>
-                                {socialSort && (t.socialCount ?? 0) > 0 && (
+                                {socialSort && tallyCount(t) > 0 && (
                                   <button
-                                    aria-label={`${t.socialCount} other user${t.socialCount === 1 ? "" : "s"} have this track`}
+                                    aria-label={`${tallyCount(t)} other user${tallyCount(t) === 1 ? "" : "s"} have this track`}
                                     onClick={e => {
                                       e.stopPropagation();
                                       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                      const rawTop = rect.bottom + 6;
+                                      const top = rawTop + 140 > window.innerHeight ? rect.top - 140 : rawTop;
                                       setPopoverData({
                                         trackId: t.id,
                                         users:   t.socialUsers ?? [],
-                                        top:     rect.bottom + 6,
+                                        top:     Math.max(8, top),
                                         right:   window.innerWidth - rect.right,
                                       });
                                     }}
-                                    style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", flexShrink: 0 }}
+                                    style={{ background: "none", border: "none", padding: "2px 0", cursor: "pointer", display: "flex", alignItems: "center", flexShrink: 0 }}
                                   >
-                                    <TallyMarks n={t.socialCount!} color={`rgba(${sr},${sg},${sb},0.55)`} />
+                                    <SocialBadge count={tallyCount(t)} color={`rgba(${sr},${sg},${sb},0.80)`} />
                                   </button>
                                 )}
                               </div>
@@ -1517,22 +1481,24 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
                         <div className="flex flex-col min-w-0 flex-1">
                           <div className="flex items-center gap-2 min-w-0">
                             <span className="text-sm font-medium truncate leading-snug flex-1" style={{ color: isActive ? selectedColor : "#ffffff" }}>{t.name}</span>
-                            {socialSort && (t.socialCount ?? 0) > 0 && (
+                            {socialSort && tallyCount(t) > 0 && (
                               <button
-                                aria-label={`${t.socialCount} other user${t.socialCount === 1 ? "" : "s"} have this track`}
+                                aria-label={`${tallyCount(t)} other user${tallyCount(t) === 1 ? "" : "s"} have this track`}
                                 onClick={e => {
                                   e.stopPropagation();
                                   const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                  const rawTop = rect.bottom + 6;
+                                  const top = rawTop + 140 > window.innerHeight ? rect.top - 140 : rawTop;
                                   setPopoverData({
                                     trackId: t.id,
                                     users:   t.socialUsers ?? [],
-                                    top:     rect.bottom + 6,
+                                    top:     Math.max(8, top),
                                     right:   window.innerWidth - rect.right,
                                   });
                                 }}
-                                style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", flexShrink: 0 }}
+                                style={{ background: "none", border: "none", padding: "2px 0", cursor: "pointer", display: "flex", alignItems: "center", flexShrink: 0 }}
                               >
-                                <TallyMarks n={t.socialCount!} color={`rgba(${sr},${sg},${sb},0.55)`} />
+                                <SocialBadge count={tallyCount(t)} color={`rgba(${sr},${sg},${sb},0.80)`} />
                               </button>
                             )}
                           </div>

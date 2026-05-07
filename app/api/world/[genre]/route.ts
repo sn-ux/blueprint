@@ -42,14 +42,14 @@ export async function GET(
   });
 
   // ── Social popularity: find other Midvale users who also have each track ──
-  // One query fetches all matching tracks with their owner's id + name.
-  // Because (userId, spotifyId) is a unique index, each row = one distinct user.
+  // Single source of truth: build socialUsers first (deduped by userId),
+  // then socialCount = socialUsers.length.  No separate count query.
 
   const spotifyIds = tracks
     .map(t => t.spotifyId)
     .filter((id): id is string => !!id);
 
-  // Map from spotifyId → array of { id, name } for users who have that track
+  // Map from spotifyId → deduped array of { id, name } for OTHER users
   const socialUsersMap = new Map<string, { id: string; name: string | null }[]>();
   if (spotifyIds.length > 0) {
     const otherTracks = await prisma.track.findMany({
@@ -65,16 +65,30 @@ export async function GET(
     for (const ot of otherTracks) {
       if (!ot.spotifyId) continue;
       const list = socialUsersMap.get(ot.spotifyId) ?? [];
-      list.push(ot.user);
+      // Dedupe by userId — guard against duplicate DB rows for the same user
+      if (!list.some(u => u.id === ot.user.id)) {
+        list.push(ot.user);
+      }
       socialUsersMap.set(ot.spotifyId, list);
     }
   }
 
-  const tracksWithSocial = tracks.map(t => ({
-    ...t,
-    socialCount: socialUsersMap.get(t.spotifyId ?? "")?.length ?? 0,
-    socialUsers: socialUsersMap.get(t.spotifyId ?? "") ?? [],
-  }));
+  const tracksWithSocial = tracks.map(t => {
+    const socialUsers = socialUsersMap.get(t.spotifyId ?? "") ?? [];
+    const socialCount = socialUsers.length;   // single source of truth
+    return { ...t, socialUsers, socialCount };
+  });
+
+  // Debug log: first track that has any social data
+  const firstSocial = tracksWithSocial.find(t => t.socialCount > 0);
+  if (firstSocial) {
+    console.log(
+      `[social-debug] spotifyId=${firstSocial.spotifyId}` +
+      ` socialUsers.length=${firstSocial.socialUsers.length}` +
+      ` socialCount=${firstSocial.socialCount}` +
+      ` renderedCount=${firstSocial.socialCount}`
+    );
+  }
 
   return NextResponse.json({ genre: blueprintWorld, tracks: tracksWithSocial });
 }
