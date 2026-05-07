@@ -1,110 +1,196 @@
-// /admin/midvale — Midvale user removal (admin-only, fully server-rendered)
+"use client";
 
-import { getCurrentUser } from "@/lib/current-user";
-import { isAdmin }        from "@/lib/admin";
-import { prisma }         from "@/lib/prisma";
-import RemoveButton       from "./RemoveButton";
+// /admin/midvale — Midvale user removal
+// Client component: fetches /api/admin/midvale/users directly.
+// If the API returns 403 → "Not authorized."
+// Never renders a blank page — every state has visible text.
 
-export const dynamic = "force-dynamic";
+import { useEffect, useState } from "react";
 
-const mono: React.CSSProperties = { fontFamily: "monospace", fontSize: 13 };
+type User = {
+  id:         string;
+  name:       string | null;
+  email:      string | null;
+  image:      string | null;
+  trackCount: number;
+};
 
-export default async function AdminMidvalePage() {
-  const user = await getCurrentUser();
+const S = {
+  page: {
+    fontFamily: "monospace",
+    fontSize:   14,
+    padding:    "2rem",
+    maxWidth:   700,
+    margin:     "0 auto",
+    color:      "#e5e5e5",
+    minHeight:  "80vh",
+  } as React.CSSProperties,
 
-  if (!user || !isAdmin(user.id)) {
-    return (
-      <main style={{ ...mono, padding: "2rem", color: "#f87171", background: "#0a0a0a", minHeight: "100vh" }}>
-        Not authorized.
-      </main>
-    );
+  heading: {
+    margin:     0,
+    fontSize:   20,
+    fontWeight: 700,
+    color:      "#ffffff",
+  } as React.CSSProperties,
+
+  row: {
+    display:      "flex",
+    alignItems:   "center",
+    gap:          14,
+    marginBottom: 8,
+    padding:      "14px 16px",
+    background:   "#161616",
+    border:       "1px solid #2a2a2a",
+    borderRadius: 8,
+  } as React.CSSProperties,
+
+  name: {
+    fontWeight: 600,
+    color:      "#ffffff",
+    fontSize:   14,
+  } as React.CSSProperties,
+
+  meta: {
+    marginTop: 3,
+    color:     "#666",
+    fontSize:  12,
+  } as React.CSSProperties,
+
+  userId: {
+    marginTop: 2,
+    color:     "#333",
+    fontSize:  10,
+  } as React.CSSProperties,
+
+  removeBtn: (busy: boolean) => ({
+    fontFamily:   "monospace",
+    fontSize:     12,
+    padding:      "6px 16px",
+    background:   busy ? "#1a1a1a" : "#7f1d1d",
+    color:        busy ? "#555"    : "#fca5a5",
+    border:       "1px solid " + (busy ? "#2a2a2a" : "#991b1b"),
+    borderRadius: 6,
+    cursor:       busy ? "default" : "pointer",
+    flexShrink:   0,
+  }) as React.CSSProperties,
+};
+
+export default function AdminMidvalePage() {
+  const [status, setStatus] = useState<"loading" | "unauth" | "error" | "ok">("loading");
+  const [users,  setUsers]  = useState<User[]>([]);
+  const [errMsg, setErrMsg] = useState("");
+  const [busy,   setBusy]   = useState<Record<string, boolean>>({});
+  const [rowErr, setRowErr] = useState<Record<string, string>>({});
+
+  async function load() {
+    setStatus("loading");
+    try {
+      const res  = await fetch("/api/admin/midvale/users");
+      if (res.status === 403) { setStatus("unauth"); return; }
+      if (!res.ok)            { setErrMsg(`HTTP ${res.status}`); setStatus("error"); return; }
+      const data = await res.json();
+      setUsers(data.users ?? []);
+      setStatus("ok");
+    } catch (e) {
+      setErrMsg(String(e));
+      setStatus("error");
+    }
   }
 
-  // ── Fetch users + track counts directly (no API hop) ──────────────────────
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const users = await prisma.user.findMany({
-    orderBy: { id: "asc" },
-    select:  { id: true, name: true, email: true, image: true },
-  });
-
-  const trackGroups = users.length > 0
-    ? await prisma.track.groupBy({
-        by:    ["userId"],
-        _count: { id: true },
-        where: { userId: { in: users.map(u => u.id) } },
-      })
-    : [];
-
-  const countMap = new Map(trackGroups.map(g => [g.userId, g._count.id]));
-
-  // ── Render ──────────────────────────────────────────────────────────────────
+  async function remove(u: User) {
+    if (!confirm("Remove this user from Midvale?")) return;
+    setBusy(p  => ({ ...p, [u.id]: true  }));
+    setRowErr(p => ({ ...p, [u.id]: ""   }));
+    try {
+      const res  = await fetch(`/api/admin/midvale/users/${u.id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (res.ok) {
+        setUsers(prev => prev.filter(x => x.id !== u.id));
+      } else {
+        setRowErr(p => ({ ...p, [u.id]: data.error ?? "Failed" }));
+      }
+    } catch {
+      setRowErr(p => ({ ...p, [u.id]: "Network error" }));
+    } finally {
+      setBusy(p => ({ ...p, [u.id]: false }));
+    }
+  }
 
   return (
-    <main style={{ ...mono, padding: "2rem", maxWidth: 720, margin: "0 auto", color: "#e5e5e5", background: "#0a0a0a", minHeight: "100vh" }}>
+    <div style={S.page}>
 
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: "2rem" }}>
-        <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>Midvale · Users</h2>
-        <span style={{ color: "#333", fontSize: 11 }}>{users.length} user{users.length !== 1 ? "s" : ""}</span>
-        <a href="/midvale" style={{ color: "#6366f1", fontSize: 12, marginLeft: "auto", textDecoration: "none" }}>
+      {/* Always-visible heading */}
+      <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 28 }}>
+        <h1 style={S.heading}>Midvale Admin</h1>
+        <a href="/midvale" style={{ marginLeft: "auto", color: "#6366f1", fontSize: 12, textDecoration: "none" }}>
           ← Midvale
         </a>
       </div>
 
-      {/* User rows */}
-      {users.length === 0 && (
-        <p style={{ color: "#555" }}>No users.</p>
+      {status === "loading" && (
+        <p style={{ color: "#888" }}>Loading users…</p>
       )}
 
-      {users.map(u => {
-        const isMe       = u.id === user.id;
-        const trackCount = countMap.get(u.id) ?? 0;
+      {status === "unauth" && (
+        <p style={{ color: "#f87171", fontSize: 15 }}>Not authorized.</p>
+      )}
 
-        return (
-          <div
-            key={u.id}
-            style={{
-              display:      "flex",
-              alignItems:   "center",
-              gap:          14,
-              marginBottom: 8,
-              padding:      "13px 16px",
-              background:   "#111",
-              border:       "1px solid #1e1e1e",
-              borderRadius: 8,
-            }}
-          >
-            {/* Avatar */}
-            {u.image
-              ? <img src={u.image} alt="" style={{ width: 32, height: 32, borderRadius: "50%", flexShrink: 0 }} /> // eslint-disable-line @next/next/no-img-element
-              : <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#222", flexShrink: 0 }} />
-            }
+      {status === "error" && (
+        <p style={{ color: "#f87171" }}>Error loading users: {errMsg}</p>
+      )}
 
-            {/* Info */}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 600, color: "#fff" }}>
-                {u.name ?? "(no name)"}
-                {isMe && <span style={{ marginLeft: 8, fontSize: 11, color: "#fbbf24", fontWeight: 400 }}>you</span>}
-              </div>
-              <div style={{ marginTop: 2, color: "#555", fontSize: 11 }}>
-                {u.email && <span style={{ marginRight: 10 }}>{u.email}</span>}
-                <span style={{ color: trackCount > 0 ? "#86efac" : "#444" }}>
-                  {trackCount.toLocaleString()} tracks
-                </span>
-              </div>
-              <div style={{ marginTop: 1, color: "#2a2a2a", fontSize: 10 }}>{u.id}</div>
+      {status === "ok" && users.length === 0 && (
+        <p style={{ color: "#888" }}>No users found.</p>
+      )}
+
+      {status === "ok" && users.map(u => (
+        <div key={u.id} style={S.row}>
+
+          {/* Avatar */}
+          {u.image
+            // eslint-disable-next-line @next/next/no-img-element
+            ? <img src={u.image} alt="" style={{ width: 34, height: 34, borderRadius: "50%", flexShrink: 0 }} />
+            : <div style={{ width: 34, height: 34, borderRadius: "50%", background: "#2a2a2a", flexShrink: 0 }} />
+          }
+
+          {/* Info */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={S.name}>{u.name ?? "(no name)"}</div>
+            <div style={S.meta}>
+              {u.email && <span style={{ marginRight: 10 }}>{u.email}</span>}
+              <span style={{ color: u.trackCount > 0 ? "#86efac" : "#555" }}>
+                {u.trackCount.toLocaleString()} tracks
+              </span>
             </div>
-
-            {/* Remove button (client island — not shown for self) */}
-            {!isMe && <RemoveButton userId={u.id} name={u.name ?? u.id} />}
+            <div style={S.userId}>{u.id}</div>
           </div>
-        );
-      })}
 
-      <p style={{ marginTop: 28, color: "#222", fontSize: 11 }}>
-        Remove deletes all tracks, accounts, sessions, and the user row.
-        The empty slot on /midvale will show a Connect Spotify card.
-      </p>
-    </main>
+          {/* Remove */}
+          <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 10 }}>
+            {rowErr[u.id] && (
+              <span style={{ fontSize: 11, color: "#f87171" }}>{rowErr[u.id]}</span>
+            )}
+            <button
+              onClick={() => remove(u)}
+              disabled={!!busy[u.id]}
+              style={S.removeBtn(!!busy[u.id])}
+            >
+              {busy[u.id] ? "Removing…" : "Remove"}
+            </button>
+          </div>
+
+        </div>
+      ))}
+
+      {status === "ok" && (
+        <p style={{ marginTop: 24, color: "#333", fontSize: 11 }}>
+          Remove deletes all tracks, accounts, sessions, and the user row.
+          Empty slots on /midvale will show a Connect Spotify card.
+        </p>
+      )}
+
+    </div>
   );
 }
