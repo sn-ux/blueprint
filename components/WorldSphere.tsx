@@ -1280,23 +1280,22 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
                 display:       "flex",
                 alignItems:    "center",
                 justifyContent:"center",
-                color:         "rgba(255,255,255,0.40)",
+                color:         "rgba(255,255,255,0.88)",
                 textDecoration:"none",
-                padding:       "6px 9px",
-                borderRadius:  20,
-                background:    "rgba(255,255,255,0.04)",
-                border:        "1px solid rgba(255,255,255,0.08)",
+                width:         36,
+                height:        36,
+                borderRadius:  "50%",
+                background:    "rgba(0,0,0,0.80)",
+                border:        "1px solid rgba(255,255,255,0.10)",
                 backdropFilter:"blur(8px)",
                 WebkitBackdropFilter: "blur(8px)",
-                transition:    "color 0.15s ease, background 0.15s ease",
+                transition:    "background 0.15s ease",
               }}
               onMouseEnter={e => {
-                e.currentTarget.style.color = "rgba(255,255,255,0.80)";
-                e.currentTarget.style.background = "rgba(255,255,255,0.09)";
+                e.currentTarget.style.background = "rgba(50,50,50,0.90)";
               }}
               onMouseLeave={e => {
-                e.currentTarget.style.color = "rgba(255,255,255,0.40)";
-                e.currentTarget.style.background = "rgba(255,255,255,0.04)";
+                e.currentTarget.style.background = "rgba(0,0,0,0.80)";
               }}
             >
               {/* Left chevron — SVG for crisp rendering at small sizes */}
@@ -1491,9 +1490,7 @@ export default function WorldSphere({ userId, backHref, userName }: WorldSphereP
                           <div className="flex items-center gap-2 min-w-0">
                             <span className="text-sm font-medium truncate leading-snug flex-1" style={{ color: isActive ? selectedColor : "#ffffff" }}>{t.name}</span>
                             {socialSort && (t.socialCount ?? 0) > 0 && (
-                              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.28)", flexShrink: 0, whiteSpace: "nowrap" }}>
-                                {t.socialCount} {t.socialCount === 1 ? "other" : "others"}
-                              </span>
+                              <TallyMarks n={t.socialCount!} color={`rgba(${sr},${sg},${sb},0.55)`} />
                             )}
                           </div>
                           <span className="text-zinc-500 text-xs truncate">{t.artist}{isPending ? <span style={{ color: "rgba(255,255,255,0.32)", marginLeft: 4 }}>(Loading…)</span> : !canPlay ? <span style={{ color: "rgba(255,255,255,0.22)", marginLeft: 4 }}>(No Preview)</span> : null}</span>

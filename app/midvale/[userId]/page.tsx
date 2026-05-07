@@ -17,11 +17,15 @@ export default async function MidvaleUserPage({ params }: Props) {
     select: { name: true },
   });
 
+  // On mobile the root layout applies px-6 gutters that shrink the sphere.
+  // -mx-6 cancels exactly that padding; md:mx-0 restores normal layout on desktop.
   return (
-    <WorldSphere
-      userId={userId}
-      backHref="/midvale"
-      userName={user?.name ?? undefined}
-    />
+    <div className="-mx-6 md:mx-0">
+      <WorldSphere
+        userId={userId}
+        backHref="/midvale"
+        userName={user?.name ?? undefined}
+      />
+    </div>
   );
 }
