@@ -5,6 +5,7 @@ import { useSession, signIn } from "next-auth/react";
 import Link from "next/link";
 import { SPHERE_INIT_RX, SPHERE_INIT_RY } from "@/lib/sphereConfig";
 import { PlaylistButton } from "@/components/PlaylistButton";
+import LiveEventsIcon from "@/components/LiveEventsIcon";
 
 // ── Short display labels ───────────────────────────────────────────────────────
 
@@ -195,33 +196,7 @@ function hexRgb(h: string): [number, number, number] {
 const normalizeArtist = (name: string) =>
   name.toLowerCase().trim().replace(/\s+/g, " ");
 
-/**
- * Microphone icon — shared by PinButton and inline track-row live-event markers.
- * Universally recognized as “live performance / concert.”
- * Paths mirror Lucide’s Mic icon (viewBox 0 0 24 24, stroke-based, no fill).
- *
- * Use MIC_ICON for the button (rendered ~17 × 17 px).
- * Use MIC_ICON_SM for inline track markers (rendered ~12 × 12 px).
- */
-const MIC_ICON = (
-  <svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="currentColor"
-    strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-    <line x1="12" y1="19" x2="12" y2="22" />
-    <line x1="8"  y1="22" x2="16" y2="22" />
-  </svg>
-);
 
-const MIC_ICON_SM = (
-  <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor"
-    strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-    <line x1="12" y1="19" x2="12" y2="22" />
-    <line x1="8"  y1="22" x2="16" y2="22" />
-  </svg>
-);
 
 // ── SpotifyLogoButton ─────────────────────────────────────────────────────────
 
@@ -318,7 +293,7 @@ function PinButton({
           ))}
         </svg>
       ) : (
-        MIC_ICON
+        <LiveEventsIcon size={17} />
       )}
     </button>
   );
@@ -2257,7 +2232,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                                     }}
                                     style={{ background: "none", border: "none", padding: "2px 0", cursor: "pointer", display: "flex", alignItems: "center", flexShrink: 0, color: `rgba(${sr},${sg},${sb},0.85)` }}
                                   >
-                                    {MIC_ICON_SM}
+                                    {<LiveEventsIcon size={12} />}
                                   </button>
                                 )}
                                 {socialSort && tallyCount(t) > 0 && (
@@ -2479,7 +2454,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                                 }}
                                 style={{ background: "none", border: "none", padding: "2px 0", cursor: "pointer", display: "flex", alignItems: "center", flexShrink: 0, color: `rgba(${sr},${sg},${sb},0.85)` }}
                               >
-                                {MIC_ICON_SM}
+                                {<LiveEventsIcon size={12} />}
                               </button>
                             )}
                             {socialSort && tallyCount(t) > 0 && (

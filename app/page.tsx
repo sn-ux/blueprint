@@ -8,6 +8,7 @@ import MapVisual from "@/components/MapVisual";
 import Footer from "@/components/Footer";
 import { SPHERE_INIT_RX, SPHERE_INIT_RY } from "@/lib/sphereConfig";
 import { PlaylistButton } from "@/components/PlaylistButton";
+import LiveEventsIcon from "@/components/LiveEventsIcon";
 
 // ── Genre display-name overrides (short labels for sphere + UI) ───────────────
 // Keys are the full canonical genre names used as data keys everywhere.
@@ -549,14 +550,7 @@ function PinButton({ active, loading, onClick, color }: { active: boolean; loadi
           ))}
         </svg>
       ) : (
-        /* Stage-lights icon — matches WorldSphere PinButton exactly */
-        <svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-          <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-          <line x1="12" y1="19" x2="12" y2="22" />
-          <line x1="8"  y1="22" x2="16" y2="22" />
-        </svg>
+        <LiveEventsIcon size={17} />
       )}
     </button>
   );
@@ -2928,14 +2922,7 @@ export default function LandingPage() {
                                 onClick={e => e.stopPropagation()}
                                 title={`${t.liveEvent.eventName} · ${t.liveEvent.venue}, ${t.liveEvent.city} · ${t.liveEvent.date}`}
                                 style={{ flexShrink: 0, color: selectedColor, display: "flex", alignItems: "center" }}>
-                                {/* Stage-lights inline marker — same geometry as PinButton */}
-                                <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                  strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                  <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-                                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                                  <line x1="12" y1="19" x2="12" y2="22" />
-                                  <line x1="8"  y1="22" x2="16" y2="22" />
-                                </svg>
+                                <LiveEventsIcon size={12} />
                               </a>
                             )}
                             {tallyCount(t) > 0 && (
@@ -3159,14 +3146,7 @@ export default function LandingPage() {
                                   onClick={e => e.stopPropagation()}
                                   title={`${t.liveEvent.eventName} · ${t.liveEvent.venue}, ${t.liveEvent.city} · ${t.liveEvent.date}`}
                                   style={{ flexShrink: 0, color: selectedColor, display: "flex", alignItems: "center" }}>
-                                  {/* Stage-lights inline marker */}
-                                  <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-                                    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                                    <line x1="12" y1="19" x2="12" y2="22" />
-                                    <line x1="8"  y1="22" x2="16" y2="22" />
-                                  </svg>
+                                  <LiveEventsIcon size={12} />
                                 </a>
                               )}
                               {tallyCount(t) > 0 && (
