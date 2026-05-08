@@ -9,7 +9,7 @@
  *
  * Enhancements over the embedded MapVisual widget:
  *  • Full-viewport layout (position: fixed, inset 0)
- *  • Blueprint brand color nodes (pink-red) with stronger glow
+ *  • Blueprint brand color nodes (neon emerald green) with stronger glow
  *  • Pulsing node radii (soft breathing animation)
  *  • Faint connection lines between on-screen neighbours
  *  • Multi-layer bloom (inner core + mid glow + outer haze)
@@ -28,8 +28,8 @@ import maplibregl from "maplibre-gl";
 
 const STYLE_URL = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
-// Blueprint brand color — premium pink-red
-const BLUEPRINT_COLOR = "#f0426d";
+// Blueprint brand color — neon emerald green (sci-fi / NVIDIA / Matrix)
+const BLUEPRINT_COLOR = "#39ff14";
 
 // Tour timing (milliseconds for one full loop through all cities).
 // Mode multipliers are applied at runtime.
