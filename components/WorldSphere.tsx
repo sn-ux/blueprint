@@ -2298,23 +2298,49 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
               </>
             ) : (
               <>
-                <div className="flex-shrink-0 px-7 pt-6 pb-4">
-                  <p className="text-xs tracking-widest uppercase mb-2" style={{ color: "rgba(255,255,255,0.20)" }}>Your World</p>
-                  <h2 className="text-2xl font-bold text-white leading-tight">All Music</h2>
-                  <p className="text-zinc-600 text-xs mt-1.5">{Object.values(worlds).reduce((s, c) => s + c, 0)} tracks</p>
-                </div>
+                {/* ── Overview header — world name ───────────────────────────
+                    Title resolves to: "Friends" | user display name | "Music"
+                    Never shows "All Music" any more.                          */}
+                {(() => {
+                  const totalTracks = Object.values(worlds).reduce((s, c) => s + c, 0);
+                  // Sublabel: context-appropriate descriptor above the title
+                  const sublabel = friendsWorld
+                    ? "Combined World"
+                    : !userId
+                      ? "Your World"
+                      : null;  // individual worlds: omit sublabel, title is enough
+                  // Title: the world's owner name / type
+                  const title = friendsWorld
+                    ? "Friends"
+                    : (userName ?? "Music");
+                  return (
+                    <div className="flex-shrink-0 px-7 pt-6 pb-4">
+                      {sublabel && (
+                        <p className="text-xs tracking-widest uppercase mb-2" style={{ color: "rgba(255,255,255,0.20)" }}>{sublabel}</p>
+                      )}
+                      <h2 className="text-2xl font-bold text-white leading-tight">{title}</h2>
+                      <p className="text-zinc-600 text-xs mt-1.5">{totalTracks.toLocaleString()} tracks</p>
+                    </div>
+                  );
+                })()}
                 <div className="flex-shrink-0 mx-7" style={{ height: 1, background: "rgba(255,255,255,0.05)" }} />
                 <div className="overflow-y-auto flex-1" style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(255,255,255,0.08) transparent" }}>
                   <div className="flex flex-col pt-1 pb-6">
-                    {Object.entries(worlds).sort(([,a],[,b])=>b-a).map(([name, count]) => (
-                      <div key={name} className="flex items-center gap-4 px-7 py-2.5 cursor-pointer hover:bg-white/[0.025]" style={{ borderBottom: "1px solid rgba(255,255,255,0.035)" }} onClick={() => { autoSelectedRef.current = false; setSelected(name); }}>
-                        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: COLORS[name] ?? "#71717a" }} />
-                        <div className="flex flex-col min-w-0 flex-1">
-                          <span className="text-white text-sm font-medium truncate leading-snug">{shortLabel(name)}</span>
-                          <span className="text-zinc-500 text-xs">{count} tracks</span>
-                        </div>
-                      </div>
-                    ))}
+                    {(() => {
+                      const total = Object.values(worlds).reduce((s, c) => s + c, 0) || 1;
+                      return Object.entries(worlds).sort(([,a],[,b])=>b-a).map(([name, count]) => {
+                        const pct = Math.round(count / total * 100);
+                        return (
+                          <div key={name} className="flex items-center gap-4 px-7 py-2.5 cursor-pointer hover:bg-white/[0.025]" style={{ borderBottom: "1px solid rgba(255,255,255,0.035)" }} onClick={() => { autoSelectedRef.current = false; setSelected(name); }}>
+                            <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: COLORS[name] ?? "#71717a" }} />
+                            <div className="flex flex-col min-w-0 flex-1">
+                              <span className="text-white text-sm font-medium truncate leading-snug">{shortLabel(name)}</span>
+                              <span className="text-zinc-500 text-xs">{count.toLocaleString()} tracks · {pct}%</span>
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()}
                   </div>
                 </div>
               </>
