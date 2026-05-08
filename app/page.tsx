@@ -7,6 +7,7 @@ import MiniSphere from "@/components/MiniSphere";
 import MapVisual from "@/components/MapVisual";
 import Footer from "@/components/Footer";
 import { SPHERE_INIT_RX, SPHERE_INIT_RY } from "@/lib/sphereConfig";
+import { PlaylistButton } from "@/components/PlaylistButton";
 
 // ── Genre display-name overrides (short labels for sphere + UI) ───────────────
 // Keys are the full canonical genre names used as data keys everywhere.
@@ -528,6 +529,11 @@ export default function LandingPage() {
   const [spotifyReady,  setSpotifyReady]  = useState(false);
   const [spotifyMode,   setSpotifyMode]   = useState(false);  // true = SDK is active source
   const [notPremium,    setNotPremium]    = useState(false);
+
+  // ── Playlist push ─────────────────────────────────────────────────────────
+  const [playlistLoading, setPlaylistLoading] = useState(false);
+  const [playlistSuccess, setPlaylistSuccess] = useState(false);
+  const [playlistMsg,     setPlaylistMsg]     = useState<string | null>(null);
 
   // ── Deezer preview URLs (fetched in background after track list loads) ────────
   // Record<trackId, deezer 30-second mp3 URL>. Ref is read synchronously in
@@ -2339,6 +2345,41 @@ export default function LandingPage() {
   // zoomSubgenre is intentionally excluded — zoom never drives the panel.
   const focusedSubgenre = hoveredSubgenre ?? selectedSubgenre;
   const displayedTracks = focusedSubgenre ? tracks.filter(t => t.blueprintSubgenre === focusedSubgenre) : tracks;
+
+  // ── Playlist push handler ─────────────────────────────────────────────────
+  const handlePlaylistPush = async () => {
+    if (!selected || playlistLoading) return;
+    setPlaylistLoading(true);
+    setPlaylistMsg(null);
+    try {
+      const body = {
+        worldType: "user" as const,
+        genre:     selected,
+        ...(focusedSubgenre ? { subgenre: focusedSubgenre } : {}),
+      };
+      const res  = await fetch("/api/spotify/playlist-push", {
+        method:      "POST",
+        credentials: "include",
+        headers:     { "Content-Type": "application/json" },
+        body:        JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setPlaylistMsg(data.error === "missing_scope"
+          ? "Reconnect Spotify to create playlists."
+          : (data.message ?? data.error ?? "Failed to create playlist."));
+        return;
+      }
+      window.open(data.playlistUrl, "_blank", "noopener,noreferrer");
+      setPlaylistSuccess(true);
+      setTimeout(() => setPlaylistSuccess(false), 2_500);
+    } catch {
+      setPlaylistMsg("Failed to create playlist.");
+    } finally {
+      setPlaylistLoading(false);
+    }
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -2470,7 +2511,10 @@ export default function LandingPage() {
                     >← {selected ? shortLabel(selected) : ""}</button>
                     <div className="flex items-center justify-between gap-4">
                       <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{focusedSubgenre}</h2>
-                      <SpotifyLogoButton track={playingTrack} />
+                      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                        <PlaylistButton loading={playlistLoading} success={playlistSuccess} onClick={handlePlaylistPush} color={selectedColor} />
+                        <SpotifyLogoButton track={playingTrack} />
+                      </div>
                     </div>
                   </>
                 ) : (
@@ -2478,11 +2522,19 @@ export default function LandingPage() {
                     <p className="text-xs tracking-widest uppercase mb-2" style={{ color: `rgba(${sr},${sg},${sb},0.38)` }}>Now exploring</p>
                     <div className="flex items-center justify-between gap-4">
                       <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{selected ? shortLabel(selected) : ""}</h2>
-                      <SpotifyLogoButton track={playingTrack} />
+                      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                        <PlaylistButton loading={playlistLoading} success={playlistSuccess} onClick={handlePlaylistPush} color={selectedColor} />
+                        <SpotifyLogoButton track={playingTrack} />
+                      </div>
                     </div>
                   </>
                 )}
-                <p className="text-zinc-600 text-xs mt-1.5">{displayedTracks.length} tracks</p>
+                <p className="text-zinc-600 text-xs mt-1.5">
+                  {displayedTracks.length} tracks
+                  {playlistMsg && (
+                    <span style={{ marginLeft: 8, color: "#ef4444" }}>{playlistMsg}</span>
+                  )}
+                </p>
               </div>
               {subgenres.length > 0 && (
                 <div className="flex-shrink-0 flex gap-1.5 px-7 pb-4 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
@@ -2667,9 +2719,9 @@ export default function LandingPage() {
                     </span>
                   </div>
 
-                  {/* Spotify logo + arrow toggle — evenly spaced sub-group */}
-                  {/* gap: 32px so horizontal Spotify↔arrow distance = 68px = vertical pill↔arrow distance */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 32, flexShrink: 0 }}>
+                  {/* Playlist + Spotify logo + arrow toggle */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 18, flexShrink: 0 }}>
+                    <PlaylistButton loading={playlistLoading} success={playlistSuccess} onClick={handlePlaylistPush} color={selectedColor} />
                     {/* Spotify logo — lights up when a track is selected */}
                     <SpotifyLogoButton track={playingTrack} size={36} />
 

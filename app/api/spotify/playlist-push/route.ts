@@ -116,15 +116,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "genre is required" }, { status: 400 });
   }
 
-  // Friends world: refuse to create playlists for top-level genres (no subgenre).
-  // Subgenre must be specified.
-  if (worldType === "friends" && !subgenre) {
-    return NextResponse.json(
-      { error: "Friends world playlists require a subgenre" },
-      { status: 400 },
-    );
-  }
-
   // ── Fetch tracks from DB ─────────────────────────────────────────────────────
 
   let spotifyIds: string[] = [];

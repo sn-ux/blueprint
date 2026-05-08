@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { SPHERE_INIT_RX, SPHERE_INIT_RY } from "@/lib/sphereConfig";
+import { PlaylistButton } from "@/components/PlaylistButton";
 
 // ── Short display labels ───────────────────────────────────────────────────────
 
@@ -298,68 +299,6 @@ function PinButton({
   );
 }
 
-// ── PlaylistButton — push current tracklist to Spotify ───────────────────────
-// Styled to match BarChartButton / PinButton: dimmed by default, genre-coloured
-// when active.  No auth guard here — the API returns a clear error if the user
-// is not logged in, which the handler surfaces as playlistMsg.
-
-function PlaylistButton({
-  loading, onClick, color,
-}: {
-  loading: boolean;
-  onClick: () => void;
-  color:   string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={e => { e.stopPropagation(); onClick(); }}
-      aria-label="Create a Spotify playlist from this tracklist"
-      title={loading ? "Creating playlist…" : "Save tracklist to Spotify playlist"}
-      disabled={loading}
-      style={{
-        flexShrink: 0,
-        background: "none",
-        border:     "none",
-        padding:    "2px",
-        cursor:     loading ? "default" : "pointer",
-        // Idle dim matches BarChartButton / PinButton inactive state
-        color:      loading ? "rgba(255,255,255,0.22)" : color,
-        opacity:    loading ? 0.55 : 1,
-        transition: "color 0.20s ease, opacity 0.20s ease",
-        display:    "flex",
-        alignItems: "center",
-        lineHeight: 1,
-      }}
-    >
-      {loading ? (
-        /* Three animated dots while creating */
-        <svg width={19} height={17} viewBox="0 0 18 10" aria-hidden="true">
-          {[0, 6, 12].map((cx, i) => (
-            <circle key={i} cx={cx + 3} cy="5" r="1.6" fill="currentColor">
-              <animate attributeName="opacity" values="0.25;1;0.25"
-                dur="1.1s" repeatCount="indefinite" begin={`${i * 0.22}s`} />
-            </circle>
-          ))}
-        </svg>
-      ) : (
-        /* ListPlus — three list lines with a + sign, matching Lucide style */
-        <svg width={18} height={18} viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" strokeWidth={2} strokeLinecap="round"
-          strokeLinejoin="round" aria-hidden="true">
-          {/* Three list lines */}
-          <line x1="3" y1="6"  x2="15" y2="6"  />
-          <line x1="3" y1="12" x2="15" y2="12" />
-          <line x1="3" y1="18" x2="11" y2="18" />
-          {/* Plus sign in bottom-right */}
-          <line x1="19" y1="11" x2="19" y2="17" />
-          <line x1="16" y1="14" x2="22" y2="14" />
-        </svg>
-      )}
-    </button>
-  );
-}
-
 // ── Social badge ──────────────────────────────────────────────────────────────
 // Plain numeric count styled in the genre color. Always equals socialUsers.length.
 
@@ -458,6 +397,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
 
   // ── Playlist push ─────────────────────────────────────────────────────────
   const [playlistLoading, setPlaylistLoading] = useState(false);
+  const [playlistSuccess, setPlaylistSuccess] = useState(false);
   const [playlistMsg,     setPlaylistMsg]     = useState<string | null>(null);
   // Session-level artist cache: normalizedArtist → LiveEvent | null.
   // Survives genre switches so artists already searched aren't re-fetched.
@@ -1483,12 +1423,6 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
       friendsWorld,
     });
 
-    // Guard: require authenticated session before hitting the API
-    if (sessionStatus === "unauthenticated") {
-      setPlaylistMsg("Connect Spotify to create playlists.");
-      return;
-    }
-
     setPlaylistLoading(true);
     setPlaylistMsg(null);
 
@@ -1501,13 +1435,13 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
       } = {
         worldType: friendsWorld ? "friends" : "user",
         genre:     selected,
-        ...(userId        ? { userId }                          : {}),
+        ...(userId          ? { userId }                        : {}),
         ...(focusedSubgenre ? { subgenre: focusedSubgenre }     : {}),
       };
 
       const res  = await fetch("/api/spotify/playlist-push", {
         method:      "POST",
-        credentials: "include",          // always send session cookies
+        credentials: "include",
         headers:     { "Content-Type": "application/json" },
         body:        JSON.stringify(body),
       });
@@ -1524,11 +1458,10 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
         return;
       }
 
-      // Success — open the new playlist and show a confirmation message
+      // Success — open playlist, show checkmark for 2.5 s, no text
       window.open(data.playlistUrl, "_blank", "noopener,noreferrer");
-      setPlaylistMsg(`Playlist created with ${data.trackCount} tracks.`);
-      // Auto-clear after 6 s
-      setTimeout(() => setPlaylistMsg(null), 6_000);
+      setPlaylistSuccess(true);
+      setTimeout(() => setPlaylistSuccess(false), 2_500);
     } catch (err) {
       console.error("[playlist-push] fetch failed:", err);
       setPlaylistMsg("Failed to create playlist.");
@@ -1693,15 +1626,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                           <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
                           <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
-                          {sessionStatus === "unauthenticated" ? (
-                            <a href="/api/auth/signin/spotify"
-                              title="Connect Spotify to save playlists"
-                              style={{ fontSize: 10, color: "rgba(255,255,255,0.40)", textDecoration: "none", flexShrink: 0, lineHeight: 1 }}>
-                              connect
-                            </a>
-                          ) : (
-                            <PlaylistButton loading={playlistLoading} onClick={handlePlaylistPush} color={selectedColor} />
-                          )}
+                          <PlaylistButton loading={playlistLoading} success={playlistSuccess} onClick={handlePlaylistPush} color={selectedColor} />
                           <SpotifyLogoButton track={playingTrack} />
                         </div>
                       </div>
@@ -1714,30 +1639,16 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                           <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
                           <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
-                          {/* Friends World: hide playlist button on top-level genre view */}
-                          {!friendsWorld && (sessionStatus === "unauthenticated" ? (
-                            <a href="/api/auth/signin/spotify"
-                              title="Connect Spotify to save playlists"
-                              style={{ fontSize: 10, color: "rgba(255,255,255,0.40)", textDecoration: "none", flexShrink: 0, lineHeight: 1 }}>
-                              connect
-                            </a>
-                          ) : (
-                            <PlaylistButton loading={playlistLoading} onClick={handlePlaylistPush} color={selectedColor} />
-                          ))}
+                          <PlaylistButton loading={playlistLoading} success={playlistSuccess} onClick={handlePlaylistPush} color={selectedColor} />
                           <SpotifyLogoButton track={playingTrack} />
                         </div>
                       </div>
                     </>
                   )}
-                  {/* ── Session debug ─ shows status + user in the panel subtext ─── */}
                   <p className="text-zinc-600 text-xs mt-1.5">
                     {tracksLoading ? "—" : `${displayedTracks.length} tracks`}
-                    {" · "}
-                    <span style={{ color: sessionStatus === "authenticated" ? "rgba(74,222,128,0.55)" : sessionStatus === "unauthenticated" ? "rgba(248,113,113,0.70)" : "rgba(255,255,255,0.18)" }}>
-                      session: {sessionStatus}{sessionStatus === "authenticated" && sessionUserId ? ` · ${session?.user?.name ?? session?.user?.email ?? sessionUserId}` : ""}
-                    </span>
                     {playlistMsg && (
-                      <span style={{ marginLeft: 8, color: playlistMsg.startsWith("Connect") || playlistMsg.startsWith("Reconnect") ? "#ef4444" : `rgba(${sr},${sg},${sb},0.75)` }}>
+                      <span style={{ marginLeft: 8, color: "#ef4444" }}>
                         {playlistMsg}
                       </span>
                     )}
@@ -1885,8 +1796,9 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                 <span className="flex-shrink-0 text-xs" style={{ color: "rgba(255,255,255,0.30)", marginLeft: 8 }}>
                   {displayedTracks.length} tracks
                 </span>
+                {/* Error messages only — no success text */}
                 {playlistMsg && (
-                  <span className="flex-shrink-0 text-xs" style={{ marginLeft: 8, color: playlistMsg.startsWith("Reconnect") ? "#ef4444" : `rgba(${sr},${sg},${sb},0.75)` }}>
+                  <span className="flex-shrink-0 text-xs" style={{ marginLeft: 8, color: "#ef4444" }}>
                     {playlistMsg}
                   </span>
                 )}
@@ -1894,10 +1806,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
               <div style={{ display: "flex", alignItems: "center", gap: 18, flexShrink: 0 }}>
                 <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
                 <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
-                {/* Show playlist button: always for subgenre, only non-friends for top genre */}
-                {(focusedSubgenre || !friendsWorld) && (
-                  <PlaylistButton loading={playlistLoading} onClick={handlePlaylistPush} color={selectedColor} />
-                )}
+                <PlaylistButton loading={playlistLoading} success={playlistSuccess} onClick={handlePlaylistPush} color={selectedColor} />
                 <SpotifyLogoButton track={playingTrack} size={36} />
                 <button
                   onClick={() => setSheetSnap(sheetSnap === 1 ? 2 : 1)}
