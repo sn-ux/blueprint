@@ -41,11 +41,18 @@ function evictExpired() {
 
 // ── Ticketmaster fetch (one artist) ──────────────────────────────────────────
 
+// Status codes that mean no tickets are available / event won't happen
+const BAD_STATUSES = new Set(["cancelled", "postponed", "rescheduled", "offsale"]);
+
 async function fetchArtistEvent(
   artist:  string,
   apiKey:  string,
 ): Promise<LiveEvent | null> {
   try {
+    const now       = new Date();
+    const startDT   = now.toISOString().replace(/\.\d{3}Z$/, "Z"); // "YYYY-MM-DDTHH:MM:SSZ"
+    const todayDate = now.toISOString().slice(0, 10);               // "YYYY-MM-DD"
+
     const url = new URL(
       "https://app.ticketmaster.com/discovery/v2/events.json",
     );
@@ -56,24 +63,59 @@ async function fetchArtistEvent(
     url.searchParams.set("keyword",            artist);
     url.searchParams.set("sort",               "date,asc");
     url.searchParams.set("size",               "5");
+    url.searchParams.set("startDateTime",      startDT); // pre-filter on TM side
 
     const res = await fetch(url.toString(), { cache: "no-store" });
     if (!res.ok) return null;
 
-    const data  = await res.json();
+    const data   = await res.json();
     const events = data?._embedded?.events;
     if (!Array.isArray(events) || events.length === 0) return null;
 
-    const ev     = events[0];
-    const venue0 = ev._embedded?.venues?.[0];
-    return {
-      artistName: artist,
-      eventName:  ev.name                 ?? "",
-      city:       venue0?.city?.name      ?? "",
-      venue:      venue0?.name            ?? "",
-      date:       ev.dates?.start?.localDate ?? "",
-      url:        ev.url                  ?? "",
-    };
+    // Walk events in date-asc order and return the first valid one
+    for (const ev of events) {
+      const date   = ev.dates?.start?.localDate as string | undefined;
+      const status = (ev.dates?.status?.code as string | undefined)?.toLowerCase();
+      const evUrl  = ev.url as string | undefined;
+
+      // Must have a date
+      if (!date) {
+        console.log(`[live-events] skip "${artist}" event "${ev.name}": no date`);
+        continue;
+      }
+
+      // Must be today or in the future (belt-and-suspenders over startDateTime param)
+      if (date < todayDate) {
+        console.log(`[live-events] skip "${artist}" event "${ev.name}": past date ${date}`);
+        continue;
+      }
+
+      // Must not be cancelled, postponed, rescheduled, or offsale
+      if (status && BAD_STATUSES.has(status)) {
+        console.log(`[live-events] skip "${artist}" event "${ev.name}": status=${status}`);
+        continue;
+      }
+
+      // Must have a booking URL
+      if (!evUrl) {
+        console.log(`[live-events] skip "${artist}" event "${ev.name}": no URL`);
+        continue;
+      }
+
+      const venue0 = ev._embedded?.venues?.[0];
+      console.log(`[live-events] ✓ "${artist}" → "${ev.name}" on ${date} (status=${status ?? "onsale"})`);
+      return {
+        artistName: artist,
+        eventName:  ev.name    ?? "",
+        city:       venue0?.city?.name ?? "",
+        venue:      venue0?.name       ?? "",
+        date,
+        url:        evUrl,
+      };
+    }
+
+    console.log(`[live-events] no valid events for "${artist}" after filtering ${events.length} results`);
+    return null;
   } catch {
     return null;
   }
