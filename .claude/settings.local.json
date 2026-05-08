@@ -68,7 +68,8 @@
       "Bash(curl -s http://localhost:3003/world)",
       "Bash(git -C /Users/blueprint/blueprint-v1 add components/WorldSphere.tsx)",
       "Bash(git -C /Users/blueprint/blueprint-v1 commit -m ' *)",
-      "Bash(git -C /Users/blueprint/blueprint-v1 add components/WorldSphere.tsx app/api/spotify/playlist-push/route.ts)"
+      "Bash(git -C /Users/blueprint/blueprint-v1 add components/WorldSphere.tsx app/api/spotify/playlist-push/route.ts)",
+      "Bash(git -C /Users/blueprint/blueprint-v1 add components/PlaylistButton.tsx components/WorldSphere.tsx app/page.tsx app/api/spotify/playlist-push/route.ts)"
     ]
   }
 }
