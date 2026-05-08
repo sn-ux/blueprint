@@ -397,8 +397,19 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
 
   // ── Playlist push ─────────────────────────────────────────────────────────
   const [playlistLoading, setPlaylistLoading] = useState(false);
-  const [playlistSuccess, setPlaylistSuccess] = useState(false);
   const [playlistMsg,     setPlaylistMsg]     = useState<string | null>(null);
+  // Set of scope keys for playlists already created this session.
+  // Initialised from sessionStorage so it survives same-tab navigations;
+  // sessionStorage is cleared when the tab/window is closed.
+  const [createdPlaylistKeys, setCreatedPlaylistKeys] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set<string>();
+    try {
+      const raw = sessionStorage.getItem("blueprint:createdPlaylists");
+      return new Set<string>(raw ? (JSON.parse(raw) as string[]) : []);
+    } catch {
+      return new Set<string>();
+    }
+  });
   // Session-level artist cache: normalizedArtist → LiveEvent | null.
   // Survives genre switches so artists already searched aren't re-fetched.
   const [liveEventMap, setLiveEventMap] = useState<Record<string, LiveEvent | null>>({});
@@ -1405,8 +1416,20 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
   };
 
   // ── Playlist push handler ─────────────────────────────────────────────────
-  // Creates a private Spotify playlist in the current user's account.
-  // For Friends World: only callable when a subgenre is focused (enforced in JSX).
+  // Unique key for the current view — used to track which playlists have
+  // already been created this session.
+  // Format: {worldType}:{ownerId}:{genre}:{subgenre|"all"}
+  // Examples: "user:abc123:Rap / Hip-Hop:all"
+  //           "friends:friends:R&B / Soul / Funk:Neo Soul"
+  const playlistKey: string | null = selected
+    ? [
+        friendsWorld ? "friends" : "user",
+        friendsWorld ? "friends" : (userId ?? sessionUserId ?? "me"),
+        selected,
+        focusedSubgenre ?? "all",
+      ].join(":")
+    : null;
+
   const handlePlaylistPush = async () => {
     if (!selected || playlistLoading) return;
 
@@ -1458,10 +1481,18 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
         return;
       }
 
-      // Success — open playlist, show checkmark for 2.5 s, no text
+      // Success — open playlist and mark key as created for this session
       window.open(data.playlistUrl, "_blank", "noopener,noreferrer");
-      setPlaylistSuccess(true);
-      setTimeout(() => setPlaylistSuccess(false), 2_500);
+      if (playlistKey) {
+        setCreatedPlaylistKeys(prev => {
+          const next = new Set(prev);
+          next.add(playlistKey);
+          try {
+            sessionStorage.setItem("blueprint:createdPlaylists", JSON.stringify([...next]));
+          } catch { /* sessionStorage unavailable — degrade gracefully */ }
+          return next;
+        });
+      }
     } catch (err) {
       console.error("[playlist-push] fetch failed:", err);
       setPlaylistMsg("Failed to create playlist.");
@@ -1626,7 +1657,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                           <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
                           <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
-                          <PlaylistButton loading={playlistLoading} success={playlistSuccess} onClick={handlePlaylistPush} color={selectedColor} />
+                          <PlaylistButton loading={playlistLoading} success={!!(playlistKey && createdPlaylistKeys.has(playlistKey))} onClick={handlePlaylistPush} color={selectedColor} />
                           <SpotifyLogoButton track={playingTrack} />
                         </div>
                       </div>
@@ -1639,7 +1670,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                           <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
                           <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
-                          <PlaylistButton loading={playlistLoading} success={playlistSuccess} onClick={handlePlaylistPush} color={selectedColor} />
+                          <PlaylistButton loading={playlistLoading} success={!!(playlistKey && createdPlaylistKeys.has(playlistKey))} onClick={handlePlaylistPush} color={selectedColor} />
                           <SpotifyLogoButton track={playingTrack} />
                         </div>
                       </div>
@@ -1806,7 +1837,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
               <div style={{ display: "flex", alignItems: "center", gap: 18, flexShrink: 0 }}>
                 <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
                 <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
-                <PlaylistButton loading={playlistLoading} success={playlistSuccess} onClick={handlePlaylistPush} color={selectedColor} />
+                <PlaylistButton loading={playlistLoading} success={!!(playlistKey && createdPlaylistKeys.has(playlistKey))} onClick={handlePlaylistPush} color={selectedColor} />
                 <SpotifyLogoButton track={playingTrack} size={36} />
                 <button
                   onClick={() => setSheetSnap(sheetSnap === 1 ? 2 : 1)}

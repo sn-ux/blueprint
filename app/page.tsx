@@ -532,8 +532,17 @@ export default function LandingPage() {
 
   // ── Playlist push ─────────────────────────────────────────────────────────
   const [playlistLoading, setPlaylistLoading] = useState(false);
-  const [playlistSuccess, setPlaylistSuccess] = useState(false);
   const [playlistMsg,     setPlaylistMsg]     = useState<string | null>(null);
+  // Persist created playlist keys for this session via sessionStorage.
+  const [createdPlaylistKeys, setCreatedPlaylistKeys] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set<string>();
+    try {
+      const raw = sessionStorage.getItem("blueprint:createdPlaylists");
+      return new Set<string>(raw ? (JSON.parse(raw) as string[]) : []);
+    } catch {
+      return new Set<string>();
+    }
+  });
 
   // ── Deezer preview URLs (fetched in background after track list loads) ────────
   // Record<trackId, deezer 30-second mp3 URL>. Ref is read synchronously in
@@ -2347,6 +2356,11 @@ export default function LandingPage() {
   const displayedTracks = focusedSubgenre ? tracks.filter(t => t.blueprintSubgenre === focusedSubgenre) : tracks;
 
   // ── Playlist push handler ─────────────────────────────────────────────────
+  // Scope key: "user:{userId}:{genre}:{subgenre|all}"
+  const playlistKey: string | null = selected
+    ? ["user", session?.user?.id ?? "me", selected, focusedSubgenre ?? "all"].join(":")
+    : null;
+
   const handlePlaylistPush = async () => {
     if (!selected || playlistLoading) return;
     setPlaylistLoading(true);
@@ -2371,8 +2385,16 @@ export default function LandingPage() {
         return;
       }
       window.open(data.playlistUrl, "_blank", "noopener,noreferrer");
-      setPlaylistSuccess(true);
-      setTimeout(() => setPlaylistSuccess(false), 2_500);
+      if (playlistKey) {
+        setCreatedPlaylistKeys(prev => {
+          const next = new Set(prev);
+          next.add(playlistKey);
+          try {
+            sessionStorage.setItem("blueprint:createdPlaylists", JSON.stringify([...next]));
+          } catch { /* sessionStorage unavailable */ }
+          return next;
+        });
+      }
     } catch {
       setPlaylistMsg("Failed to create playlist.");
     } finally {
@@ -2512,7 +2534,7 @@ export default function LandingPage() {
                     <div className="flex items-center justify-between gap-4">
                       <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{focusedSubgenre}</h2>
                       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                        <PlaylistButton loading={playlistLoading} success={playlistSuccess} onClick={handlePlaylistPush} color={selectedColor} />
+                        <PlaylistButton loading={playlistLoading} success={!!(playlistKey && createdPlaylistKeys.has(playlistKey))} onClick={handlePlaylistPush} color={selectedColor} />
                         <SpotifyLogoButton track={playingTrack} />
                       </div>
                     </div>
@@ -2523,7 +2545,7 @@ export default function LandingPage() {
                     <div className="flex items-center justify-between gap-4">
                       <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{selected ? shortLabel(selected) : ""}</h2>
                       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                        <PlaylistButton loading={playlistLoading} success={playlistSuccess} onClick={handlePlaylistPush} color={selectedColor} />
+                        <PlaylistButton loading={playlistLoading} success={!!(playlistKey && createdPlaylistKeys.has(playlistKey))} onClick={handlePlaylistPush} color={selectedColor} />
                         <SpotifyLogoButton track={playingTrack} />
                       </div>
                     </div>
@@ -2721,7 +2743,7 @@ export default function LandingPage() {
 
                   {/* Playlist + Spotify logo + arrow toggle */}
                   <div style={{ display: "flex", alignItems: "center", gap: 18, flexShrink: 0 }}>
-                    <PlaylistButton loading={playlistLoading} success={playlistSuccess} onClick={handlePlaylistPush} color={selectedColor} />
+                    <PlaylistButton loading={playlistLoading} success={!!(playlistKey && createdPlaylistKeys.has(playlistKey))} onClick={handlePlaylistPush} color={selectedColor} />
                     {/* Spotify logo — lights up when a track is selected */}
                     <SpotifyLogoButton track={playingTrack} size={36} />
 

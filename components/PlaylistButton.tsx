@@ -25,13 +25,13 @@ export function PlaylistButton({
       onClick={e => { e.stopPropagation(); onClick(); }}
       aria-label="Create a Spotify playlist from this tracklist"
       title={loading ? "Creating playlist…" : success ? "Playlist created!" : "Save tracklist to Spotify playlist"}
-      disabled={loading}
+      disabled={loading || success}
       style={{
         flexShrink: 0,
         background: "none",
         border:     "none",
         padding:    "2px",
-        cursor:     loading ? "default" : "pointer",
+        cursor:     (loading || success) ? "default" : "pointer",
         color:      loading ? "rgba(255,255,255,0.22)" : color,
         opacity:    loading ? 0.55 : 1,
         transition: "color 0.20s ease, opacity 0.20s ease",
