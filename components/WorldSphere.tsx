@@ -298,6 +298,59 @@ function PinButton({
   );
 }
 
+// ── PlaylistButton — push current tracklist to Spotify ───────────────────────
+
+function PlaylistButton({
+  loading, onClick, color,
+}: {
+  loading: boolean;
+  onClick: () => void;
+  color:   string;
+}) {
+  return (
+    <button
+      onClick={e => { e.stopPropagation(); onClick(); }}
+      aria-label="Push tracklist to Spotify as a new playlist"
+      title={loading ? "Creating playlist…" : "Create a Spotify playlist from this tracklist"}
+      disabled={loading}
+      style={{
+        flexShrink: 0,
+        background: "none",
+        border:     "none",
+        padding:    "2px",
+        cursor:     loading ? "default" : "pointer",
+        color:      loading ? `rgba(255,255,255,0.40)` : color,
+        opacity:    loading ? 0.55 : 1,
+        transition: "color 0.20s ease, opacity 0.20s ease",
+        display:    "flex",
+        alignItems: "center",
+        lineHeight: 1,
+      }}
+    >
+      {loading ? (
+        /* Three animated dots while creating */
+        <svg width={19} height={17} viewBox="0 0 18 10" aria-hidden="true">
+          {[0, 6, 12].map((cx, i) => (
+            <circle key={i} cx={cx + 3} cy="5" r="1.6" fill="currentColor">
+              <animate attributeName="opacity" values="0.25;1;0.25"
+                dur="1.1s" repeatCount="indefinite" begin={`${i * 0.22}s`} />
+            </circle>
+          ))}
+        </svg>
+      ) : (
+        /* "Add to playlist" icon — circle with a + inside */
+        <svg width={18} height={18} viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" strokeWidth={1.9} strokeLinecap="round"
+          strokeLinejoin="round" aria-hidden="true">
+          <line x1="12" y1="5" x2="12" y2="19" />
+          <line x1="5"  y1="12" x2="19" y2="12" />
+          <circle cx="12" cy="12" r="10" />
+        </svg>
+      )}
+    </button>
+  );
+}
+
 // ── Social badge ──────────────────────────────────────────────────────────────
 // Plain numeric count styled in the genre color. Always equals socialUsers.length.
 
@@ -393,6 +446,10 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
   // ── Live events ───────────────────────────────────────────────────────────
   const [liveMode,     setLiveMode]     = useState(false);
   const [liveLoading,  setLiveLoading]  = useState(false);
+
+  // ── Playlist push ─────────────────────────────────────────────────────────
+  const [playlistLoading, setPlaylistLoading] = useState(false);
+  const [playlistMsg,     setPlaylistMsg]     = useState<string | null>(null);
   // Session-level artist cache: normalizedArtist → LiveEvent | null.
   // Survives genre switches so artists already searched aren't re-fetched.
   const [liveEventMap, setLiveEventMap] = useState<Record<string, LiveEvent | null>>({});
@@ -1398,6 +1455,56 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
     }
   };
 
+  // ── Playlist push handler ─────────────────────────────────────────────────
+  // Creates a private Spotify playlist in the current user's account.
+  // For Friends World: only callable when a subgenre is focused (enforced in JSX).
+  const handlePlaylistPush = async () => {
+    if (!selected || playlistLoading) return;
+    setPlaylistLoading(true);
+    setPlaylistMsg(null);
+
+    try {
+      const body: {
+        worldType: "user" | "friends";
+        userId?:   string;
+        genre:     string;
+        subgenre?: string;
+      } = {
+        worldType: friendsWorld ? "friends" : "user",
+        genre:     selected,
+        ...(userId   ? { userId }                               : {}),
+        ...(focusedSubgenre ? { subgenre: focusedSubgenre }     : {}),
+      };
+
+      const res  = await fetch("/api/spotify/playlist-push", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(body),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        if (data.error === "missing_scope") {
+          setPlaylistMsg("Reconnect Spotify to create playlists.");
+        } else {
+          setPlaylistMsg(data.message ?? data.error ?? "Failed to create playlist.");
+        }
+        return;
+      }
+
+      // Success — open the new playlist and show a confirmation message
+      window.open(data.playlistUrl, "_blank", "noopener,noreferrer");
+      setPlaylistMsg(`Playlist created with ${data.trackCount} tracks.`);
+      // Auto-clear after 6 s
+      setTimeout(() => setPlaylistMsg(null), 6_000);
+    } catch (err) {
+      console.error("[playlist-push] fetch failed:", err);
+      setPlaylistMsg("Failed to create playlist.");
+    } finally {
+      setPlaylistLoading(false);
+    }
+  };
+
   return (
     <main className="h-screen bg-black text-white flex flex-col overflow-hidden">
 
@@ -1554,6 +1661,9 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                           <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
                           <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
+                          {sessionUserId && (
+                            <PlaylistButton loading={playlistLoading} onClick={handlePlaylistPush} color={selectedColor} />
+                          )}
                           <SpotifyLogoButton track={playingTrack} />
                         </div>
                       </div>
@@ -1566,12 +1676,23 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                           <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
                           <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
+                          {/* Friends World: hide playlist button on top-level genre view */}
+                          {sessionUserId && !friendsWorld && (
+                            <PlaylistButton loading={playlistLoading} onClick={handlePlaylistPush} color={selectedColor} />
+                          )}
                           <SpotifyLogoButton track={playingTrack} />
                         </div>
                       </div>
                     </>
                   )}
-                  <p className="text-zinc-600 text-xs mt-1.5">{tracksLoading ? "—" : `${displayedTracks.length} tracks`}</p>
+                  <p className="text-zinc-600 text-xs mt-1.5">
+                    {tracksLoading ? "—" : `${displayedTracks.length} tracks`}
+                    {playlistMsg && (
+                      <span style={{ marginLeft: 8, color: playlistMsg.startsWith("Reconnect") ? "#ef4444" : `rgba(${sr},${sg},${sb},0.75)` }}>
+                        {playlistMsg}
+                      </span>
+                    )}
+                  </p>
                 </div>
                 {subgenres.length > 0 && (
                   <div className="flex-shrink-0 flex gap-1.5 px-7 pb-4 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
@@ -1715,10 +1836,19 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                 <span className="flex-shrink-0 text-xs" style={{ color: "rgba(255,255,255,0.30)", marginLeft: 8 }}>
                   {displayedTracks.length} tracks
                 </span>
+                {playlistMsg && (
+                  <span className="flex-shrink-0 text-xs" style={{ marginLeft: 8, color: playlistMsg.startsWith("Reconnect") ? "#ef4444" : `rgba(${sr},${sg},${sb},0.75)` }}>
+                    {playlistMsg}
+                  </span>
+                )}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 18, flexShrink: 0 }}>
                 <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
                 <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
+                {/* Show playlist button: always for subgenre, only non-friends for top genre */}
+                {sessionUserId && (focusedSubgenre || !friendsWorld) && (
+                  <PlaylistButton loading={playlistLoading} onClick={handlePlaylistPush} color={selectedColor} />
+                )}
                 <SpotifyLogoButton track={playingTrack} size={36} />
                 <button
                   onClick={() => setSheetSnap(sheetSnap === 1 ? 2 : 1)}
