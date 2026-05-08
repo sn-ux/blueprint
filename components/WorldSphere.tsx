@@ -1053,7 +1053,11 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
           for(const h of labelHitsRef.current){
             const E=10;
             if(mx3>=h.x1-E&&mx3<=h.x2+E&&my3>=h.y1-E&&my3<=h.y2+E){
-              if(h.subgenre){const next=selectedSubgenreRef.current===h.subgenre?null:h.subgenre;selectedSubgenreRef.current=next;setSelectedSubgenre(next);}
+              if(h.subgenre){
+                const next=selectedSubgenreRef.current===h.subgenre?null:h.subgenre;
+                selectedSubgenreRef.current=next;setSelectedSubgenre(next);
+                console.log("[subgenre-click] mobile label path", {clickedSubgenre:h.subgenre,highlightedSubgenre:next,fetchSubgenre:next,panelTitleSubgenre:next});
+              }
               else{const isDe=selectedRef.current===h.name;autoSelectedRef.current=false;selectedSubgenreRef.current=null;setSelectedSubgenre(null);zoomSubgenreRef.current=null;setZoomSubgenre(null);setSelected(prev=>prev===h.name?null:h.name);if(!isDe)zoomTargetRef.current=Math.max(zoomTargetRef.current,2.5);}
               return;
             }
@@ -1073,7 +1077,9 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
             if(selectedRef.current!==null&&zoomRef.current>=2.0&&bestTName===selectedRef.current&&subPolesRef.current.length>0){
               const sft=[...subRegionRef.current.keys()];let bsf=sft[0]??-1,bsd=-Infinity;for(const fi of sft){const c=fCT[fi];if(!c)continue;const d=c[0]*x_w+c[1]*y_w+c[2]*z_w;if(d>bsd){bsd=d;bsf=fi;}}
               const si=subRegionRef.current.get(bsf)??0,sn=activeSubsRef.current[si]?.name??subPolesRef.current[0]?.name??"";
-              const next=selectedSubgenreRef.current===sn?null:sn;selectedSubgenreRef.current=next;setSelectedSubgenre(next);
+              const next=selectedSubgenreRef.current===sn?null:sn;
+              selectedSubgenreRef.current=next;setSelectedSubgenre(next);
+              console.log("[subgenre-click] mobile polygon path", {clickedSubgenre:sn,highlightedSubgenre:next,fetchSubgenre:next,panelTitleSubgenre:next});
             } else {
               const isDe=selectedRef.current===bestTName;autoSelectedRef.current=false;selectedSubgenreRef.current=null;setSelectedSubgenre(null);zoomSubgenreRef.current=null;setZoomSubgenre(null);setSelected(prev=>prev===bestTName?null:bestTName);
               if(!isDe)zoomTargetRef.current=Math.max(zoomTargetRef.current,2.5);
@@ -1225,7 +1231,15 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
         const canvas=canvasRef.current; if(!canvas)return;
         const rect=canvas.getBoundingClientRect();
         const lx=mx-rect.left,ly=my-rect.top;
-        for(const h of labelHitsRef.current){if(lx>=h.x1&&lx<=h.x2&&ly>=h.y1&&ly<=h.y2){hoveredRef.current=h.subgenre?{genre:h.name,subgenre:h.subgenre}:{genre:h.name};dirtyRef.current=true;return;}}
+        for(const h of labelHitsRef.current){if(lx>=h.x1&&lx<=h.x2&&ly>=h.y1&&ly<=h.y2){
+          hoveredRef.current=h.subgenre?{genre:h.name,subgenre:h.subgenre}:{genre:h.name};
+          // Sync hoveredSubgenre state so focusedSubgenre reflects the label under
+          // the cursor, not whatever polygon body the cursor previously touched.
+          // Without this, the track panel title would lag behind the visual highlight.
+          const labelSub = h.subgenre ?? null;
+          if (labelSub !== hoveredSubgRef.current) { hoveredSubgRef.current = labelSub; setHoveredSubgenre(labelSub); }
+          dirtyRef.current=true;return;
+        }}
         // Sphere hit test
         const W=canvas.clientWidth,H=canvas.clientHeight,R=Math.min(W,H)*0.35*zoomRef.current;
         const nx=(lx-W/2)/R,ny=(ly-H/2)/R;
@@ -1270,7 +1284,28 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
     if (dragRef.current.moved) return;
     const canvas=canvasRef.current!;const rect=canvas.getBoundingClientRect();
     const mx=e.clientX-rect.left,my=e.clientY-rect.top;
-    for(const h of labelHitsRef.current){if(mx>=h.x1&&mx<=h.x2&&my>=h.y1&&my<=h.y2){if(h.subgenre){const next=selectedSubgenreRef.current===h.subgenre?null:h.subgenre;selectedSubgenreRef.current=next;setSelectedSubgenre(next);}else{autoSelectedRef.current=false;selectedSubgenreRef.current=null;setSelectedSubgenre(null);zoomSubgenreRef.current=null;setZoomSubgenre(null);setSelected(p=>p===h.name?null:h.name);}return;}}
+    for(const h of labelHitsRef.current){if(mx>=h.x1&&mx<=h.x2&&my>=h.y1&&my<=h.y2){
+      if(h.subgenre){
+        const next=selectedSubgenreRef.current===h.subgenre?null:h.subgenre;
+        selectedSubgenreRef.current=next;
+        setSelectedSubgenre(next);
+        // Clear stale hover so focusedSubgenre = selectedSubgenre immediately.
+        // (Hover can point to a different polygon than the label drawn on top of it.)
+        hoveredSubgRef.current=null;
+        setHoveredSubgenre(null);
+        console.log("[subgenre-click] label path", {
+          clickedSubgenre:  h.subgenre,
+          highlightedSubgenre: next,   // = selectedSubgenreRef after update
+          fetchSubgenre:    next,       // focusedSubgenre will resolve to this
+          panelTitleSubgenre: next,
+        });
+      }else{
+        autoSelectedRef.current=false;selectedSubgenreRef.current=null;setSelectedSubgenre(null);
+        hoveredSubgRef.current=null;setHoveredSubgenre(null);
+        zoomSubgenreRef.current=null;setZoomSubgenre(null);setSelected(p=>p===h.name?null:h.name);
+      }
+      return;
+    }}
     const W=canvas.clientWidth,H=canvas.clientHeight,R=Math.min(W,H)*0.35*zoomRef.current;
     const nx=(mx-W/2)/R,ny=(my-H/2)/R;
     if(nx*nx+ny*ny>1){autoSelectedRef.current=false;selectedSubgenreRef.current=null;setSelectedSubgenre(null);zoomSubgenreRef.current=null;setZoomSubgenre(null);setSelected(null);return;}
@@ -1284,7 +1319,21 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
     if(selectedRef.current!==null&&zoomRef.current>=2.0&&bestName===selectedRef.current&&subPolesRef.current.length>0){
       const sft=[...subRegionRef.current.keys()];let bsf=sft[0]??-1,bsd=-Infinity;for(const fi of sft){const c=fC[fi];if(!c)continue;const d=c[0]*x_w+c[1]*y_w+c[2]*z_w;if(d>bsd){bsd=d;bsf=fi;}}
       const si=subRegionRef.current.get(bsf)??0,sn=activeSubsRef.current[si]?.name??subPolesRef.current[0]?.name??"";
-      const next=selectedSubgenreRef.current===sn?null:sn;selectedSubgenreRef.current=next;setSelectedSubgenre(next);return;
+      const next=selectedSubgenreRef.current===sn?null:sn;
+      selectedSubgenreRef.current=next;
+      setSelectedSubgenre(next);
+      // Hovering over the polygon body already set hoveredSubgenre to sn via onMouseMove.
+      // After the click, both selectedSubgenre=next and hoveredSubgenre=sn should agree —
+      // but clear hover so focusedSubgenre resolves to selectedSubgenre unambiguously.
+      hoveredSubgRef.current=null;
+      setHoveredSubgenre(null);
+      console.log("[subgenre-click] polygon path", {
+        clickedSubgenre:    sn,
+        highlightedSubgenre: next,
+        fetchSubgenre:      next,
+        panelTitleSubgenre: next,
+      });
+      return;
     }
     autoSelectedRef.current=false;selectedSubgenreRef.current=null;setSelectedSubgenre(null);zoomSubgenreRef.current=null;setZoomSubgenre(null);
     setSelected(p=>p===bestName?null:bestName);
