@@ -63,7 +63,7 @@ export default async function MidvalePage() {
             Full-width tile linking to /midvale/friends.
             On desktop: sphere left, info right.
             On mobile:  sphere top, info below. */}
-        <div style={{ marginBottom: 56 }}>
+        <div style={{ marginBottom: 36 }}>
           <FriendsWorldCard />
         </div>
 
@@ -71,7 +71,7 @@ export default async function MidvalePage() {
         <div style={{
           height:       1,
           background:   "rgba(255,255,255,0.07)",
-          marginBottom: 40,
+          marginBottom: 28,
         }} />
 
         {/* ── Individual world gallery — always 2 columns ──────────────────

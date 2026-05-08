@@ -72,6 +72,8 @@ function GenreBreakdown({
 }
 
 // ── WorldGalleryTile — user with an imported library ─────────────────────────
+// Mobile  : sphere full-width (aspect-square) stacked above info.
+// Desktop (sm+): compact row — small 150 px sphere on left, info on right.
 
 function WorldGalleryTile({
   name,
@@ -100,24 +102,28 @@ function WorldGalleryTile({
 
   return (
     <Link href={worldHref} style={{ textDecoration: "none", display: "block" }}>
+      {/* Mobile: column stack. sm+: row with fixed-size sphere */}
       <div
+        className="flex flex-col sm:flex-row sm:items-center"
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         style={{
           cursor:     "pointer",
-          transform:  hovered ? "translateY(-3px)" : "translateY(0)",
+          gap:        12,
+          transform:  hovered ? "translateY(-2px)" : "translateY(0)",
           transition: "transform 0.18s ease",
         }}
       >
         {/* ── Sphere preview ──────────────────────────────────────────────── */}
-        <div style={{
-          position:     "relative",
-          width:        "100%",
-          aspectRatio:  "1 / 1",
-          borderRadius: 16,
-          overflow:     "hidden",
-          marginBottom: 14,
-        }}>
+        {/* Mobile: full-width square. sm+: fixed 150 px square. */}
+        <div
+          className="relative w-full sm:w-[150px] sm:h-[150px] flex-shrink-0"
+          style={{
+            aspectRatio:  "1 / 1",
+            borderRadius: 14,
+            overflow:     "hidden",
+          }}
+        >
           <SphereCanvas
             className="absolute inset-0 w-full h-full"
             interactive={false}
@@ -126,7 +132,7 @@ function WorldGalleryTile({
             initialRotX={0.28 + rotSeed * 0.12}
             initialRotY={rotSeed * 1.4}
           />
-          {/* Open-world hover label */}
+          {/* Hover overlay */}
           <div style={{
             position:       "absolute",
             inset:          0,
@@ -138,13 +144,13 @@ function WorldGalleryTile({
             pointerEvents:  "none",
           }}>
             <span style={{
-              fontSize:      12,
+              fontSize:      11,
               fontWeight:    500,
-              letterSpacing: "0.06em",
+              letterSpacing: "0.05em",
               textTransform: "uppercase",
               color:         "rgba(255,255,255,0.80)",
               background:    "rgba(0,0,0,0.58)",
-              padding:       "6px 14px",
+              padding:       "5px 11px",
               borderRadius:  20,
               backdropFilter:"blur(6px)",
             }}>
@@ -157,7 +163,7 @@ function WorldGalleryTile({
         <div>
           <p style={{
             margin:        "0 0 3px",
-            fontSize:      "clamp(13px, 1.8vw, 16px)",
+            fontSize:      14,
             fontWeight:    600,
             letterSpacing: "-0.01em",
             color:         hovered ? "#ffffff" : "rgba(255,255,255,0.88)",
@@ -169,7 +175,7 @@ function WorldGalleryTile({
           {totalTracks !== null && (
             <p style={{
               margin:        "0 0 5px",
-              fontSize:      "clamp(11px, 1.4vw, 13px)",
+              fontSize:      11,
               color:         "rgba(255,255,255,0.38)",
               letterSpacing: "0.01em",
             }}>
@@ -180,7 +186,7 @@ function WorldGalleryTile({
             <GenreBreakdown
               worlds={worlds}
               topN={4}
-              fontSize={11}
+              fontSize={10}
             />
           )}
         </div>
@@ -190,6 +196,7 @@ function WorldGalleryTile({
 }
 
 // ── EmptyGallerySlot — placeholder for users who haven't connected ────────────
+// Matches WorldGalleryTile layout: row on sm+, column on mobile.
 
 function EmptyGallerySlot({ name, rotSeed = 0 }: { name: string; rotSeed: number }) {
   const [connecting, setConnecting] = useState(false);
@@ -207,16 +214,19 @@ function EmptyGallerySlot({ name, rotSeed = 0 }: { name: string; rotSeed: number
   };
 
   return (
-    <div style={{ opacity: 0.40 }}>
+    <div
+      className="flex flex-col sm:flex-row sm:items-center"
+      style={{ opacity: 0.40, gap: 12 }}
+    >
       {/* ── Sphere preview — dimmed ──────────────────────────────────────── */}
-      <div style={{
-        position:     "relative",
-        width:        "100%",
-        aspectRatio:  "1 / 1",
-        borderRadius: 16,
-        overflow:     "hidden",
-        marginBottom: 14,
-      }}>
+      <div
+        className="relative w-full sm:w-[150px] sm:h-[150px] flex-shrink-0"
+        style={{
+          aspectRatio:  "1 / 1",
+          borderRadius: 14,
+          overflow:     "hidden",
+        }}
+      >
         <SphereCanvas
           className="absolute inset-0 w-full h-full"
           interactive={false}
@@ -240,12 +250,12 @@ function EmptyGallerySlot({ name, rotSeed = 0 }: { name: string; rotSeed: number
             onClick={handleConnect}
             disabled={connecting}
             style={{
-              padding:       "8px 18px",
+              padding:       "6px 14px",
               background:    "rgba(255,255,255,0.07)",
               border:        "1px solid rgba(255,255,255,0.16)",
               borderRadius:  10,
               color:         "rgba(255,255,255,0.75)",
-              fontSize:      "clamp(11px, 1.4vw, 13px)",
+              fontSize:      11,
               fontFamily:    "inherit",
               fontWeight:    500,
               letterSpacing: "0.01em",
@@ -262,7 +272,7 @@ function EmptyGallerySlot({ name, rotSeed = 0 }: { name: string; rotSeed: number
       {/* ── Info ────────────────────────────────────────────────────────── */}
       <p style={{
         margin:        0,
-        fontSize:      "clamp(13px, 1.8vw, 16px)",
+        fontSize:      14,
         fontWeight:    600,
         letterSpacing: "-0.01em",
         color:         "rgba(255,255,255,0.40)",
@@ -296,24 +306,31 @@ export function FriendsWorldCard() {
 
   return (
     <Link href="/midvale/friends" style={{ textDecoration: "none", display: "block" }}>
-      {/* Responsive flex: stacked on mobile → side-by-side on sm+ */}
+      {/* Mobile: sphere top, info below.
+          sm+: sphere left (320 px), info right.
+          lg+: sphere grows to 420 px.
+          xl+: sphere grows to 480 px. */}
       <div
         className="flex flex-col sm:flex-row sm:items-center"
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         style={{
           cursor:     "pointer",
-          gap:        "clamp(16px, 3vw, 40px)",
+          gap:        "clamp(20px, 3vw, 44px)",
           transform:  hovered ? "translateY(-3px)" : "translateY(0)",
           transition: "transform 0.18s ease",
         }}
       >
-        {/* ── Sphere — full-width square on mobile, 240px square on sm+ ─── */}
+        {/* ── Sphere
+            Mobile : full-width square (aspect-ratio handles height).
+            sm     : 320 × 320 px
+            lg     : 420 × 420 px
+            xl     : 480 × 480 px                                      ── */}
         <div
-          className="relative w-full sm:w-60 sm:h-60 flex-shrink-0"
+          className="relative w-full sm:w-[320px] sm:h-[320px] lg:w-[420px] lg:h-[420px] xl:w-[480px] xl:h-[480px] flex-shrink-0"
           style={{
-            aspectRatio:  "1 / 1",   /* respected on mobile (w-full, h auto) */
-            borderRadius: 20,
+            aspectRatio:  "1 / 1",
+            borderRadius: 22,
             overflow:     "hidden",
           }}
         >
@@ -352,24 +369,24 @@ export function FriendsWorldCard() {
           </div>
         </div>
 
-        {/* ── Info ────────────────────────────────────────────────────────── */}
-        <div>
+        {/* ── Info — sits beside the sphere on desktop ──────────────────── */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <p style={{
-            margin:        "0 0 6px",
-            fontSize:      "clamp(22px, 3.5vw, 36px)",
+            margin:        0,
+            fontSize:      "clamp(26px, 4vw, 44px)",
             fontWeight:    700,
-            letterSpacing: "-0.025em",
+            letterSpacing: "-0.03em",
             color:         hovered ? "#ffffff" : "rgba(255,255,255,0.92)",
             transition:    "color 0.18s ease",
-            lineHeight:    1.1,
+            lineHeight:    1.0,
           }}>
             Friends
           </p>
           {totalTracks !== null && (
             <p style={{
-              margin:        "0 0 8px",
-              fontSize:      "clamp(12px, 1.5vw, 14px)",
-              color:         "rgba(255,255,255,0.40)",
+              margin:        0,
+              fontSize:      "clamp(12px, 1.4vw, 14px)",
+              color:         "rgba(255,255,255,0.38)",
               letterSpacing: "0.01em",
             }}>
               {totalTracks.toLocaleString()} tracks
