@@ -1875,40 +1875,47 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
             {/* Accent line */}
             <div style={{ height: 2, background: selectedColor ?? "rgba(255,255,255,0.12)", opacity: 0.85, flexShrink: 0 }} />
 
-            {/* ── Sheet header — two-row button layout ────────────────────── */}
-            <div style={{ flexShrink: 0, padding: "12px 16px 10px" }}>
+            {/* ── Sheet header — left title / right button cluster ─────────── */}
+            <div style={{ flexShrink: 0, padding: "12px 16px 10px", display: "flex", alignItems: "flex-start", gap: 12 }}>
 
-              {/* Title + track count */}
-              <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 12, overflow: "hidden" }}>
-                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: selectedColor, lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flexShrink: 1, minWidth: 0 }}>
+              {/* LEFT — genre title + track count */}
+              <div style={{ flex: 1, minWidth: 0, paddingTop: 3 }}>
+                <h2 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 700, color: selectedColor, lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {focusedSubgenre ?? (selected ? shortLabel(selected) : "")}
                 </h2>
-                <span style={{ fontSize: 12, color: "rgba(255,255,255,0.30)", flexShrink: 0 }}>
-                  {displayedTracks.length} tracks
-                </span>
-                {/* Error messages only */}
-                {playlistMsg && (
-                  <span style={{ fontSize: 12, color: "#ef4444", flexShrink: 0 }}>{playlistMsg}</span>
-                )}
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 12, color: "rgba(255,255,255,0.30)" }}>
+                    {displayedTracks.length} tracks
+                  </span>
+                  {/* Error messages only */}
+                  {playlistMsg && (
+                    <span style={{ fontSize: 12, color: "#ef4444" }}>{playlistMsg}</span>
+                  )}
+                </div>
               </div>
 
-              {/* Button row 1 — Playlist · Spotify · Collapse */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-around", marginBottom: 10 }}>
-                <PlaylistButton loading={playlistLoading} success={!!(playlistKey && createdPlaylistKeys.has(playlistKey))} onClick={handlePlaylistPush} color={selectedColor} />
-                <SpotifyLogoButton track={playingTrack} size={36} />
-                <button
-                  onClick={() => setSheetSnap(sheetSnap === 1 ? 2 : 1)}
-                  aria-label={sheetSnap === 1 ? "Expand to fullscreen" : "Collapse to preview"}
-                  style={{ flexShrink: 0, width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.60)", fontSize: 16, lineHeight: 1 }}
-                >
-                  {sheetSnap === 1 ? "↑" : "↓"}
-                </button>
-              </div>
+              {/* RIGHT — compact two-row button cluster, right-aligned */}
+              <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
 
-              {/* Button row 2 — Popularity · Live Events */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-around" }}>
-                <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
-                <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
+                {/* Row 1: Playlist · Spotify · Collapse */}
+                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                  <PlaylistButton loading={playlistLoading} success={!!(playlistKey && createdPlaylistKeys.has(playlistKey))} onClick={handlePlaylistPush} color={selectedColor} />
+                  <SpotifyLogoButton track={playingTrack} size={36} />
+                  <button
+                    onClick={() => setSheetSnap(sheetSnap === 1 ? 2 : 1)}
+                    aria-label={sheetSnap === 1 ? "Expand to fullscreen" : "Collapse to preview"}
+                    style={{ flexShrink: 0, width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.60)", fontSize: 16, lineHeight: 1 }}
+                  >
+                    {sheetSnap === 1 ? "↑" : "↓"}
+                  </button>
+                </div>
+
+                {/* Row 2: Popularity · Live Events */}
+                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                  <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
+                  <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
+                </div>
+
               </div>
 
             </div>
