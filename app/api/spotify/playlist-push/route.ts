@@ -47,18 +47,31 @@ async function spotifyFetch(
 export async function POST(req: NextRequest) {
   // ── Diagnostic ──────────────────────────────────────────────────────────────
   const cookieHeader = req.headers.get("cookie") ?? "";
-  const hasCookie    = cookieHeader.length > 0;
   const userAgent    = req.headers.get("user-agent") ?? "(none)";
+  const hasInsecure  = cookieHeader.includes("next-auth.session-token");
+  const hasSecure    = cookieHeader.includes("__Secure-next-auth.session-token");
   console.log("[playlist-push] route hit", {
-    hasCookie,
-    hasSessionToken: cookieHeader.includes("next-auth.session-token") ||
-                     cookieHeader.includes("__Secure-next-auth.session-token"),
-    userAgent: userAgent.slice(0, 80),
+    host:            req.headers.get("host"),
+    origin:          req.headers.get("origin"),
+    referer:         req.headers.get("referer"),
+    hasCookieHeader: cookieHeader.length > 0,
+    hasInsecureToken: hasInsecure,
+    hasSecureToken:  hasSecure,
+    cookieNames:     cookieHeader
+                       .split(";")
+                       .map(c => c.trim().split("=")[0])
+                       .filter(Boolean),
+    userAgent:       userAgent.slice(0, 80),
+    nextauthUrl:     process.env.NEXTAUTH_URL ?? "(not set)",
   });
 
   // ── Auth ────────────────────────────────────────────────────────────────────
   const user = await getCurrentUser();
-  console.log("[playlist-push] auth", { userFound: !!user, userId: user?.id ?? null });
+  console.log("[playlist-push] auth", {
+    userFound: !!user,
+    userId:    user?.id ?? null,
+    email:     user?.email ?? null,
+  });
   if (!user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }

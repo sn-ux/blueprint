@@ -1469,19 +1469,28 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
   // For Friends World: only callable when a subgenre is focused (enforced in JSX).
   const handlePlaylistPush = async () => {
     if (!selected || playlistLoading) return;
-    setPlaylistLoading(true);
-    setPlaylistMsg(null);
 
     // ── Diagnostic ──────────────────────────────────────────────────────────
     console.log("[playlist-push] invoked", {
-      surface:       isMobile ? "mobile" : "desktop",
+      surface:         isMobile ? "mobile" : "desktop",
       sessionStatus,
       sessionUserId,
-      hasCookie:     document.cookie.length > 0,
+      hasCookie:       document.cookie.length > 0,
+      cookieSnippet:   document.cookie.slice(0, 120),
+      location:        window.location.href,
       selected,
       focusedSubgenre,
       friendsWorld,
     });
+
+    // Guard: require authenticated session before hitting the API
+    if (sessionStatus === "unauthenticated") {
+      setPlaylistMsg("Connect Spotify to create playlists.");
+      return;
+    }
+
+    setPlaylistLoading(true);
+    setPlaylistMsg(null);
 
     try {
       const body: {
@@ -1684,7 +1693,15 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                           <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
                           <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
-                          <PlaylistButton loading={playlistLoading} onClick={handlePlaylistPush} color={selectedColor} />
+                          {sessionStatus === "unauthenticated" ? (
+                            <a href="/api/auth/signin/spotify"
+                              title="Connect Spotify to save playlists"
+                              style={{ fontSize: 10, color: "rgba(255,255,255,0.40)", textDecoration: "none", flexShrink: 0, lineHeight: 1 }}>
+                              connect
+                            </a>
+                          ) : (
+                            <PlaylistButton loading={playlistLoading} onClick={handlePlaylistPush} color={selectedColor} />
+                          )}
                           <SpotifyLogoButton track={playingTrack} />
                         </div>
                       </div>
@@ -1698,18 +1715,29 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                           <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
                           <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
                           {/* Friends World: hide playlist button on top-level genre view */}
-                          {!friendsWorld && (
+                          {!friendsWorld && (sessionStatus === "unauthenticated" ? (
+                            <a href="/api/auth/signin/spotify"
+                              title="Connect Spotify to save playlists"
+                              style={{ fontSize: 10, color: "rgba(255,255,255,0.40)", textDecoration: "none", flexShrink: 0, lineHeight: 1 }}>
+                              connect
+                            </a>
+                          ) : (
                             <PlaylistButton loading={playlistLoading} onClick={handlePlaylistPush} color={selectedColor} />
-                          )}
+                          ))}
                           <SpotifyLogoButton track={playingTrack} />
                         </div>
                       </div>
                     </>
                   )}
+                  {/* ── Session debug ─ shows status + user in the panel subtext ─── */}
                   <p className="text-zinc-600 text-xs mt-1.5">
                     {tracksLoading ? "—" : `${displayedTracks.length} tracks`}
+                    {" · "}
+                    <span style={{ color: sessionStatus === "authenticated" ? "rgba(74,222,128,0.55)" : sessionStatus === "unauthenticated" ? "rgba(248,113,113,0.70)" : "rgba(255,255,255,0.18)" }}>
+                      session: {sessionStatus}{sessionStatus === "authenticated" && sessionUserId ? ` · ${session?.user?.name ?? session?.user?.email ?? sessionUserId}` : ""}
+                    </span>
                     {playlistMsg && (
-                      <span style={{ marginLeft: 8, color: playlistMsg.startsWith("Reconnect") ? "#ef4444" : `rgba(${sr},${sg},${sb},0.75)` }}>
+                      <span style={{ marginLeft: 8, color: playlistMsg.startsWith("Connect") || playlistMsg.startsWith("Reconnect") ? "#ef4444" : `rgba(${sr},${sg},${sb},0.75)` }}>
                         {playlistMsg}
                       </span>
                     )}
