@@ -299,6 +299,9 @@ function PinButton({
 }
 
 // ── PlaylistButton — push current tracklist to Spotify ───────────────────────
+// Styled to match BarChartButton / PinButton: dimmed by default, genre-coloured
+// when active.  No auth guard here — the API returns a clear error if the user
+// is not logged in, which the handler surfaces as playlistMsg.
 
 function PlaylistButton({
   loading, onClick, color,
@@ -310,8 +313,8 @@ function PlaylistButton({
   return (
     <button
       onClick={e => { e.stopPropagation(); onClick(); }}
-      aria-label="Push tracklist to Spotify as a new playlist"
-      title={loading ? "Creating playlist…" : "Create a Spotify playlist from this tracklist"}
+      aria-label="Create a Spotify playlist from this tracklist"
+      title={loading ? "Creating playlist…" : "Save tracklist to Spotify playlist"}
       disabled={loading}
       style={{
         flexShrink: 0,
@@ -319,7 +322,8 @@ function PlaylistButton({
         border:     "none",
         padding:    "2px",
         cursor:     loading ? "default" : "pointer",
-        color:      loading ? `rgba(255,255,255,0.40)` : color,
+        // Idle dim matches BarChartButton / PinButton inactive state
+        color:      loading ? "rgba(255,255,255,0.22)" : color,
         opacity:    loading ? 0.55 : 1,
         transition: "color 0.20s ease, opacity 0.20s ease",
         display:    "flex",
@@ -338,13 +342,17 @@ function PlaylistButton({
           ))}
         </svg>
       ) : (
-        /* "Add to playlist" icon — circle with a + inside */
+        /* ListPlus — three list lines with a + sign, matching Lucide style */
         <svg width={18} height={18} viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" strokeWidth={1.9} strokeLinecap="round"
+          stroke="currentColor" strokeWidth={2} strokeLinecap="round"
           strokeLinejoin="round" aria-hidden="true">
-          <line x1="12" y1="5" x2="12" y2="19" />
-          <line x1="5"  y1="12" x2="19" y2="12" />
-          <circle cx="12" cy="12" r="10" />
+          {/* Three list lines */}
+          <line x1="3" y1="6"  x2="15" y2="6"  />
+          <line x1="3" y1="12" x2="15" y2="12" />
+          <line x1="3" y1="18" x2="11" y2="18" />
+          {/* Plus sign in bottom-right */}
+          <line x1="19" y1="11" x2="19" y2="17" />
+          <line x1="16" y1="14" x2="22" y2="14" />
         </svg>
       )}
     </button>
@@ -1661,9 +1669,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                           <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
                           <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
-                          {sessionUserId && (
-                            <PlaylistButton loading={playlistLoading} onClick={handlePlaylistPush} color={selectedColor} />
-                          )}
+                          <PlaylistButton loading={playlistLoading} onClick={handlePlaylistPush} color={selectedColor} />
                           <SpotifyLogoButton track={playingTrack} />
                         </div>
                       </div>
@@ -1677,7 +1683,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                           <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
                           <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
                           {/* Friends World: hide playlist button on top-level genre view */}
-                          {sessionUserId && !friendsWorld && (
+                          {!friendsWorld && (
                             <PlaylistButton loading={playlistLoading} onClick={handlePlaylistPush} color={selectedColor} />
                           )}
                           <SpotifyLogoButton track={playingTrack} />
@@ -1846,7 +1852,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                 <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
                 <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
                 {/* Show playlist button: always for subgenre, only non-friends for top genre */}
-                {sessionUserId && (focusedSubgenre || !friendsWorld) && (
+                {(focusedSubgenre || !friendsWorld) && (
                   <PlaylistButton loading={playlistLoading} onClick={handlePlaylistPush} color={selectedColor} />
                 )}
                 <SpotifyLogoButton track={playingTrack} size={36} />
