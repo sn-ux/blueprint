@@ -822,7 +822,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
         zoom: number; rotMat: number[];
         socialSort: boolean; liveMode: boolean; unheardMode: boolean;
       };
-      const myRoute = userId ? `/midvale/${userId}` : "/world";
+      const myRoute = typeof window !== "undefined" ? window.location.pathname : (userId ? `/midvale/${userId}` : "/world");
       if (state.route !== myRoute) return; // restore meant for a different world
       sessionStorage.removeItem("blueprint:pendingRestore");
 
@@ -1552,7 +1552,17 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
     };
   }, [worlds, loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Subgenre Voronoi — recomputes only when selected genre or subgenres change ──
+  // ── Subgenre Voronoi — recomputes when selected genre, subgenres, OR worlds change ──
+  //
+  // `worlds` is included in deps even though the body reads geoRef (a ref, not state).
+  // Reason: geoRef.current is set by the canvas effect (deps=[worlds,loading]) which
+  // runs EARLIER in the file.  When a Venn back-restore mounts this component and
+  // setSelected() fires before loadWorld() finishes, subgenres may arrive while
+  // geoRef is still null — the guard exits early and subRegionRef stays empty.
+  // Adding `worlds` ensures this effect re-fires when worlds (and therefore geoRef)
+  // becomes available, regardless of which API call finishes first.
+  // React runs effects in declaration order, so the canvas effect always sets
+  // geoRef before this effect reads it for the same worlds state-update.
   useEffect(() => {
     const geo = geoRef.current;
     // Clear sub-voronoi state
@@ -1623,7 +1633,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
     }
 
     dirtyRef.current = true;
-  }, [selected, subgenres]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selected, subgenres, worlds]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Desktop mouse handlers (arcball, same model as mobile) ────────────────
 
@@ -1977,7 +1987,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
       // Store full origin state so the Friends World back button can return
       // the user here with camera position, genre, and toggles intact.
       const originState = {
-        route:      userId ? `/midvale/${userId}` : "/world",
+        route:      typeof window !== "undefined" ? window.location.pathname : (userId ? `/midvale/${userId}` : "/world"),
         genre:      selected,
         subgenre:   selectedSubgenre,
         zoom:       zoomRef.current,
