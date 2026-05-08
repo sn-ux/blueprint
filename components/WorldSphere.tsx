@@ -221,7 +221,7 @@ function BarChartButton({ active, onClick, color }: { active: boolean; onClick: 
     <button
       onClick={e => { e.stopPropagation(); onClick(); }}
       aria-label={active ? "Clear social sort" : "Sort by social popularity"}
-      title={active ? "Sorted by how many Midvale users share this track" : "Sort by Midvale popularity"}
+      title={active ? "Sorted by how many Friends users share this track" : "Sort by Friends popularity"}
       style={{
         flexShrink:  0,
         background:  "none",
@@ -1572,7 +1572,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
       {backHref && (
         <Link
           href={backHref}
-          aria-label="Back to Midvale"
+          aria-label="Back to Friends"
           style={{
             // Sits flush below the fixed Navbar (height 56) with a 12 px gap.
             // left matches the Navbar's own paddingLeft so it aligns with the
@@ -2014,7 +2014,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
             }}
           >
             <p style={{ fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.30)", marginBottom: 8, lineHeight: 1 }}>
-              Also in Midvale
+              Also in Friends
             </p>
             {popoverData.users.length === 0 ? (
               <p style={{ fontSize: 12, color: "rgba(255,255,255,0.45)" }}>No one else</p>

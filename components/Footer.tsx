@@ -100,7 +100,7 @@ export default function Footer() {
           { label: "Blueprint",  href: "/"            },
           { label: "Philosophy", href: "/philosophy"  },
           { label: "Connect",    href: "/connect"     },
-          { label: "Midvale",    href: "/midvale"     },
+          { label: "Friends",    href: "/midvale"     },
         ].map(({ label, href }) => (
           <Link
             key={label}

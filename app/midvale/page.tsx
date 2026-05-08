@@ -59,20 +59,8 @@ export default async function MidvalePage() {
               lineHeight:    1.08,
             }}
           >
-            Midvale
+            Friends
           </h1>
-          <p
-            style={{
-              margin:        "10px 0 0",
-              fontSize:      15,
-              fontWeight:    400,
-              letterSpacing: "0.01em",
-              color:         "rgba(255,255,255,0.32)",
-              lineHeight:    1.5,
-            }}
-          >
-            Five music worlds under one roof.
-          </p>
         </div>
 
         {/* ── Friends World — full-width card above individual worlds ────── */}
