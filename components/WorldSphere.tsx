@@ -2364,7 +2364,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                     </>
                   ) : (
                     <>
-                      <p className="text-xs tracking-widest uppercase mb-2" style={{ color: `rgba(${sr},${sg},${sb},0.38)` }}>Now exploring</p>
+                      <p className="text-xs tracking-widest uppercase mb-2" style={{ color: `rgba(${sr},${sg},${sb},0.38)` }}>{friendsWorld ? "Friends" : "Now exploring"}</p>
                       <div className="flex items-center justify-between gap-4">
                         <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{shortLabel(selected)}</h2>
                         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
