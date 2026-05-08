@@ -45,6 +45,11 @@ type TrackItem = {
   socialUsers?: { id: string; name: string | null }[];
   // Attached at render-time when Live Events mode is active
   liveEvent?: LiveEvent;
+  // Set by API when ?unheardForUserId is present.
+  // true  = track not in substitute user's library (unheard)
+  // false = track IS in substitute user's library (heard)
+  // undefined = no spotifyId or no substitute selected
+  isUnheardForSelectedUser?: boolean;
 };
 type SubgenreItem = { name: string; count: number };
 type LiveEvent = {
@@ -352,6 +357,51 @@ function VennButton({ href, color, disabled = false }: { href: string; color: st
   );
 }
 
+// ── UnheardButton — sort unheard tracks to top ───────────────────────────────
+// Only rendered when a substitute profile is selected. Uses a sparkle icon to
+// convey "undiscovered" without interfering with the Venn / playlist buttons.
+
+function UnheardButton({
+  active,
+  onClick,
+  color,
+}: {
+  active:  boolean;
+  onClick: () => void;
+  color:   string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={e => { e.stopPropagation(); onClick(); }}
+      aria-label={active ? "Disable unheard filter" : "Show unheard tracks first"}
+      title={active ? "Showing unheard tracks first" : "Sort unheard tracks to top"}
+      style={{
+        flexShrink: 0,
+        background: "none",
+        border:     "none",
+        padding:    "2px",
+        cursor:     "pointer",
+        color:      active ? color : "rgba(255,255,255,0.28)",
+        transition: "color 0.20s ease",
+        display:    "flex",
+        alignItems: "center",
+        lineHeight: 1,
+      }}
+    >
+      {/* Sparkle / asterisk — "new / undiscovered" */}
+      <svg
+        width={18} height={18} viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" strokeWidth={2}
+        strokeLinecap="round" strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+      </svg>
+    </button>
+  );
+}
+
 // ── Social badge ──────────────────────────────────────────────────────────────
 // Plain numeric count styled in the genre color. Always equals socialUsers.length.
 
@@ -477,6 +527,25 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
   const [friendsGenres,    setFriendsGenres]    = useState<Record<string, number> | null>(null);
   const [friendsSubgenres, setFriendsSubgenres] = useState<Record<string, string[]>>({});
   const friendsSubgenresFetchedRef              = useRef<Set<string>>(new Set());
+
+  // ── Substitute profile & Unheard mode ────────────────────────────────────
+  // substituteProfile: set on /midvale, stored in sessionStorage.
+  // Drives ?unheardForUserId on track API requests.
+  // unheardMode: when true, sort isUnheardForSelectedUser===true tracks first.
+  const [substituteProfile, setSubstituteProfile] = useState<{
+    userId:   string;
+    userName: string;
+  } | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = sessionStorage.getItem("blueprint:substituteProfile");
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  });
+  const substituteProfileRef = useRef(substituteProfile);
+  substituteProfileRef.current = substituteProfile;
+  const [unheardMode, setUnheardMode] = useState(false);
+
   const selectedSubgenreRef = useRef<string | null>(null);
   const [zoomSubgenre,     setZoomSubgenre]      = useState<string | null>(null);
   const zoomSubgenreRef    = useRef<string | null>(null);
@@ -641,6 +710,48 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
       });
   }, [friendsWorld, selected, selectedSubgenre]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Substitute profile — listen for changes from /midvale selector ─────────
+  // Handles two sources:
+  //   1. "blueprint:substituteChange" custom event (same-tab, fired by SubstituteSelector)
+  //   2. native "storage" event (cross-tab, fired when sessionStorage changes in another tab)
+  useEffect(() => {
+    const onSubChange = (e: Event) => {
+      const profile = (e as CustomEvent<{ userId: string; userName: string } | null>).detail;
+      setSubstituteProfile(profile);
+      setUnheardMode(false); // reset when profile changes
+    };
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== "blueprint:substituteProfile") return;
+      try {
+        const profile = e.newValue ? JSON.parse(e.newValue) : null;
+        setSubstituteProfile(profile);
+        setUnheardMode(false);
+      } catch { /* malformed — ignore */ }
+    };
+    window.addEventListener("blueprint:substituteChange", onSubChange);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener("blueprint:substituteChange", onSubChange);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Refetch tracks when substitute profile changes ────────────────────────
+  // Only runs when a genre is already open. Leaves subgenres, sphere position,
+  // and selected subgenre untouched — just refreshes track data with the new
+  // ?unheardForUserId param so isUnheardForSelectedUser fields are up-to-date.
+  useEffect(() => {
+    const gen = selectedRef.current;
+    if (!gen) return; // no genre open — nothing to refetch
+    const enc = encodeURIComponent(gen);
+    setTracksLoading(true);
+    fetch(trackUrl(enc, substituteProfile?.userId ?? null))
+      .then(r => r.json())
+      .then(d => { setTracks(d.tracks ?? []); })
+      .catch(() => {})
+      .finally(() => setTracksLoading(false));
+  }, [substituteProfile]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Body scroll lock when exploring on mobile ────────────────────────────
   useEffect(() => {
     if (!isMobile) return;
@@ -675,6 +786,17 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
   const subgenreUrl = (enc: string) => friendsWorld
     ? `/api/world/friends/${enc}/subgenres`
     : `/api/world/${enc}/subgenres${userParam}`;
+
+  // Builds a full tracklist URL including the optional ?unheardForUserId param.
+  // Reads substituteProfileRef.current so it always picks up the latest value
+  // even when called from inside a useEffect with a stale closure.
+  const trackUrl = (enc: string, uid?: string | null): string => {
+    const base = genreUrl(enc);
+    const id   = uid ?? substituteProfileRef.current?.userId ?? null;
+    if (!id) return base;
+    const sep  = base.includes("?") ? "&" : "?";
+    return `${base}${sep}unheardForUserId=${encodeURIComponent(id)}`;
+  };
 
   async function loadWorld() {
     try {
@@ -795,14 +917,16 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
       setSocialSort(false); setLiveMode(false);
       return;
     }
-    setSocialSort(true); setLiveMode(false);
+    setSocialSort(true); setLiveMode(false); setUnheardMode(false);
     setSelectedSubgenre(null); selectedSubgenreRef.current = null;
     setZoomSubgenre(null);     zoomSubgenreRef.current     = null;
     deezerPreviewsRef.current = {}; setDeezerPreviews({});
 
     const enc = encodeURIComponent(selected);
     setTracksLoading(true);
-    fetch(genreUrl(enc))
+    // trackUrl() reads substituteProfileRef.current so the unheard param is
+    // included immediately if a substitute profile is already selected.
+    fetch(trackUrl(enc))
       .then(r => r.json())
       .then(d => {
         setTracks(d.tracks ?? []);
@@ -815,7 +939,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
       })
       .catch(() => setTracks([]))
       .finally(() => setTracksLoading(false));
-  }, [selected]);
+  }, [selected]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // hoveredSubgenre is now driven directly from onMouseMove/onTouchMove — no setInterval needed.
 
@@ -1507,9 +1631,13 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
   const tallyCount = (t: TrackItem) => t.socialUsers?.length ?? t.socialCount ?? 0;
 
   // ── Compound sort + live-event enrichment ────────────────────────────────
-  // Enrich each track with t.liveEvent from the session map so JSX can use
-  // t.liveEvent directly (avoids IIFE lookups and keeps null checks explicit).
-  // Sort priority: live events first > socialCount desc > earliest date > original order.
+  // Sort priority (highest to lowest):
+  //   1. Unheard mode  — isUnheardForSelectedUser === true first
+  //                      false second, undefined last (no spotifyId)
+  //   2. Live events   — tracks with a concert first (if liveMode)
+  //   3. Social sort   — by socialCount desc (if socialSort)
+  //   4. Default       — original artist/name order from API
+  // Within each tier the secondary tiers still apply for further ordering.
   const sortedTracks = useMemo(() => {
     // Attach liveEvent to each track when mode is on
     const enrich = (t: TrackItem): TrackItem => {
@@ -1518,30 +1646,54 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
       return ev ? { ...t, liveEvent: ev } : { ...t, liveEvent: undefined };
     };
 
-    if (!liveMode && !socialSort) return displayedTracks;
+    if (!unheardMode && !liveMode && !socialSort) return displayedTracks;
 
     const base = displayedTracks.map(enrich);
+
+    // Helper: compare two tracks by unheard status (true < false < undefined)
+    const cmpUnheard = (a: TrackItem, b: TrackItem): number => {
+      if (!unheardMode) return 0;
+      const av = a.isUnheardForSelectedUser;
+      const bv = b.isUnheardForSelectedUser;
+      if (av === bv) return 0;
+      if (av === true)  return -1;
+      if (bv === true)  return  1;
+      if (av === false) return -1; // false (heard) sorts before undefined (no id)
+      return 1;
+    };
 
     if (liveMode) {
       const withEv = base.filter(t => !!t.liveEvent);
       const noEv   = base.filter(t => !t.liveEvent);
 
-      // Events: social popularity first, then earliest date as tie-breaker
+      // Events: unheard first → social desc → earliest date
       withEv.sort((a, b) => {
-        const sc = tallyCount(b) - tallyCount(a);
-        if (sc !== 0) return sc;
+        const u = cmpUnheard(a, b); if (u !== 0) return u;
+        const sc = tallyCount(b) - tallyCount(a); if (sc !== 0) return sc;
         return (a.liveEvent!.date).localeCompare(b.liveEvent!.date);
       });
 
-      // Non-events: social sort if active, else original order
-      if (socialSort) noEv.sort((a, b) => tallyCount(b) - tallyCount(a));
+      // Non-events: unheard first → social desc (if active)
+      noEv.sort((a, b) => {
+        const u = cmpUnheard(a, b); if (u !== 0) return u;
+        if (socialSort) return tallyCount(b) - tallyCount(a);
+        return 0;
+      });
 
       return [...withEv, ...noEv];
     }
 
-    // Only social sort
-    return base.sort((a, b) => tallyCount(b) - tallyCount(a));
-  }, [displayedTracks, liveMode, socialSort, liveEventMap]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Social sort only (±unheard)
+    if (socialSort) {
+      return base.sort((a, b) => {
+        const u = cmpUnheard(a, b); if (u !== 0) return u;
+        return tallyCount(b) - tallyCount(a);
+      });
+    }
+
+    // Unheard-only sort
+    return base.sort(cmpUnheard);
+  }, [displayedTracks, liveMode, socialSort, unheardMode, liveEventMap]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Render ─────────────────────────────────────────────────────────────────
   // Early return placed AFTER all hooks (including useMemo above) so that
@@ -1876,6 +2028,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                       <div className="flex items-center justify-between gap-4">
                         <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{focusedSubgenre}</h2>
                         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                          {substituteProfile && <UnheardButton active={unheardMode} onClick={() => setUnheardMode(v => !v)} color={selectedColor} />}
                           {vennHref && <VennButton href={vennHref} color={selectedColor} disabled={!vennEnabled} />}
                           <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
                           <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
@@ -1890,6 +2043,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                       <div className="flex items-center justify-between gap-4">
                         <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{shortLabel(selected)}</h2>
                         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                          {substituteProfile && <UnheardButton active={unheardMode} onClick={() => setUnheardMode(v => !v)} color={selectedColor} />}
                           {vennHref && <VennButton href={vennHref} color={selectedColor} disabled={!vennEnabled} />}
                           <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
                           <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
@@ -1943,6 +2097,14 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                             <div className="flex flex-col min-w-0 flex-1">
                               <div className="flex items-center gap-2 min-w-0">
                                 <span className="text-sm font-medium truncate leading-snug flex-1" style={{ color: isActive ? selectedColor : "#ffffff" }}>{t.name}</span>
+                                {/* Unheard dot — shown when unheard mode is on and track is unheard */}
+                                {unheardMode && t.isUnheardForSelectedUser === true && (
+                                  <span
+                                    aria-label="Not in selected user's library"
+                                    title={`Not in ${substituteProfile?.userName ?? "selected user"}'s library`}
+                                    style={{ flexShrink: 0, width: 6, height: 6, borderRadius: "50%", background: selectedColor, opacity: 0.70, display: "inline-block" }}
+                                  />
+                                )}
                                 {/* Pin BEFORE social badge */}
                                 {t.liveEvent && (
                                   <button
@@ -2091,11 +2253,15 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                       </button>
                     </div>
 
-                    {/* Row 2 (2–3 cells): Venn · Popularity · Live Events
-                        When vennHref is present (individual world), 3 cells
-                        match Row 1 exactly for perfect column alignment.
-                        On Friends World only 2 cells are shown.            */}
+                    {/* Row 2: [Unheard] · [Venn] · Popularity · Live Events
+                        Unheard and Venn are conditional; Popularity/Live always shown.
+                        Row expands left with each additional conditional button.      */}
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      {substituteProfile && (
+                        <div style={W}>
+                          <UnheardButton active={unheardMode} onClick={() => setUnheardMode(v => !v)} color={selectedColor} />
+                        </div>
+                      )}
                       {vennHref && (
                         <div style={W}>
                           <VennButton href={vennHref} color={selectedColor} disabled={!vennEnabled} />
@@ -2134,6 +2300,14 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                         <div className="flex flex-col min-w-0 flex-1">
                           <div className="flex items-center gap-2 min-w-0">
                             <span className="text-sm font-medium truncate leading-snug flex-1" style={{ color: isActive ? selectedColor : "#ffffff" }}>{t.name}</span>
+                            {/* Unheard dot — shown when unheard mode is on and track is unheard */}
+                            {unheardMode && t.isUnheardForSelectedUser === true && (
+                              <span
+                                aria-label="Not in selected user's library"
+                                title={`Not in ${substituteProfile?.userName ?? "selected user"}'s library`}
+                                style={{ flexShrink: 0, width: 6, height: 6, borderRadius: "50%", background: selectedColor, opacity: 0.70, display: "inline-block" }}
+                              />
+                            )}
                             {/* Pin BEFORE social badge */}
                             {t.liveEvent && (
                               <button

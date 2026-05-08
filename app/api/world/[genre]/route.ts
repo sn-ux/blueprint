@@ -9,8 +9,9 @@ export async function GET(
   const t0 = Date.now();
 
   const { searchParams } = new URL(req.url);
-  const queryUserId = searchParams.get("userId");
-  const isPublicView = !!queryUserId;
+  const queryUserId      = searchParams.get("userId");
+  const unheardForUserId = searchParams.get("unheardForUserId");
+  const isPublicView     = !!queryUserId;
 
   let user;
   if (queryUserId) {
@@ -77,10 +78,25 @@ export async function GET(
     }
   }
 
+  // ── Unheard-for-user: find which spotifyIds the substitute already has ────
+  let heardSet = new Set<string>();
+  if (unheardForUserId && spotifyIds.length > 0) {
+    const heardRows = await prisma.track.findMany({
+      where:  { userId: unheardForUserId, spotifyId: { in: spotifyIds } },
+      select: { spotifyId: true },
+    });
+    heardSet = new Set(heardRows.map(r => r.spotifyId).filter(Boolean) as string[]);
+  }
+
   const tracksWithSocial = tracks.map(t => {
     const socialUsers = socialUsersMap.get(t.spotifyId ?? "") ?? [];
     const socialCount = socialUsers.length;
-    return { ...t, socialUsers, socialCount };
+    // isUnheardForSelectedUser is only set when ?unheardForUserId is present AND
+    // the track has a spotifyId. Tracks without a spotifyId get undefined (sorted last).
+    const isUnheardForSelectedUser = (unheardForUserId && t.spotifyId)
+      ? !heardSet.has(t.spotifyId)
+      : undefined;
+    return { ...t, socialUsers, socialCount, isUnheardForSelectedUser };
   });
 
   // ── Bundle subgenre counts (saves the frontend's second /subgenres fetch) ──

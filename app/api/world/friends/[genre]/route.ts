@@ -23,10 +23,12 @@ type RawTrack = {
 };
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   context: { params: Promise<{ genre: string }> },
 ) {
   const t0 = Date.now();
+  const { searchParams }  = new URL(req.url);
+  const unheardForUserId  = searchParams.get("unheardForUserId");
   const { genre } = await context.params;
   const blueprintWorld = decodeURIComponent(genre);
 
@@ -72,13 +74,27 @@ export async function GET(
     socialUserMap.set(t.spotifyId, list);
   }
 
+  // ── Unheard-for-user: find which spotifyIds the substitute already has ────
+  const allSpotifyIds = [...repMap.keys()];
+  let heardSet = new Set<string>();
+  if (unheardForUserId && allSpotifyIds.length > 0) {
+    const heardRows = await prisma.track.findMany({
+      where:  { userId: unheardForUserId, spotifyId: { in: allSpotifyIds } },
+      select: { spotifyId: true },
+    });
+    heardSet = new Set(heardRows.map(r => r.spotifyId).filter(Boolean) as string[]);
+  }
+
   // ── Compose final tracks ──────────────────────────────────────────────────
   const tracks = [...repMap.values()]
     .sort((a, b) => a.artist.localeCompare(b.artist) || a.name.localeCompare(b.name))
     .map(({ user: _user, ...rest }) => {
       const socialUsers = socialUserMap.get(rest.spotifyId) ?? [];
       const socialCount = socialUsers.length;
-      return { ...rest, socialUsers, socialCount };
+      const isUnheardForSelectedUser = unheardForUserId
+        ? !heardSet.has(rest.spotifyId)
+        : undefined;
+      return { ...rest, socialUsers, socialCount, isUnheardForSelectedUser };
     });
 
   // ── Bundle subgenre counts (saves a second /subgenres round-trip) ─────────

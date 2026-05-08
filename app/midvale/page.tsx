@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import Footer from "@/components/Footer";
 import WorldCard, { FriendsWorldCard } from "@/components/WorldCard";
+import SubstituteSelector from "@/components/SubstituteSelector";
 
 // Always fetch fresh data — never serve a cached version of this page.
 export const dynamic = "force-dynamic";
@@ -49,7 +50,7 @@ export default async function MidvalePage() {
 
         {/* ── Page title ───────────────────────────────────────────────────── */}
         <h1 style={{
-          margin:        "0 0 48px",
+          margin:        "0 0 16px",
           fontSize:      "clamp(32px, 5vw, 52px)",
           fontWeight:    700,
           letterSpacing: "-0.03em",
@@ -58,6 +59,15 @@ export default async function MidvalePage() {
         }}>
           Friends
         </h1>
+
+        {/* ── "Viewing as" substitute profile selector ─────────────────────
+            Only shows registered users (those with a real userId/account).
+            Guests see no selector if no users have connected yet.          */}
+        <SubstituteSelector
+          users={slots
+            .filter(s => s.userId !== null)
+            .map(s => ({ id: s.userId!, name: s.name }))}
+        />
 
         {/* ── Combined Friends world ────────────────────────────────────────
             Full-width tile linking to /midvale/friends.
