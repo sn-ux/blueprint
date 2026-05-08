@@ -3008,7 +3008,7 @@ export default function LandingPage() {
                                 <LiveEventsIcon size={12} />
                               </a>
                             )}
-                            {tallyCount(t) > 0 && (
+                            {socialSort && tallyCount(t) > 0 && (
                               <span onClick={e => {
                                 e.stopPropagation();
                                 const rect = e.currentTarget.getBoundingClientRect();
@@ -3232,7 +3232,7 @@ export default function LandingPage() {
                                   <LiveEventsIcon size={12} />
                                 </a>
                               )}
-                              {tallyCount(t) > 0 && (
+                              {socialSort && tallyCount(t) > 0 && (
                                 <span onClick={e => {
                                   e.stopPropagation();
                                   const rect = e.currentTarget.getBoundingClientRect();
