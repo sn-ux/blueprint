@@ -1273,15 +1273,10 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
     setSelected(p=>p===bestName?null:bestName);
   };
 
-  // ── Render ─────────────────────────────────────────────────────────────────
-
-  if (loading) {
-    return (
-      <main className="min-h-screen bg-black text-white flex items-center justify-center">
-        <p className="text-xl">Loading your Music World...</p>
-      </main>
-    );
-  }
+  // ── Derived render values (must stay above any early return — hooks rule) ──
+  // useMemo is a hook and cannot be called after a conditional return.
+  // All derived constants that feed into the memo are kept here too so they
+  // are computed in the same order on every render.
 
   const selectedColor   = selected ? (COLORS[selected] ?? "#ffffff") : "#ffffff";
   const [sr, sg, sb]    = selected ? hexRgb(COLORS[selected] ?? "#ffffff") : [255, 255, 255];
@@ -1329,6 +1324,17 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
     // Only social sort
     return base.sort((a, b) => tallyCount(b) - tallyCount(a));
   }, [displayedTracks, liveMode, socialSort, liveEventMap]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+  // Early return placed AFTER all hooks (including useMemo above) so that
+  // hooks are always called in the same order regardless of loading state.
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-black text-white flex items-center justify-center">
+        <p className="text-xl">Loading your Music World...</p>
+      </main>
+    );
+  }
 
   // ── Live-events toggle handler ────────────────────────────────────────────
   // • Mode OFF → ON : fetch uncached artists, merge into liveEventMap, log results.
