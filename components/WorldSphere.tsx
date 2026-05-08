@@ -1894,29 +1894,52 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                 </div>
               </div>
 
-              {/* RIGHT — compact two-row button cluster, right-aligned */}
-              <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+              {/* RIGHT — compact two-row button cluster, right-aligned.
+                  Every button is wrapped in a 36 × 36 circular container
+                  so all five cells are identical in size and spacing.    */}
+              {(() => {
+                // Shared circular wrapper — matches the arrow button's own style exactly.
+                const W: React.CSSProperties = {
+                  flexShrink: 0, width: 36, height: 36,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  borderRadius: "50%", background: "rgba(255,255,255,0.07)",
+                };
+                return (
+                  <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
 
-                {/* Row 1: Playlist · Spotify · Collapse */}
-                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                  <PlaylistButton loading={playlistLoading} success={!!(playlistKey && createdPlaylistKeys.has(playlistKey))} onClick={handlePlaylistPush} color={selectedColor} />
-                  <SpotifyLogoButton track={playingTrack} size={36} />
-                  <button
-                    onClick={() => setSheetSnap(sheetSnap === 1 ? 2 : 1)}
-                    aria-label={sheetSnap === 1 ? "Expand to fullscreen" : "Collapse to preview"}
-                    style={{ flexShrink: 0, width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.60)", fontSize: 16, lineHeight: 1 }}
-                  >
-                    {sheetSnap === 1 ? "↑" : "↓"}
-                  </button>
-                </div>
+                    {/* Row 1 (3 cells): Playlist · Spotify · Collapse */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={W}>
+                        <PlaylistButton loading={playlistLoading} success={!!(playlistKey && createdPlaylistKeys.has(playlistKey))} onClick={handlePlaylistPush} color={selectedColor} />
+                      </div>
+                      <div style={W}>
+                        <SpotifyLogoButton track={playingTrack} size={20} />
+                      </div>
+                      {/* Arrow button is already a 36 × 36 circle — no extra wrapper needed */}
+                      <button
+                        onClick={() => setSheetSnap(sheetSnap === 1 ? 2 : 1)}
+                        aria-label={sheetSnap === 1 ? "Expand to fullscreen" : "Collapse to preview"}
+                        style={{ flexShrink: 0, width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.60)", fontSize: 16, lineHeight: 1 }}
+                      >
+                        {sheetSnap === 1 ? "↑" : "↓"}
+                      </button>
+                    </div>
 
-                {/* Row 2: Popularity · Live Events */}
-                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                  <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
-                  <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
-                </div>
+                    {/* Row 2 (2 cells): Popularity · Live Events
+                        With gap: 10 + cell 36, row 2 right-aligns so
+                        Popularity sits under Spotify, Pin under Arrow.  */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={W}>
+                        <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
+                      </div>
+                      <div style={W}>
+                        <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
+                      </div>
+                    </div>
 
-              </div>
+                  </div>
+                );
+              })()}
 
             </div>
 
