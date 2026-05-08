@@ -196,36 +196,30 @@ const normalizeArtist = (name: string) =>
   name.toLowerCase().trim().replace(/\s+/g, " ");
 
 /**
- * Stage-lights icon — shared by PinButton and inline track-row live-event markers.
+ * Microphone icon — shared by PinButton and inline track-row live-event markers.
+ * Universally recognized as “live performance / concert.”
+ * Paths mirror Lucide’s Mic icon (viewBox 0 0 24 24, stroke-based, no fill).
  *
- * Design: horizontal lighting rig bar at top, two hanging spotlights, stage floor
- * at bottom.  All stroke-based (no filled paths) so it scales gracefully.
- *
- * Use STAGE_ICON for the button (rendered ~18 × 15 px).
- * Use STAGE_ICON_SM for inline track markers (rendered ~11 × 9 px).
- * Both share the same 18 × 15 viewBox so the shapes are identical.
+ * Use MIC_ICON for the button (rendered ~17 × 17 px).
+ * Use MIC_ICON_SM for inline track markers (rendered ~12 × 12 px).
  */
-const STAGE_ICON = (
-  <svg width={18} height={15} viewBox="0 0 18 15" fill="none" stroke="currentColor"
+const MIC_ICON = (
+  <svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="currentColor"
     strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <line x1="1"   y1="2"    x2="17"  y2="2"    />  {/* rig bar */}
-    <line x1="5"   y1="2"    x2="5"   y2="4"    />  {/* left stem */}
-    <circle cx="5"  cy="5.5" r="1.5"             />  {/* left spotlight */}
-    <line x1="13"  y1="2"    x2="13"  y2="4"    />  {/* right stem */}
-    <circle cx="13" cy="5.5" r="1.5"             />  {/* right spotlight */}
-    <line x1="1"   y1="13.5" x2="17"  y2="13.5" />  {/* stage floor */}
+    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+    <line x1="12" y1="19" x2="12" y2="22" />
+    <line x1="8"  y1="22" x2="16" y2="22" />
   </svg>
 );
 
-const STAGE_ICON_SM = (
-  <svg width={11} height={9} viewBox="0 0 18 15" fill="none" stroke="currentColor"
+const MIC_ICON_SM = (
+  <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor"
     strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <line x1="1"   y1="2"    x2="17"  y2="2"    />
-    <line x1="5"   y1="2"    x2="5"   y2="4"    />
-    <circle cx="5"  cy="5.5" r="1.5"             />
-    <line x1="13"  y1="2"    x2="13"  y2="4"    />
-    <circle cx="13" cy="5.5" r="1.5"             />
-    <line x1="1"   y1="13.5" x2="17"  y2="13.5" />
+    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+    <line x1="12" y1="19" x2="12" y2="22" />
+    <line x1="8"  y1="22" x2="16" y2="22" />
   </svg>
 );
 
@@ -324,7 +318,7 @@ function PinButton({
           ))}
         </svg>
       ) : (
-        STAGE_ICON
+        MIC_ICON
       )}
     </button>
   );
@@ -2263,7 +2257,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                                     }}
                                     style={{ background: "none", border: "none", padding: "2px 0", cursor: "pointer", display: "flex", alignItems: "center", flexShrink: 0, color: `rgba(${sr},${sg},${sb},0.85)` }}
                                   >
-                                    {STAGE_ICON_SM}
+                                    {MIC_ICON_SM}
                                   </button>
                                 )}
                                 {socialSort && tallyCount(t) > 0 && (
@@ -2485,7 +2479,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                                 }}
                                 style={{ background: "none", border: "none", padding: "2px 0", cursor: "pointer", display: "flex", alignItems: "center", flexShrink: 0, color: `rgba(${sr},${sg},${sb},0.85)` }}
                               >
-                                {STAGE_ICON_SM}
+                                {MIC_ICON_SM}
                               </button>
                             )}
                             {socialSort && tallyCount(t) > 0 && (

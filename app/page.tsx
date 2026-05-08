@@ -550,14 +550,12 @@ function PinButton({ active, loading, onClick, color }: { active: boolean; loadi
         </svg>
       ) : (
         /* Stage-lights icon — matches WorldSphere PinButton exactly */
-        <svg width={18} height={15} viewBox="0 0 18 15" fill="none" stroke="currentColor"
+        <svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="currentColor"
           strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <line x1="1"   y1="2"    x2="17"  y2="2"    />
-          <line x1="5"   y1="2"    x2="5"   y2="4"    />
-          <circle cx="5"  cy="5.5" r="1.5"             />
-          <line x1="13"  y1="2"    x2="13"  y2="4"    />
-          <circle cx="13" cy="5.5" r="1.5"             />
-          <line x1="1"   y1="13.5" x2="17"  y2="13.5" />
+          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+          <line x1="12" y1="19" x2="12" y2="22" />
+          <line x1="8"  y1="22" x2="16" y2="22" />
         </svg>
       )}
     </button>
@@ -2931,14 +2929,12 @@ export default function LandingPage() {
                                 title={`${t.liveEvent.eventName} · ${t.liveEvent.venue}, ${t.liveEvent.city} · ${t.liveEvent.date}`}
                                 style={{ flexShrink: 0, color: selectedColor, display: "flex", alignItems: "center" }}>
                                 {/* Stage-lights inline marker — same geometry as PinButton */}
-                                <svg width={11} height={9} viewBox="0 0 18 15" fill="none" stroke="currentColor"
+                                <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                   strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                  <line x1="1"   y1="2"    x2="17"  y2="2"    />
-                                  <line x1="5"   y1="2"    x2="5"   y2="4"    />
-                                  <circle cx="5"  cy="5.5" r="1.5"             />
-                                  <line x1="13"  y1="2"    x2="13"  y2="4"    />
-                                  <circle cx="13" cy="5.5" r="1.5"             />
-                                  <line x1="1"   y1="13.5" x2="17"  y2="13.5" />
+                                  <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                                  <line x1="12" y1="19" x2="12" y2="22" />
+                                  <line x1="8"  y1="22" x2="16" y2="22" />
                                 </svg>
                               </a>
                             )}
@@ -3164,14 +3160,12 @@ export default function LandingPage() {
                                   title={`${t.liveEvent.eventName} · ${t.liveEvent.venue}, ${t.liveEvent.city} · ${t.liveEvent.date}`}
                                   style={{ flexShrink: 0, color: selectedColor, display: "flex", alignItems: "center" }}>
                                   {/* Stage-lights inline marker */}
-                                  <svg width={11} height={9} viewBox="0 0 18 15" fill="none" stroke="currentColor"
+                                  <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                    <line x1="1"   y1="2"    x2="17"  y2="2"    />
-                                    <line x1="5"   y1="2"    x2="5"   y2="4"    />
-                                    <circle cx="5"  cy="5.5" r="1.5"             />
-                                    <line x1="13"  y1="2"    x2="13"  y2="4"    />
-                                    <circle cx="13" cy="5.5" r="1.5"             />
-                                    <line x1="1"   y1="13.5" x2="17"  y2="13.5" />
+                                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                                    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                                    <line x1="12" y1="19" x2="12" y2="22" />
+                                    <line x1="8"  y1="22" x2="16" y2="22" />
                                   </svg>
                                 </a>
                               )}
