@@ -301,8 +301,36 @@ function PinButton({
 
 // ── VennButton — opens the current genre/subgenre in Friends World ────────────
 // Only rendered on individual user worlds (not on friendsWorld itself).
+// When disabled (genre/subgenre absent from Friends World) renders as a muted
+// non-interactive span instead of a navigable link.
 
-function VennButton({ href, color }: { href: string; color: string }) {
+function VennButton({ href, color, disabled = false }: { href: string; color: string; disabled?: boolean }) {
+  const circles = (
+    <svg width={20} height={14} viewBox="0 0 22 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="7"  cy="7" r="6" />
+      <circle cx="15" cy="7" r="6" />
+    </svg>
+  );
+
+  if (disabled) {
+    return (
+      <span
+        aria-label="Not in Friends World"
+        title="Not in Friends World"
+        style={{
+          flexShrink: 0,
+          display:    "flex",
+          alignItems: "center",
+          lineHeight: 1,
+          color:      "rgba(255,255,255,0.18)",
+          cursor:     "default",
+        }}
+      >
+        {circles}
+      </span>
+    );
+  }
+
   return (
     <Link
       href={href}
@@ -319,11 +347,7 @@ function VennButton({ href, color }: { href: string; color: string }) {
         transition:     "color 0.20s ease",
       }}
     >
-      {/* Overlapping circles (Venn diagram) */}
-      <svg width={20} height={14} viewBox="0 0 22 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden="true">
-        <circle cx="7"  cy="7" r="6" />
-        <circle cx="15" cy="7" r="6" />
-      </svg>
+      {circles}
     </Link>
   );
 }
@@ -442,6 +466,17 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
   // Session-level artist cache: normalizedArtist → LiveEvent | null.
   // Survives genre switches so artists already searched aren't re-fetched.
   const [liveEventMap, setLiveEventMap] = useState<Record<string, LiveEvent | null>>({});
+
+  // ── Friends World availability (individual worlds only) ───────────────────
+  // Used to enable/disable the Venn button based on whether the current
+  // genre (and optionally subgenre) exists in the Friends aggregate world.
+  //   friendsGenres:    genre → count from /api/world/friends
+  //   friendsSubgenres: genre → subgenre name list, fetched lazily per genre
+  // friendsSubgenresFetchedRef tracks which genres have been requested so we
+  // never issue duplicate fetches even if the effect re-fires.
+  const [friendsGenres,    setFriendsGenres]    = useState<Record<string, number> | null>(null);
+  const [friendsSubgenres, setFriendsSubgenres] = useState<Record<string, string[]>>({});
+  const friendsSubgenresFetchedRef              = useRef<Set<string>>(new Set());
   const selectedSubgenreRef = useRef<string | null>(null);
   const [zoomSubgenre,     setZoomSubgenre]      = useState<string | null>(null);
   const zoomSubgenreRef    = useRef<string | null>(null);
@@ -570,6 +605,41 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
     setSelectedSubgenre(s);
     dirtyRef.current               = true;
   }, [subgenres]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Friends World availability — fetch genres once (individual worlds only) ─
+  // Populates friendsGenres so we can immediately evaluate whether the current
+  // genre exists in the Friends aggregate world.
+  useEffect(() => {
+    if (friendsWorld) return;
+    fetch("/api/world/friends")
+      .then(r => r.json())
+      .then((d: Record<string, number>) => setFriendsGenres(d))
+      .catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Friends World availability — lazily fetch subgenres per genre ──────────
+  // Triggered whenever the user selects a subgenre.  Uses a ref-based
+  // fetch-guard so the same genre is never requested twice per session.
+  // Uses selectedSubgenre (state) rather than focusedSubgenre (render-phase
+  // derived value) so it can safely live in a useEffect dep array.
+  useEffect(() => {
+    if (friendsWorld || !selected || !selectedSubgenre) return;
+    if (friendsSubgenresFetchedRef.current.has(selected)) return; // already fetched or in-flight
+    friendsSubgenresFetchedRef.current.add(selected);
+    const enc = encodeURIComponent(selected);
+    fetch(`/api/world/friends/${enc}/subgenres`)
+      .then(r => r.json())
+      .then((d: { subgenres: { name: string }[] }) => {
+        setFriendsSubgenres(prev => ({
+          ...prev,
+          [selected]: d.subgenres.map(sg => sg.name),
+        }));
+      })
+      .catch(() => {
+        // On error, allow a retry next time the effect fires
+        friendsSubgenresFetchedRef.current.delete(selected);
+      });
+  }, [friendsWorld, selected, selectedSubgenre]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Body scroll lock when exploring on mobile ────────────────────────────
   useEffect(() => {
@@ -1568,6 +1638,19 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
       : `/midvale/friends?genre=${encodeURIComponent(selected)}`
     : null;
 
+  // Venn enabled — true only when the current genre (and subgenre, if focused)
+  // actually exists in the Friends aggregate world.
+  // Remains false while friendsGenres is still loading (null).
+  const vennEnabled: boolean = (() => {
+    if (!selected || friendsWorld) return false;
+    if (friendsGenres === null) return false;                         // loading
+    if (!(selected in friendsGenres)) return false;                  // genre absent
+    if (!focusedSubgenre) return true;                               // genre present, no subgenre filter
+    const subs = friendsSubgenres[selected];
+    if (!subs) return false;                                         // subgenres not yet fetched
+    return subs.includes(focusedSubgenre);                           // subgenre present?
+  })();
+
   const handlePlaylistPush = async () => {
     if (!selected || playlistLoading) return;
 
@@ -1793,7 +1876,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                       <div className="flex items-center justify-between gap-4">
                         <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{focusedSubgenre}</h2>
                         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                          {vennHref && <VennButton href={vennHref} color={selectedColor} />}
+                          {vennHref && <VennButton href={vennHref} color={selectedColor} disabled={!vennEnabled} />}
                           <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
                           <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
                           <PlaylistButton loading={playlistLoading} success={!!(playlistKey && createdPlaylistKeys.has(playlistKey))} onClick={handlePlaylistPush} color={selectedColor} />
@@ -1807,7 +1890,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                       <div className="flex items-center justify-between gap-4">
                         <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{shortLabel(selected)}</h2>
                         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                          {vennHref && <VennButton href={vennHref} color={selectedColor} />}
+                          {vennHref && <VennButton href={vennHref} color={selectedColor} disabled={!vennEnabled} />}
                           <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
                           <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
                           <PlaylistButton loading={playlistLoading} success={!!(playlistKey && createdPlaylistKeys.has(playlistKey))} onClick={handlePlaylistPush} color={selectedColor} />
@@ -2015,7 +2098,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                       {vennHref && (
                         <div style={W}>
-                          <VennButton href={vennHref} color={selectedColor} />
+                          <VennButton href={vennHref} color={selectedColor} disabled={!vennEnabled} />
                         </div>
                       )}
                       <div style={W}>
