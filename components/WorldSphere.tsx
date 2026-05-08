@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useMemo } from "react";
-import { useSession } from "next-auth/react";
+import { useSession, signIn } from "next-auth/react";
 import Link from "next/link";
 import { SPHERE_INIT_RX, SPHERE_INIT_RY } from "@/lib/sphereConfig";
 import { PlaylistButton } from "@/components/PlaylistButton";
@@ -499,8 +499,12 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
   const [liveLoading,  setLiveLoading]  = useState(false);
 
   // ── Playlist push ─────────────────────────────────────────────────────────
-  const [playlistLoading, setPlaylistLoading] = useState(false);
-  const [playlistMsg,     setPlaylistMsg]     = useState<string | null>(null);
+  const [playlistLoading,   setPlaylistLoading]   = useState(false);
+  const [playlistMsg,       setPlaylistMsg]       = useState<string | null>(null);
+  // "signin"  → 401, user must sign in with Spotify
+  // "reconnect" → 403 missing_scope, user must reconnect
+  // null     → no auth error
+  const [playlistAuthError, setPlaylistAuthError] = useState<"signin" | "reconnect" | null>(null);
   // Set of scope keys for playlists already created this session.
   // Initialised from sessionStorage so it survives same-tab navigations;
   // sessionStorage is cleared when the tab/window is closed.
@@ -1873,6 +1877,14 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
 
     setPlaylistLoading(true);
     setPlaylistMsg(null);
+    setPlaylistAuthError(null);
+
+    // Pre-flight: skip fetch if we already know the user isn't signed in.
+    if (sessionStatus === "unauthenticated") {
+      setPlaylistLoading(false);
+      setPlaylistAuthError("signin");
+      return;
+    }
 
     try {
       const body: {
@@ -1898,8 +1910,10 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
       console.log("[playlist-push] response", { status: res.status, data });
 
       if (!res.ok) {
-        if (data.error === "missing_scope") {
-          setPlaylistMsg("Reconnect Spotify to create playlists.");
+        if (res.status === 401 || data.error === "Not authenticated" || data.error === "not_authenticated") {
+          setPlaylistAuthError("signin");
+        } else if (res.status === 403 || data.error === "missing_scope") {
+          setPlaylistAuthError("reconnect");
         } else {
           setPlaylistMsg(data.message ?? data.error ?? "Failed to create playlist.");
         }
@@ -2107,7 +2121,27 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                   )}
                   <p className="text-zinc-600 text-xs mt-1.5">
                     {tracksLoading ? "—" : `${displayedTracks.length} tracks`}
-                    {playlistMsg && (
+                    {playlistAuthError === "signin" && (
+                      <button
+                        type="button"
+                        onClick={() => signIn("spotify", { callbackUrl: window.location.href })}
+                        style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, color: "#1db954",
+                                 background: "rgba(29,185,84,0.12)", border: "1px solid rgba(29,185,84,0.30)",
+                                 borderRadius: 6, padding: "2px 8px", cursor: "pointer", lineHeight: 1.5 }}>
+                        Sign in with Spotify
+                      </button>
+                    )}
+                    {playlistAuthError === "reconnect" && (
+                      <button
+                        type="button"
+                        onClick={() => signIn("spotify", { callbackUrl: window.location.href })}
+                        style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, color: "#fb923c",
+                                 background: "rgba(251,146,60,0.10)", border: "1px solid rgba(251,146,60,0.28)",
+                                 borderRadius: 6, padding: "2px 8px", cursor: "pointer", lineHeight: 1.5 }}>
+                        Reconnect Spotify
+                      </button>
+                    )}
+                    {!playlistAuthError && playlistMsg && (
                       <span style={{ marginLeft: 8, color: "#ef4444" }}>
                         {playlistMsg}
                       </span>
@@ -2263,12 +2297,33 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                 <h2 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 700, color: selectedColor, lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {focusedSubgenre ?? (selected ? shortLabel(selected) : "")}
                 </h2>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <span style={{ fontSize: 12, color: "rgba(255,255,255,0.30)" }}>
                     {displayedTracks.length} tracks
                   </span>
-                  {/* Error messages only */}
-                  {playlistMsg && (
+                  {/* Auth errors — sign-in / reconnect CTAs */}
+                  {playlistAuthError === "signin" && (
+                    <button
+                      type="button"
+                      onClick={() => signIn("spotify", { callbackUrl: window.location.href })}
+                      style={{ fontSize: 11, fontWeight: 600, color: "#1db954",
+                               background: "rgba(29,185,84,0.12)", border: "1px solid rgba(29,185,84,0.30)",
+                               borderRadius: 6, padding: "2px 8px", cursor: "pointer", lineHeight: 1.5 }}>
+                      Sign in with Spotify
+                    </button>
+                  )}
+                  {playlistAuthError === "reconnect" && (
+                    <button
+                      type="button"
+                      onClick={() => signIn("spotify", { callbackUrl: window.location.href })}
+                      style={{ fontSize: 11, fontWeight: 600, color: "#fb923c",
+                               background: "rgba(251,146,60,0.10)", border: "1px solid rgba(251,146,60,0.28)",
+                               borderRadius: 6, padding: "2px 8px", cursor: "pointer", lineHeight: 1.5 }}>
+                      Reconnect Spotify
+                    </button>
+                  )}
+                  {/* Other (non-auth) errors */}
+                  {!playlistAuthError && playlistMsg && (
                     <span style={{ fontSize: 12, color: "#ef4444" }}>{playlistMsg}</span>
                   )}
                 </div>
