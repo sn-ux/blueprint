@@ -2616,16 +2616,19 @@ export default function LandingPage() {
       sessionStorage.setItem("blueprint:autoEnableUnheard", "true");
       // Store full origin state so the Friends World back button can return
       // the user here with camera position, genre, and toggles intact.
+      // originKind = "homepage" so the back button never routes to /midvale/[userId].
       const originState = {
-        route:    "/world",
-        genre:    selected   ?? null,
-        subgenre: selectedSubgenre ?? null,
-        zoom:     zoomRef.current,
-        rotMat:   Array.from(rotMatRef.current),
+        originKind:  "homepage" as const,
+        route:       "/world",
+        genre:       selected   ?? null,
+        subgenre:    selectedSubgenre ?? null,
+        zoom:        zoomRef.current,
+        rotMat:      Array.from(rotMatRef.current),
         socialSort,
         liveMode,
         unheardMode: false, // homepage never has Unheard
       };
+      console.log("[Venn] storing origin state (page.tsx):", originState);
       sessionStorage.setItem("blueprint:vennOriginState", JSON.stringify(originState));
       window.dispatchEvent(new CustomEvent("blueprint:substituteChange", { detail: profile }));
     } catch {}

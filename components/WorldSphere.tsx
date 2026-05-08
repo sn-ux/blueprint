@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useMemo } from "react";
 import { useSession, signIn } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { SPHERE_INIT_RX, SPHERE_INIT_RY } from "@/lib/sphereConfig";
 import { PlaylistButton } from "@/components/PlaylistButton";
@@ -469,6 +470,7 @@ function possessiveHeadline(name: string | undefined): string {
 export default function WorldSphere({ userId, backHref, userName, friendsWorld = false }: WorldSphereProps = {}) {
   const { data: session, status: sessionStatus } = useSession();
   const sessionUserId = session?.user?.id ?? null;
+  const router = useRouter();
 
   // True when viewing our own world (no userId prop, or userId matches session).
   // Friends World is never "own world" — auto-sync must never run there.
@@ -1986,8 +1988,14 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
       sessionStorage.setItem("blueprint:autoEnableUnheard", "true");
       // Store full origin state so the Friends World back button can return
       // the user here with camera position, genre, and toggles intact.
+      const originRoute = typeof window !== "undefined" ? window.location.pathname : "/world";
+      // originKind unambiguously marks homepage vs individual so the back button
+      // never falls back to a userId-derived route.
+      const originKind: "homepage" | "individual" =
+        (originRoute === "/world" || originRoute === "/") ? "homepage" : "individual";
       const originState = {
-        route:      typeof window !== "undefined" ? window.location.pathname : (userId ? `/midvale/${userId}` : "/world"),
+        originKind,
+        route:      originRoute,
         genre:      selected,
         subgenre:   selectedSubgenre,
         zoom:       zoomRef.current,
@@ -1996,6 +2004,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
         liveMode,
         unheardMode,
       };
+      console.log("[Venn] storing origin state:", originState);
       sessionStorage.setItem("blueprint:vennOriginState", JSON.stringify(originState));
       // Also dispatch the event so any already-mounted WorldSphere (e.g. opened
       // in another same-tab route) picks it up without a page reload.
@@ -2109,23 +2118,57 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
             - zoom level
             - mobile sheet snap state
             - canvas transforms
-          z-index 210 > zoom pill (120) > mobile sheet (100). */}
+          z-index 210 > zoom pill (120) > mobile sheet (100).
+          Uses router.push (not Link href) so route is resolved at click time —
+          never inferred from userId at mount time. */}
       {backHref && (
-        <Link
-          href={vennOriginRoute ?? backHref}
+        <button
           aria-label={vennOriginRoute ? "Back to previous world" : "Back to Friends"}
           onClick={() => {
-            // When leaving Friends World via back, transfer the origin state
-            // to blueprint:pendingRestore so the destination world can restore
-            // its exact camera + genre + toggle state.
-            if (!friendsWorld) return;
+            if (!friendsWorld) {
+              // Non-friends worlds have a static backHref — just navigate.
+              router.push(backHref);
+              return;
+            }
+            // Friends World: resolve exact back target from sessionStorage at
+            // click time so stale mount-time state can never win.
             try {
               const raw = sessionStorage.getItem("blueprint:vennOriginState");
+              console.log("[Friends back] clicked — raw vennOriginState:", raw);
+
               if (raw) {
+                const state = JSON.parse(raw) as {
+                  originKind?: string;
+                  route?: string;
+                  [key: string]: unknown;
+                };
+                console.log("[Friends back] originKind:", state.originKind, "route:", state.route);
+
+                // Transfer to pendingRestore so the destination world can
+                // recover its camera + genre + toggle state.
                 sessionStorage.setItem("blueprint:pendingRestore", raw);
                 sessionStorage.removeItem("blueprint:vennOriginState");
+
+                // Determine target route.
+                // homepage origins must NEVER map to /midvale/[userId].
+                const isHomepage =
+                  state.originKind === "homepage" ||
+                  state.route === "/world" ||
+                  state.route === "/";
+                const target = isHomepage
+                  ? "/world"
+                  : (state.route ?? backHref);
+
+                console.log("[Friends back] pushing to:", target);
+                router.push(target);
+              } else {
+                // No origin state — standard Friends back fallback.
+                console.log("[Friends back] no origin state, pushing to:", backHref);
+                router.push(backHref);
               }
-            } catch {}
+            } catch {
+              router.push(backHref);
+            }
           }}
           style={{
             // Sits flush below the fixed Navbar (height 56) with a 12 px gap.
@@ -2139,7 +2182,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
             alignItems:    "center",
             justifyContent:"center",
             color:         "rgba(255,255,255,0.88)",
-            textDecoration:"none",
+            cursor:        "pointer",
             width:         36,
             height:        36,
             borderRadius:  "50%",
@@ -2156,7 +2199,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
             strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <polyline points="6.5,1.5 2.5,5 6.5,8.5" />
           </svg>
-        </Link>
+        </button>
       )}
 
       {/* ── Utility bar ──────────────────────────────────────────────────────── */}
