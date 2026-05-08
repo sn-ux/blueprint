@@ -2786,9 +2786,25 @@ export default function LandingPage() {
     const subId   = session?.user?.id;
     const subName = session?.user?.name ?? "Surya";
     if (!subId) return;
-    const profile = { userId: subId, userName: subName };
+    const sourceOwner = { userId: subId, userName: subName };
     try {
-      sessionStorage.setItem("blueprint:substituteProfile", JSON.stringify(profile));
+      // Preserve any existing viewing-as profile — only set session user as
+      // default if no profile has been explicitly selected.
+      let existing: { userId: string; userName: string } | null = null;
+      try {
+        const raw = sessionStorage.getItem("blueprint:substituteProfile");
+        existing = raw ? JSON.parse(raw) : null;
+      } catch { /* ignore */ }
+
+      if (!existing) {
+        sessionStorage.setItem("blueprint:substituteProfile", JSON.stringify(sourceOwner));
+        window.dispatchEvent(new CustomEvent("blueprint:substituteChange", { detail: sourceOwner }));
+      }
+      // else: user has an explicit viewing-as profile — leave it untouched.
+
+      // Always record source world owner separately for Friends World context.
+      sessionStorage.setItem("blueprint:vennSourceOwner", JSON.stringify(sourceOwner));
+
       // Signal Friends World to auto-enable Unheard mode on arrival.
       sessionStorage.setItem("blueprint:autoEnableUnheard", "true");
       // Store full origin state so the Friends World back button can return
@@ -2808,7 +2824,6 @@ export default function LandingPage() {
       };
       console.log("[Venn] storing origin state (page.tsx):", originState);
       sessionStorage.setItem("blueprint:vennOriginState", JSON.stringify(originState));
-      window.dispatchEvent(new CustomEvent("blueprint:substituteChange", { detail: profile }));
     } catch {}
   };
 

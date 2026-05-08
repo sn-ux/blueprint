@@ -1989,18 +1989,51 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
     : null;
 
   // Called by VennButton just before navigating to the Friends World.
-  // Pre-writes this world's owner as the substitute profile so the Friends
-  // World loads with "Viewing as <this user>" and the Unheard button works.
-  // Works on every individual world (homepage /world, /midvale/[userId], etc.)
+  //
+  // SUBSTITUTE PROFILE PRESERVATION RULE:
+  //   If the user already has a viewing-as profile selected, we must NOT
+  //   overwrite it with the source world owner.  The user's explicit lens
+  //   should survive the round-trip to Friends World and back.
+  //
+  //   Only when no profile is selected do we fall back to the world owner
+  //   as a sensible default so the Unheard button works on first visit.
+  //
+  //   The source world owner is always stored separately as
+  //   blueprint:vennSourceOwner so Friends World has context about where
+  //   navigation came from, independent of the viewing-as lens.
   const handleVennNavigate = (): void => {
     const subId   = userId ?? sessionUserId;
     const subName = userName ?? "";
     if (!subId) return;
-    const profile = { userId: subId, userName: subName };
+    const sourceOwner = { userId: subId, userName: subName };
     try {
-      sessionStorage.setItem("blueprint:substituteProfile", JSON.stringify(profile));
+      // Read current substitute — may have been explicitly set by the user.
+      let existing: { userId: string; userName: string } | null = null;
+      try {
+        const raw = sessionStorage.getItem("blueprint:substituteProfile");
+        existing = raw ? JSON.parse(raw) : null;
+      } catch { /* ignore parse errors */ }
+
+      if (!existing) {
+        // No explicit viewing-as profile — use source world owner as default
+        // so the Unheard button works on first arrival in Friends World.
+        sessionStorage.setItem("blueprint:substituteProfile", JSON.stringify(sourceOwner));
+        // Dispatch so any co-mounted WorldSphere picks the change up immediately.
+        window.dispatchEvent(
+          new CustomEvent("blueprint:substituteChange", { detail: sourceOwner }),
+        );
+      }
+      // else: user has an explicit profile selected — leave it untouched.
+      // Friends World will use it as-is; Unheard will compare against it.
+
+      // Always record the source world owner separately.  Friends World uses
+      // this for context (e.g. centering) without conflating it with the
+      // user's chosen viewing-as lens.
+      sessionStorage.setItem("blueprint:vennSourceOwner", JSON.stringify(sourceOwner));
+
       // Signal Friends World to auto-enable Unheard mode on arrival.
       sessionStorage.setItem("blueprint:autoEnableUnheard", "true");
+
       // Store full origin state so the Friends World back button can return
       // the user here with camera position, genre, and toggles intact.
       const originRoute = typeof window !== "undefined" ? window.location.pathname : "/world";
@@ -2021,11 +2054,6 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
       };
       console.log("[Venn] storing origin state:", originState);
       sessionStorage.setItem("blueprint:vennOriginState", JSON.stringify(originState));
-      // Also dispatch the event so any already-mounted WorldSphere (e.g. opened
-      // in another same-tab route) picks it up without a page reload.
-      window.dispatchEvent(
-        new CustomEvent("blueprint:substituteChange", { detail: profile }),
-      );
     } catch { /* sessionStorage unavailable — degrade gracefully */ }
   };
 
