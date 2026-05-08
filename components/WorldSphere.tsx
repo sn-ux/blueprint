@@ -299,6 +299,35 @@ function PinButton({
   );
 }
 
+// ── VennButton — opens the current genre/subgenre in Friends World ────────────
+// Only rendered on individual user worlds (not on friendsWorld itself).
+
+function VennButton({ href, color }: { href: string; color: string }) {
+  return (
+    <Link
+      href={href}
+      onClick={e => e.stopPropagation()}
+      aria-label="Compare in Friends World"
+      title="Open this genre in Friends World"
+      style={{
+        flexShrink:     0,
+        display:        "flex",
+        alignItems:     "center",
+        color,
+        lineHeight:     1,
+        textDecoration: "none",
+        transition:     "color 0.20s ease",
+      }}
+    >
+      {/* Overlapping circles (Venn diagram) */}
+      <svg width={20} height={14} viewBox="0 0 22 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden="true">
+        <circle cx="7"  cy="7" r="6" />
+        <circle cx="15" cy="7" r="6" />
+      </svg>
+    </Link>
+  );
+}
+
 // ── Social badge ──────────────────────────────────────────────────────────────
 // Plain numeric count styled in the genre color. Always equals socialUsers.length.
 
@@ -472,6 +501,14 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
   const dirtyRef        = useRef(true);
   const mouseMoveRafRef = useRef(false);
 
+  // ── Friends World: URL-param auto-selection ───────────────────────────────
+  // When navigating from an individual world via the Venn button, the URL
+  // carries ?genre=... and optionally ?subgenre=...  These refs hold the
+  // decoded values so they can be applied once data has loaded.
+  const urlGenreParamRef    = useRef<string | null>(null);
+  const pendingSubgenreRef  = useRef<string | null>(null);
+  const urlParamAppliedRef  = useRef(false);
+
   // ── Mobile detection ──────────────────────────────────────────────────────
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -496,6 +533,43 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
     if (selected !== null) setSheetSnap(prev => prev === 0 ? 1 : prev);
     else setSheetSnap(0);
   }, [selected, isMobile]);
+
+  // ── Friends World: read ?genre / ?subgenre from URL on mount ─────────────
+  useEffect(() => {
+    if (!friendsWorld || typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    urlGenreParamRef.current   = params.get("genre");
+    pendingSubgenreRef.current = params.get("subgenre");
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Friends World: apply genre param once world data has loaded ───────────
+  useEffect(() => {
+    if (!friendsWorld || loading || urlParamAppliedRef.current) return;
+    const g = urlGenreParamRef.current;
+    if (!g || !(g in worlds)) return;
+    urlParamAppliedRef.current = true;
+    setSelected(g);
+    selectedRef.current   = g;
+    // Zoom to genre level; zoom further if a subgenre will also be applied.
+    zoomTargetRef.current = pendingSubgenreRef.current ? 3.2 : 2.5;
+    dirtyRef.current      = true;
+  }, [friendsWorld, loading, worlds]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Friends World: apply subgenre param once subgenres list arrives ───────
+  useEffect(() => {
+    const s = pendingSubgenreRef.current;
+    if (!s || subgenres.length === 0) return;
+    // Only apply if the subgenre actually exists in this world
+    if (!subgenres.find(sg => sg.name === s)) {
+      // Subgenre not present — clear the pending value, show graceful state
+      pendingSubgenreRef.current = null;
+      return;
+    }
+    pendingSubgenreRef.current     = null;
+    selectedSubgenreRef.current    = s;
+    setSelectedSubgenre(s);
+    dirtyRef.current               = true;
+  }, [subgenres]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Body scroll lock when exploring on mobile ────────────────────────────
   useEffect(() => {
@@ -1487,6 +1561,13 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
       ].join(":")
     : null;
 
+  // Venn href — only shown on individual worlds (not the Friends aggregate world)
+  const vennHref: string | null = !friendsWorld && selected
+    ? focusedSubgenre
+      ? `/midvale/friends?genre=${encodeURIComponent(selected)}&subgenre=${encodeURIComponent(focusedSubgenre)}`
+      : `/midvale/friends?genre=${encodeURIComponent(selected)}`
+    : null;
+
   const handlePlaylistPush = async () => {
     if (!selected || playlistLoading) return;
 
@@ -1712,6 +1793,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                       <div className="flex items-center justify-between gap-4">
                         <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{focusedSubgenre}</h2>
                         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                          {vennHref && <VennButton href={vennHref} color={selectedColor} />}
                           <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
                           <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
                           <PlaylistButton loading={playlistLoading} success={!!(playlistKey && createdPlaylistKeys.has(playlistKey))} onClick={handlePlaylistPush} color={selectedColor} />
@@ -1725,6 +1807,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                       <div className="flex items-center justify-between gap-4">
                         <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{shortLabel(selected)}</h2>
                         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                          {vennHref && <VennButton href={vennHref} color={selectedColor} />}
                           <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
                           <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
                           <PlaylistButton loading={playlistLoading} success={!!(playlistKey && createdPlaylistKeys.has(playlistKey))} onClick={handlePlaylistPush} color={selectedColor} />
@@ -1925,10 +2008,16 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                       </button>
                     </div>
 
-                    {/* Row 2 (2 cells): Popularity · Live Events
-                        With gap: 10 + cell 36, row 2 right-aligns so
-                        Popularity sits under Spotify, Pin under Arrow.  */}
+                    {/* Row 2 (2–3 cells): Venn · Popularity · Live Events
+                        When vennHref is present (individual world), 3 cells
+                        match Row 1 exactly for perfect column alignment.
+                        On Friends World only 2 cells are shown.            */}
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      {vennHref && (
+                        <div style={W}>
+                          <VennButton href={vennHref} color={selectedColor} />
+                        </div>
+                      )}
                       <div style={W}>
                         <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
                       </div>
