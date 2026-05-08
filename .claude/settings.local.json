@@ -53,7 +53,19 @@
       "Bash(npx ts-node *)",
       "Bash(xargs cat *)",
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "Bash(command -v vercel)",
+      "Bash(vercel logs *)",
+      "mcp__Claude_in_Chrome__list_connected_browsers",
+      "Bash(curl -s \"http://localhost:3003/api/world/friends\")",
+      "Bash(curl -s \"http://localhost:3003/api/world\")",
+      "Bash(curl -s \"http://localhost:3003/api/world/friends/Other\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('tracks:', len\\(d['tracks']\\), 'subgenres:', len\\(d['subgenres']\\)\\); print\\('sample subgenres:', d['subgenres'][:3]\\)\")",
+      "Bash(echo \"exit: $?\")",
+      "Bash(npx next *)",
+      "Bash(curl -s http://localhost:3003/midvale/friends)",
+      "Bash(curl -s http://localhost:3003/world)"
     ]
   }
 }
