@@ -18,45 +18,71 @@ const COLORS: Record<string, string> = {
   "Other":                          "#71717a",
 };
 
-interface Props {
-  /** Display name shown in the card header. */
-  name: string;
-  /**
-   * The userId this card represents.  When provided the card fetches real genre
-   * data from /api/world?userId=<id> and, together with hasWorld=true, renders
-   * the full interactive FullWorldCard variant.
-   */
-  userId?: string | null;
-  /**
-   * Where clicking the card should navigate.  Defaults to "/world" when
-   * userId is not provided (legacy Surya behaviour preserved).
-   */
-  worldHref?: string;
-  /**
-   * True when this user has already imported their library.  Controls whether
-   * a FullWorldCard or a RoommateCard (placeholder) is rendered.
-   */
-  hasWorld?: boolean;
-  /**
-   * Offsets each sphere's initial rotation so the four cards look distinct.
-   * Value in radians; each card gets a different seed (0, 1, 2, 3).
-   */
-  rotSeed?: number;
+// Shortened display labels for genre breakdown text
+const SHORT_GENRE: Record<string, string> = {
+  "Rap / Hip-Hop":                  "Rap",
+  "R&B / Soul / Funk":              "R&B",
+  "Rock / Indie / Alternative":     "Rock",
+  "Pop / Dance":                    "Pop",
+  "Jazz / Blues":                   "Jazz",
+  "Electronic / Ambient":           "Electronic",
+  "Classical / Score / Soundtrack": "Classical",
+  "World / Folk / Regional":        "World",
+  "Other":                          "Other",
+};
+
+// ── Genre breakdown helpers ───────────────────────────────────────────────────
+
+interface GenreSlice { genre: string; label: string; pct: number; color: string }
+
+function calcGenres(worlds: Record<string, number>, topN = 4): GenreSlice[] {
+  const total = Object.values(worlds).reduce((s, c) => s + c, 0) || 1;
+  return Object.entries(worlds)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, topN)
+    .map(([genre, count]) => ({
+      genre,
+      label: SHORT_GENRE[genre] ?? genre,
+      pct:   Math.round((count / total) * 100),
+      color: COLORS[genre] ?? "#71717a",
+    }));
 }
 
-// ── FullWorldCard — any user who has an imported library ──────────────────────
-// The entire card is a <Link> that navigates to worldHref.
+function GenreBreakdown({
+  worlds,
+  topN = 4,
+  fontSize = 11,
+}: {
+  worlds: Record<string, number>;
+  topN?: number;
+  fontSize?: number;
+}) {
+  const genres = calcGenres(worlds, topN);
+  return (
+    <p style={{ margin: 0, fontSize, lineHeight: 1.7, color: "rgba(255,255,255,0.38)" }}>
+      {genres.map((g, i) => (
+        <span key={g.genre}>
+          {i > 0 && <span style={{ opacity: 0.45 }}> · </span>}
+          <span style={{ color: g.color, fontWeight: 500 }}>{g.label}</span>
+          {" "}<span>{g.pct}%</span>
+        </span>
+      ))}
+    </p>
+  );
+}
 
-function FullWorldCard({
+// ── WorldGalleryTile — user with an imported library ─────────────────────────
+
+function WorldGalleryTile({
   name,
   userId,
   worldHref,
   rotSeed = 0,
 }: {
-  name: string;
-  userId: string;
+  name:      string;
+  userId:    string;
   worldHref: string;
-  rotSeed: number;
+  rotSeed:   number;
 }) {
   const [worlds,  setWorlds]  = useState<Record<string, number> | null>(null);
   const [hovered, setHovered] = useState(false);
@@ -72,73 +98,35 @@ function FullWorldCard({
     ? Object.values(worlds).reduce((s, c) => s + c, 0)
     : null;
 
-  const topGenre    = worlds
-    ? (Object.entries(worlds).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null)
-    : null;
-  const accentHex   = topGenre ? (COLORS[topGenre] ?? "#ffffff") : "#ffffff";
-  const accentShadow = hovered
-    ? `inset 0 1px 0 ${accentHex}55, 0 8px 28px rgba(0,0,0,0.35)`
-    : `inset 0 1px 0 ${accentHex}33`;
-
   return (
-    <Link
-      href={worldHref}
-      style={{ textDecoration: "none", display: "block" }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
+    <Link href={worldHref} style={{ textDecoration: "none", display: "block" }}>
       <div
-        className="w-full aspect-[16/10]"
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
         style={{
-          borderRadius:  20,
-          border:        `1px solid rgba(255,255,255,${hovered ? 0.18 : 0.10})`,
-          background:    "rgba(255,255,255,0.015)",
-          overflow:      "hidden",
-          display:       "flex",
-          flexDirection: "column",
-          cursor:        "pointer",
-          boxShadow:     accentShadow,
-          transform:     hovered ? "translateY(-2px)" : "translateY(0)",
-          transition:    "border-color 0.18s ease, box-shadow 0.22s ease, transform 0.18s ease",
+          cursor:     "pointer",
+          transform:  hovered ? "translateY(-3px)" : "translateY(0)",
+          transition: "transform 0.18s ease",
         }}
       >
-        {/* ── Header ──────────────────────────────────────────────────────── */}
+        {/* ── Sphere preview ──────────────────────────────────────────────── */}
         <div style={{
-          flexShrink:     0,
-          padding:        "15px 18px 0",
-          display:        "flex",
-          alignItems:     "center",
-          justifyContent: "space-between",
+          position:     "relative",
+          width:        "100%",
+          aspectRatio:  "1 / 1",
+          borderRadius: 16,
+          overflow:     "hidden",
+          marginBottom: 14,
         }}>
-          <p style={{
-            margin:        0,
-            fontSize:      12,
-            fontWeight:    600,
-            letterSpacing: "0.06em",
-            textTransform: "uppercase",
-            color:         "rgba(255,255,255,0.55)",
-          }}>
-            {name}
-          </p>
-          {totalTracks !== null && (
-            <span style={{ fontSize: 11, color: "rgba(255,255,255,0.22)", letterSpacing: "0.01em" }}>
-              {totalTracks.toLocaleString()} tracks
-            </span>
-          )}
-        </div>
-
-        {/* ── Sphere ──────────────────────────────────────────────────────── */}
-        <div style={{ flex: 1, position: "relative" }}>
           <SphereCanvas
             className="absolute inset-0 w-full h-full"
             interactive={false}
             showLabels={false}
-            rotSpeed={0.0020}
+            rotSpeed={0.0018 + rotSeed * 0.0003}
             initialRotX={0.28 + rotSeed * 0.12}
             initialRotY={rotSeed * 1.4}
           />
-
-          {/* Hover overlay */}
+          {/* Open-world hover label */}
           <div style={{
             position:       "absolute",
             inset:          0,
@@ -146,201 +134,150 @@ function FullWorldCard({
             alignItems:     "center",
             justifyContent: "center",
             opacity:        hovered ? 1 : 0,
-            transition:     "opacity 0.20s ease",
+            transition:     "opacity 0.18s ease",
             pointerEvents:  "none",
           }}>
             <span style={{
-              fontSize:      13,
+              fontSize:      12,
               fontWeight:    500,
               letterSpacing: "0.06em",
               textTransform: "uppercase",
-              color:         "rgba(255,255,255,0.70)",
-              background:    "rgba(0,0,0,0.55)",
-              padding:       "7px 16px",
+              color:         "rgba(255,255,255,0.80)",
+              background:    "rgba(0,0,0,0.58)",
+              padding:       "6px 14px",
               borderRadius:  20,
-              backdropFilter:"blur(4px)",
+              backdropFilter:"blur(6px)",
             }}>
-              Open World →
+              Open →
             </span>
           </div>
         </div>
 
-        {/* ── Footer strip ────────────────────────────────────────────────── */}
-        <div style={{
-          flexShrink:     0,
-          padding:        "9px 18px 13px",
-          borderTop:      "1px solid rgba(255,255,255,0.05)",
-          display:        "flex",
-          alignItems:     "center",
-          justifyContent: "space-between",
-        }}>
-          {/* Top-4 genre colour dots */}
-          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-            {worlds && Object.entries(worlds)
-              .sort((a, b) => b[1] - a[1])
-              .slice(0, 5)
-              .map(([genre]) => (
-                <div
-                  key={genre}
-                  title={genre}
-                  style={{
-                    width:        6,
-                    height:       6,
-                    borderRadius: "50%",
-                    background:   COLORS[genre] ?? "#71717a",
-                    opacity:      hovered ? 0.90 : 0.60,
-                    flexShrink:   0,
-                    transition:   "opacity 0.18s ease",
-                  }}
-                />
-              ))}
-          </div>
-          <span style={{
-            fontSize:      12,
-            color:         `rgba(255,255,255,${hovered ? 0.70 : 0.30})`,
-            letterSpacing: "0.02em",
+        {/* ── Info ────────────────────────────────────────────────────────── */}
+        <div>
+          <p style={{
+            margin:        "0 0 3px",
+            fontSize:      "clamp(13px, 1.8vw, 16px)",
+            fontWeight:    600,
+            letterSpacing: "-0.01em",
+            color:         hovered ? "#ffffff" : "rgba(255,255,255,0.88)",
             transition:    "color 0.18s ease",
+            lineHeight:    1.25,
           }}>
-            Explore →
-          </span>
+            {name}
+          </p>
+          {totalTracks !== null && (
+            <p style={{
+              margin:        "0 0 5px",
+              fontSize:      "clamp(11px, 1.4vw, 13px)",
+              color:         "rgba(255,255,255,0.38)",
+              letterSpacing: "0.01em",
+            }}>
+              {totalTracks.toLocaleString()} tracks
+            </p>
+          )}
+          {worlds && (
+            <GenreBreakdown
+              worlds={worlds}
+              topN={4}
+              fontSize={11}
+            />
+          )}
         </div>
       </div>
     </Link>
   );
 }
 
-// ── RoommateCard — placeholder for users who have not yet connected ────────────
-// Shows the auto-rotating sphere (dimmed) and a "Connect Spotify" button that
-// starts the NextAuth Spotify OAuth flow.  After OAuth the browser lands on
-// /midvale/welcome which fires the import immediately on mount.
+// ── EmptyGallerySlot — placeholder for users who haven't connected ────────────
 
-function RoommateCard({ name, rotSeed = 0 }: { name: string; rotSeed: number }) {
+function EmptyGallerySlot({ name, rotSeed = 0 }: { name: string; rotSeed: number }) {
   const [connecting, setConnecting] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
 
   const handleConnect = async () => {
     setConnecting(true);
-
-    // ── Clear any existing session first ─────────────────────────────────────
-    // If Surya (or anyone) is currently logged in, their session must be ended
-    // before we start the new OAuth.  Without this, NextAuth may receive the
-    // callback and find an existing user that matches Spotify's silent re-auth,
-    // leaving the browser in Surya's session instead of the new roommate's.
-    // redirect: false keeps us on the page; signIn below immediately redirects.
     await signOut({ redirect: false });
-
-    // ── Start Spotify OAuth with forced account chooser ───────────────────────
-    // The third argument passes extra params to Spotify's authorization URL.
-    // show_dialog=true forces Spotify to always present the account/permission
-    // dialog, even when the user is already logged into Spotify in the browser.
-    // This lets the roommate pick THEIR account instead of silently reusing
-    // whatever Spotify session is active.
-    //
-    // callbackUrl is /midvale/welcome — a dedicated page that fires the import
-    // immediately on mount, bypassing all the useSession/useSearchParams timing
-    // issues that plagued the old ?import=1 query-param mechanism.
     await signIn(
       "spotify",
       { callbackUrl: "/midvale/welcome" },
       { show_dialog: "true" },
     );
-
-    // signIn redirects; this line only runs if the redirect somehow resolves.
     setConnecting(false);
   };
 
   return (
-    <div
-      className="w-full aspect-[16/10]"
-      style={{
-        borderRadius:  20,
-        border:        "1px solid rgba(255,255,255,0.05)",
-        background:    "rgba(255,255,255,0.010)",
-        overflow:      "hidden",
-        display:       "flex",
-        flexDirection: "column",
-        opacity:       0.50,
-        boxShadow:     "inset 0 1px 0 rgba(255,255,255,0.04)",
-      }}
-    >
-      {/* ── Header ──────────────────────────────────────────────────────────── */}
-      <div style={{ flexShrink: 0, padding: "15px 18px 0" }}>
-        <p style={{
-          margin:        0,
-          fontSize:      12,
-          fontWeight:    600,
-          letterSpacing: "0.06em",
-          textTransform: "uppercase",
-          color:         "rgba(255,255,255,0.22)",
-        }}>
-          {name}
-        </p>
-      </div>
-
-      {/* ── Sphere — slow, dimmed ────────────────────────────────────────────── */}
-      <div style={{ flex: 1, position: "relative" }}>
+    <div style={{ opacity: 0.40 }}>
+      {/* ── Sphere preview — dimmed ──────────────────────────────────────── */}
+      <div style={{
+        position:     "relative",
+        width:        "100%",
+        aspectRatio:  "1 / 1",
+        borderRadius: 16,
+        overflow:     "hidden",
+        marginBottom: 14,
+      }}>
         <SphereCanvas
           className="absolute inset-0 w-full h-full"
           interactive={false}
           showLabels={false}
-          rotSpeed={0.0014}
+          rotSpeed={0.0012}
           initialRotX={0.28 + rotSeed * 0.12}
           initialRotY={rotSeed * 1.4}
         />
-
-        {/* Overlay: radial vignette + Connect button */}
+        {/* Connect Spotify button overlay */}
         <div style={{
           position:       "absolute",
           inset:          0,
           display:        "flex",
-          flexDirection:  "column",
           alignItems:     "center",
           justifyContent: "center",
-          gap:            14,
-          padding:        "0 28px",
-          background:     "radial-gradient(ellipse at center, rgba(0,0,0,0.32) 0%, rgba(0,0,0,0) 72%)",
+          background:     "radial-gradient(ellipse at center, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0) 75%)",
         }}>
           <button
             ref={btnRef}
+            type="button"
             onClick={handleConnect}
             disabled={connecting}
             style={{
-              padding:       "9px 20px",
-              background:    "rgba(255,255,255,0.06)",
-              border:        "1px solid rgba(255,255,255,0.14)",
+              padding:       "8px 18px",
+              background:    "rgba(255,255,255,0.07)",
+              border:        "1px solid rgba(255,255,255,0.16)",
               borderRadius:  10,
-              color:         "rgba(255,255,255,0.70)",
-              fontSize:      13,
+              color:         "rgba(255,255,255,0.75)",
+              fontSize:      "clamp(11px, 1.4vw, 13px)",
               fontFamily:    "inherit",
               fontWeight:    500,
               letterSpacing: "0.01em",
               cursor:        connecting ? "default" : "pointer",
               opacity:       connecting ? 0.50 : 1,
-              transition:    "background 0.18s ease, border-color 0.18s ease, color 0.18s ease",
-            }}
-            onMouseEnter={e => {
-              if (connecting) return;
-              e.currentTarget.style.background  = "rgba(255,255,255,0.11)";
-              e.currentTarget.style.borderColor = "rgba(255,255,255,0.26)";
-              e.currentTarget.style.color       = "rgba(255,255,255,0.92)";
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.background  = "rgba(255,255,255,0.06)";
-              e.currentTarget.style.borderColor = "rgba(255,255,255,0.14)";
-              e.currentTarget.style.color       = "rgba(255,255,255,0.70)";
+              transition:    "background 0.18s ease, border-color 0.18s ease",
             }}
           >
             {connecting ? "Connecting…" : "Connect Spotify"}
           </button>
         </div>
       </div>
+
+      {/* ── Info ────────────────────────────────────────────────────────── */}
+      <p style={{
+        margin:        0,
+        fontSize:      "clamp(13px, 1.8vw, 16px)",
+        fontWeight:    600,
+        letterSpacing: "-0.01em",
+        color:         "rgba(255,255,255,0.40)",
+        lineHeight:    1.25,
+      }}>
+        {name}
+      </p>
     </div>
   );
 }
 
-// ── FriendsWorldCard ──────────────────────────────────────────────────────────
-// Larger card that aggregates all Midvale users' tracks.
-// Fetches from /api/world/friends; links to /midvale/friends.
+// ── FriendsGalleryTile — combined world at the top of the Friends page ────────
+// Rendered full-width above the individual world grid.
+// On desktop: sphere left + info right (flex row).
+// On mobile:  sphere top + info below (flex col, forced by className).
 
 export function FriendsWorldCard() {
   const [worlds,  setWorlds]  = useState<Record<string, number> | null>(null);
@@ -357,84 +294,37 @@ export function FriendsWorldCard() {
     ? Object.values(worlds).reduce((s, c) => s + c, 0)
     : null;
 
-  const topGenre   = worlds
-    ? (Object.entries(worlds).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null)
-    : null;
-  const accentHex    = topGenre ? (COLORS[topGenre] ?? "#ffffff") : "#ffffff";
-  const accentShadow = hovered
-    ? `inset 0 1px 0 ${accentHex}55, 0 12px 40px rgba(0,0,0,0.40)`
-    : `inset 0 1px 0 ${accentHex}33`;
-
   return (
-    <Link
-      href="/midvale/friends"
-      style={{ textDecoration: "none", display: "block" }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
+    <Link href="/midvale/friends" style={{ textDecoration: "none", display: "block" }}>
+      {/* Responsive flex: stacked on mobile → side-by-side on sm+ */}
       <div
-        className="w-full"
+        className="flex flex-col sm:flex-row sm:items-center"
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
         style={{
-          aspectRatio:   "21 / 8",
-          borderRadius:  24,
-          border:        `1px solid rgba(255,255,255,${hovered ? 0.20 : 0.12})`,
-          background:    "rgba(255,255,255,0.018)",
-          overflow:      "hidden",
-          display:       "flex",
-          flexDirection: "column",
-          cursor:        "pointer",
-          boxShadow:     accentShadow,
-          transform:     hovered ? "translateY(-2px)" : "translateY(0)",
-          transition:    "border-color 0.18s ease, box-shadow 0.22s ease, transform 0.18s ease",
+          cursor:     "pointer",
+          gap:        "clamp(16px, 3vw, 40px)",
+          transform:  hovered ? "translateY(-3px)" : "translateY(0)",
+          transition: "transform 0.18s ease",
         }}
       >
-        {/* Header */}
-        <div style={{
-          flexShrink:     0,
-          padding:        "18px 22px 0",
-          display:        "flex",
-          alignItems:     "center",
-          justifyContent: "space-between",
-        }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-            <p style={{
-              margin:        0,
-              fontSize:      13,
-              fontWeight:    700,
-              letterSpacing: "0.07em",
-              textTransform: "uppercase",
-              color:         "rgba(255,255,255,0.70)",
-            }}>
-              Friends
-            </p>
-            <span style={{
-              fontSize:      11,
-              fontWeight:    400,
-              letterSpacing: "0.04em",
-              textTransform: "uppercase",
-              color:         "rgba(255,255,255,0.22)",
-            }}>
-              Combined World
-            </span>
-          </div>
-          {totalTracks !== null && (
-            <span style={{ fontSize: 11, color: "rgba(255,255,255,0.22)", letterSpacing: "0.01em" }}>
-              {totalTracks.toLocaleString()} unique tracks
-            </span>
-          )}
-        </div>
-
-        {/* Sphere */}
-        <div style={{ flex: 1, position: "relative" }}>
+        {/* ── Sphere — full-width square on mobile, 240px square on sm+ ─── */}
+        <div
+          className="relative w-full sm:w-60 sm:h-60 flex-shrink-0"
+          style={{
+            aspectRatio:  "1 / 1",   /* respected on mobile (w-full, h auto) */
+            borderRadius: 20,
+            overflow:     "hidden",
+          }}
+        >
           <SphereCanvas
             className="absolute inset-0 w-full h-full"
             interactive={false}
             showLabels={false}
-            rotSpeed={0.0016}
+            rotSpeed={0.0014}
             initialRotX={0.35}
             initialRotY={0.9}
           />
-
           {/* Hover overlay */}
           <div style={{
             position:       "absolute",
@@ -451,65 +341,63 @@ export function FriendsWorldCard() {
               fontWeight:    500,
               letterSpacing: "0.06em",
               textTransform: "uppercase",
-              color:         "rgba(255,255,255,0.70)",
-              background:    "rgba(0,0,0,0.55)",
+              color:         "rgba(255,255,255,0.80)",
+              background:    "rgba(0,0,0,0.58)",
               padding:       "7px 16px",
               borderRadius:  20,
-              backdropFilter:"blur(4px)",
+              backdropFilter:"blur(6px)",
             }}>
-              Explore Friends World →
+              Open →
             </span>
           </div>
         </div>
 
-        {/* Footer */}
-        <div style={{
-          flexShrink:     0,
-          padding:        "9px 22px 14px",
-          borderTop:      "1px solid rgba(255,255,255,0.05)",
-          display:        "flex",
-          alignItems:     "center",
-          justifyContent: "space-between",
-        }}>
-          {/* Genre colour dots */}
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            {worlds && Object.entries(worlds)
-              .sort((a, b) => b[1] - a[1])
-              .slice(0, 8)
-              .map(([genre]) => (
-                <div
-                  key={genre}
-                  title={genre}
-                  style={{
-                    width:        7,
-                    height:       7,
-                    borderRadius: "50%",
-                    background:   COLORS[genre] ?? "#71717a",
-                    opacity:      hovered ? 0.90 : 0.55,
-                    flexShrink:   0,
-                    transition:   "opacity 0.18s ease",
-                  }}
-                />
-              ))}
-          </div>
-          <span style={{
-            fontSize:      12,
-            color:         `rgba(255,255,255,${hovered ? 0.70 : 0.30})`,
-            letterSpacing: "0.02em",
+        {/* ── Info ────────────────────────────────────────────────────────── */}
+        <div>
+          <p style={{
+            margin:        "0 0 6px",
+            fontSize:      "clamp(22px, 3.5vw, 36px)",
+            fontWeight:    700,
+            letterSpacing: "-0.025em",
+            color:         hovered ? "#ffffff" : "rgba(255,255,255,0.92)",
             transition:    "color 0.18s ease",
+            lineHeight:    1.1,
           }}>
-            Explore →
-          </span>
+            Friends
+          </p>
+          {totalTracks !== null && (
+            <p style={{
+              margin:        "0 0 8px",
+              fontSize:      "clamp(12px, 1.5vw, 14px)",
+              color:         "rgba(255,255,255,0.40)",
+              letterSpacing: "0.01em",
+            }}>
+              {totalTracks.toLocaleString()} tracks
+            </p>
+          )}
+          {worlds && (
+            <GenreBreakdown
+              worlds={worlds}
+              topN={5}
+              fontSize={12}
+            />
+          )}
         </div>
       </div>
     </Link>
   );
 }
 
-// ── Public export ─────────────────────────────────────────────────────────────
-// Routes to the correct card variant:
-//   • userId + hasWorld → FullWorldCard  (real genre data, clickable)
-//   • otherwise          → RoommateCard  (placeholder, Connect Spotify button)
+// ── WorldCard — public default export ────────────────────────────────────────
+// Routes to WorldGalleryTile (has world) or EmptyGallerySlot (no world yet).
+
+interface Props {
+  name:      string;
+  userId?:   string | null;
+  worldHref?: string;
+  hasWorld?: boolean;
+  rotSeed?:  number;
+}
 
 export default function WorldCard({
   name,
@@ -520,7 +408,7 @@ export default function WorldCard({
 }: Props) {
   if (userId && hasWorld) {
     return (
-      <FullWorldCard
+      <WorldGalleryTile
         name={name}
         userId={userId}
         worldHref={worldHref ?? `/midvale/${userId}`}
@@ -528,5 +416,5 @@ export default function WorldCard({
       />
     );
   }
-  return <RoommateCard name={name} rotSeed={rotSeed} />;
+  return <EmptyGallerySlot name={name} rotSeed={rotSeed} />;
 }
