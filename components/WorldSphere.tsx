@@ -304,6 +304,7 @@ function PinButton({
 // Only rendered on individual user worlds (not on friendsWorld itself).
 // When disabled (genre/subgenre absent from Friends World) renders as a muted
 // non-interactive span instead of a navigable link.
+// Icon: Users / group silhouette — visually distinct from UnheardButton's sparkle.
 
 function VennButton({
   href,
@@ -317,15 +318,19 @@ function VennButton({
   /** Called synchronously before the Link navigates — use to write sessionStorage. */
   onBeforeNavigate?:  () => void;
 }) {
-  // Sparkle / plus-star — same icon used by UnheardButton, communicates discovery.
-  const sparkle = (
+  // Users (two-person silhouette) — clearly communicates "Friends / group / network".
+  // Deliberately different from the sparkle icon used by UnheardButton.
+  const usersIcon = (
     <svg
       width={18} height={18} viewBox="0 0 24 24" fill="none"
       stroke="currentColor" strokeWidth={2}
       strokeLinecap="round" strokeLinejoin="round"
       aria-hidden="true"
     >
-      <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
     </svg>
   );
 
@@ -343,7 +348,7 @@ function VennButton({
           cursor:     "default",
         }}
       >
-        {sparkle}
+        {usersIcon}
       </span>
     );
   }
@@ -355,8 +360,8 @@ function VennButton({
         e.stopPropagation();
         onBeforeNavigate?.();
       }}
-      aria-label="Compare in Friends World"
-      title="Open this genre in Friends World"
+      aria-label="Open in Friends World"
+      title="Open in Friends World"
       style={{
         flexShrink:     0,
         display:        "flex",
@@ -367,30 +372,35 @@ function VennButton({
         transition:     "color 0.20s ease",
       }}
     >
-      {sparkle}
+      {usersIcon}
     </Link>
   );
 }
 
 // ── UnheardButton — sort unheard tracks to top ───────────────────────────────
 // Only rendered when a substitute profile is selected. Uses a sparkle icon to
-// convey "undiscovered" without interfering with the Venn / playlist buttons.
+// convey "undiscovered". Visually distinct from VennButton (which uses Users icon).
 
 function UnheardButton({
   active,
   onClick,
   color,
+  name,
 }: {
-  active:  boolean;
-  onClick: () => void;
-  color:   string;
+  active:   boolean;
+  onClick:  () => void;
+  color:    string;
+  /** Display name of the viewing-as profile — used in tooltip. */
+  name?:    string;
 }) {
+  const label  = name ? `Show songs ${name} hasn't saved` : "Show unheard tracks first";
+  const active_label = name ? `Showing songs ${name} hasn't saved` : "Showing unheard tracks first";
   return (
     <button
       type="button"
       onClick={e => { e.stopPropagation(); onClick(); }}
-      aria-label={active ? "Disable unheard filter" : "Show unheard tracks first"}
-      title={active ? "Showing unheard tracks first" : "Sort unheard tracks to top"}
+      aria-label={active ? "Disable unheard filter" : label}
+      title={active ? active_label : label}
       style={{
         flexShrink: 0,
         background: "none",
@@ -404,7 +414,7 @@ function UnheardButton({
         lineHeight: 1,
       }}
     >
-      {/* Sparkle / asterisk — "new / undiscovered" */}
+      {/* Sparkle / asterisk — "new / undiscovered". Distinct from the Users icon on VennButton. */}
       <svg
         width={18} height={18} viewBox="0 0 24 24" fill="none"
         stroke="currentColor" strokeWidth={2}
@@ -2315,7 +2325,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                       <div className="flex items-center justify-between gap-4">
                         <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{focusedSubgenre}</h2>
                         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                          {showUnheard && <UnheardButton active={unheardMode} onClick={() => setUnheardMode(v => !v)} color={selectedColor} />}
+                          {showUnheard && <UnheardButton active={unheardMode} onClick={() => setUnheardMode(v => !v)} color={selectedColor} name={substituteProfile?.userName} />}
                           {vennHref && <VennButton href={vennHref} color={selectedColor} disabled={!vennEnabled} onBeforeNavigate={handleVennNavigate} />}
                           <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
                           <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
@@ -2330,7 +2340,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                       <div className="flex items-center justify-between gap-4">
                         <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{shortLabel(selected)}</h2>
                         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                          {showUnheard && <UnheardButton active={unheardMode} onClick={() => setUnheardMode(v => !v)} color={selectedColor} />}
+                          {showUnheard && <UnheardButton active={unheardMode} onClick={() => setUnheardMode(v => !v)} color={selectedColor} name={substituteProfile?.userName} />}
                           {vennHref && <VennButton href={vennHref} color={selectedColor} disabled={!vennEnabled} onBeforeNavigate={handleVennNavigate} />}
                           <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
                           <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
@@ -2611,7 +2621,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                       {showUnheard && (
                         <div style={W}>
-                          <UnheardButton active={unheardMode} onClick={() => setUnheardMode(v => !v)} color={selectedColor} />
+                          <UnheardButton active={unheardMode} onClick={() => setUnheardMode(v => !v)} color={selectedColor} name={substituteProfile?.userName} />
                         </div>
                       )}
                       {vennHref && (
