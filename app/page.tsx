@@ -831,18 +831,22 @@ export default function LandingPage() {
   }, [worlds]);
 
   // ── Venn back-restore: re-apply state when returning from Friends World ────
-  // Reads blueprint:pendingRestore on mount.  If the stored route is "/world",
-  // immediately writes camera refs and schedules genre/subgenre/toggle restore.
+  // Reads blueprint:pendingRestore on mount.  If the stored route matches this
+  // page's pathname ("/"), immediately writes camera refs and schedules restore.
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem("blueprint:pendingRestore");
       if (!raw) return;
       const state = JSON.parse(raw) as {
-        route: string; genre: string | null; subgenre: string | null;
-        zoom: number; rotMat: number[];
+        originKind?: string; route: string; genre: string | null;
+        subgenre: string | null; zoom: number; rotMat: number[];
         socialSort: boolean; liveMode: boolean; unheardMode: boolean;
       };
-      if (state.route !== "/world") return;
+      // Match on "/" (our actual pathname) OR the legacy "/world" key that
+      // older stored states may still carry.
+      const myRoute = typeof window !== "undefined" ? window.location.pathname : "/";
+      const routeMatches = state.route === myRoute || state.route === "/world";
+      if (!routeMatches) return;
       sessionStorage.removeItem("blueprint:pendingRestore");
 
       // Restore camera (refs read by RAF on next tick — no re-render needed).
@@ -2617,9 +2621,10 @@ export default function LandingPage() {
       // Store full origin state so the Friends World back button can return
       // the user here with camera position, genre, and toggles intact.
       // originKind = "homepage" so the back button never routes to /midvale/[userId].
+      // route is the exact current pathname ("/") — not normalized to "/world".
       const originState = {
         originKind:  "homepage" as const,
-        route:       "/world",
+        route:       typeof window !== "undefined" ? window.location.pathname : "/",
         genre:       selected   ?? null,
         subgenre:    selectedSubgenre ?? null,
         zoom:        zoomRef.current,

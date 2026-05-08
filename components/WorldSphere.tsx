@@ -2151,12 +2151,13 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
 
                 // Determine target route.
                 // homepage origins must NEVER map to /midvale/[userId].
+                // Use the exact stored route — "/" stays "/", "/world" stays "/world".
                 const isHomepage =
                   state.originKind === "homepage" ||
-                  state.route === "/world" ||
-                  state.route === "/";
+                  state.route === "/" ||
+                  state.route === "/world";
                 const target = isHomepage
-                  ? "/world"
+                  ? (state.route ?? "/")   // exact origin — "/" or "/world", never a userId path
                   : (state.route ?? backHref);
 
                 console.log("[Friends back] pushing to:", target);
