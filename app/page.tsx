@@ -549,9 +549,15 @@ function PinButton({ active, loading, onClick, color }: { active: boolean; loadi
           ))}
         </svg>
       ) : (
-        <svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <line x1="12" y1="17" x2="12" y2="22" />
-          <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z" />
+        /* Stage-lights icon — matches WorldSphere PinButton exactly */
+        <svg width={18} height={15} viewBox="0 0 18 15" fill="none" stroke="currentColor"
+          strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <line x1="1"   y1="2"    x2="17"  y2="2"    />
+          <line x1="5"   y1="2"    x2="5"   y2="4"    />
+          <circle cx="5"  cy="5.5" r="1.5"             />
+          <line x1="13"  y1="2"    x2="13"  y2="4"    />
+          <circle cx="13" cy="5.5" r="1.5"             />
+          <line x1="1"   y1="13.5" x2="17"  y2="13.5" />
         </svg>
       )}
     </button>
@@ -2924,8 +2930,15 @@ export default function LandingPage() {
                                 onClick={e => e.stopPropagation()}
                                 title={`${t.liveEvent.eventName} · ${t.liveEvent.venue}, ${t.liveEvent.city} · ${t.liveEvent.date}`}
                                 style={{ flexShrink: 0, color: selectedColor, display: "flex", alignItems: "center" }}>
-                                <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                  <line x1="12" y1="17" x2="12" y2="22" /><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z" />
+                                {/* Stage-lights inline marker — same geometry as PinButton */}
+                                <svg width={11} height={9} viewBox="0 0 18 15" fill="none" stroke="currentColor"
+                                  strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                  <line x1="1"   y1="2"    x2="17"  y2="2"    />
+                                  <line x1="5"   y1="2"    x2="5"   y2="4"    />
+                                  <circle cx="5"  cy="5.5" r="1.5"             />
+                                  <line x1="13"  y1="2"    x2="13"  y2="4"    />
+                                  <circle cx="13" cy="5.5" r="1.5"             />
+                                  <line x1="1"   y1="13.5" x2="17"  y2="13.5" />
                                 </svg>
                               </a>
                             )}
@@ -3150,8 +3163,15 @@ export default function LandingPage() {
                                   onClick={e => e.stopPropagation()}
                                   title={`${t.liveEvent.eventName} · ${t.liveEvent.venue}, ${t.liveEvent.city} · ${t.liveEvent.date}`}
                                   style={{ flexShrink: 0, color: selectedColor, display: "flex", alignItems: "center" }}>
-                                  <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                    <line x1="12" y1="17" x2="12" y2="22" /><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z" />
+                                  {/* Stage-lights inline marker */}
+                                  <svg width={11} height={9} viewBox="0 0 18 15" fill="none" stroke="currentColor"
+                                    strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                    <line x1="1"   y1="2"    x2="17"  y2="2"    />
+                                    <line x1="5"   y1="2"    x2="5"   y2="4"    />
+                                    <circle cx="5"  cy="5.5" r="1.5"             />
+                                    <line x1="13"  y1="2"    x2="13"  y2="4"    />
+                                    <circle cx="13" cy="5.5" r="1.5"             />
+                                    <line x1="1"   y1="13.5" x2="17"  y2="13.5" />
                                   </svg>
                                 </a>
                               )}

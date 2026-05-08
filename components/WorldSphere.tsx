@@ -195,10 +195,39 @@ function hexRgb(h: string): [number, number, number] {
 const normalizeArtist = (name: string) =>
   name.toLowerCase().trim().replace(/\s+/g, " ");
 
-/** Shared pin SVG path for PinButton and inline track pins. */
-const PIN_PATH =
-  "M5 0C2.79 0 1 1.79 1 4c0 2.8 4 10 4 10s4-7.2 4-10C9 1.79 7.21 0 5 " +
-  "0zm0 5.5C4.17 5.5 3.5 4.83 3.5 4S4.17 2.5 5 2.5 6.5 3.17 6.5 4 5.83 5.5 5 5.5z";
+/**
+ * Stage-lights icon — shared by PinButton and inline track-row live-event markers.
+ *
+ * Design: horizontal lighting rig bar at top, two hanging spotlights, stage floor
+ * at bottom.  All stroke-based (no filled paths) so it scales gracefully.
+ *
+ * Use STAGE_ICON for the button (rendered ~18 × 15 px).
+ * Use STAGE_ICON_SM for inline track markers (rendered ~11 × 9 px).
+ * Both share the same 18 × 15 viewBox so the shapes are identical.
+ */
+const STAGE_ICON = (
+  <svg width={18} height={15} viewBox="0 0 18 15" fill="none" stroke="currentColor"
+    strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <line x1="1"   y1="2"    x2="17"  y2="2"    />  {/* rig bar */}
+    <line x1="5"   y1="2"    x2="5"   y2="4"    />  {/* left stem */}
+    <circle cx="5"  cy="5.5" r="1.5"             />  {/* left spotlight */}
+    <line x1="13"  y1="2"    x2="13"  y2="4"    />  {/* right stem */}
+    <circle cx="13" cy="5.5" r="1.5"             />  {/* right spotlight */}
+    <line x1="1"   y1="13.5" x2="17"  y2="13.5" />  {/* stage floor */}
+  </svg>
+);
+
+const STAGE_ICON_SM = (
+  <svg width={11} height={9} viewBox="0 0 18 15" fill="none" stroke="currentColor"
+    strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <line x1="1"   y1="2"    x2="17"  y2="2"    />
+    <line x1="5"   y1="2"    x2="5"   y2="4"    />
+    <circle cx="5"  cy="5.5" r="1.5"             />
+    <line x1="13"  y1="2"    x2="13"  y2="4"    />
+    <circle cx="13" cy="5.5" r="1.5"             />
+    <line x1="1"   y1="13.5" x2="17"  y2="13.5" />
+  </svg>
+);
 
 // ── SpotifyLogoButton ─────────────────────────────────────────────────────────
 
@@ -295,10 +324,7 @@ function PinButton({
           ))}
         </svg>
       ) : (
-        /* Map-pin SVG */
-        <svg width={15} height={19} viewBox="0 0 10 14" fill="currentColor" aria-hidden="true">
-          <path d={PIN_PATH} />
-        </svg>
+        STAGE_ICON
       )}
     </button>
   );
@@ -2237,9 +2263,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                                     }}
                                     style={{ background: "none", border: "none", padding: "2px 0", cursor: "pointer", display: "flex", alignItems: "center", flexShrink: 0, color: `rgba(${sr},${sg},${sb},0.85)` }}
                                   >
-                                    <svg width={10} height={13} viewBox="0 0 10 14" fill="currentColor" aria-hidden="true">
-                                      <path d={PIN_PATH} />
-                                    </svg>
+                                    {STAGE_ICON_SM}
                                   </button>
                                 )}
                                 {socialSort && tallyCount(t) > 0 && (
@@ -2461,9 +2485,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                                 }}
                                 style={{ background: "none", border: "none", padding: "2px 0", cursor: "pointer", display: "flex", alignItems: "center", flexShrink: 0, color: `rgba(${sr},${sg},${sb},0.85)` }}
                               >
-                                <svg width={10} height={13} viewBox="0 0 10 14" fill="currentColor" aria-hidden="true">
-                                  <path d={PIN_PATH} />
-                                </svg>
+                                {STAGE_ICON_SM}
                               </button>
                             )}
                             {socialSort && tallyCount(t) > 0 && (
