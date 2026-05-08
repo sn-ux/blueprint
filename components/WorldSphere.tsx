@@ -753,6 +753,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
       if (!w || !h) return;
       canvas.width  = Math.round(w * dpr);
       canvas.height = Math.round(h * dpr);
+      dirtyRef.current = true;
     };
     sync();
     const ro = new ResizeObserver(sync);
@@ -786,18 +787,18 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
     let snapZoom = false;  // set on mobile pinch-end for immediate snap
 
     // ── drawFrame ──────────────────────────────────────────────────────────
-    function drawFrame() {
-      const geo = geoRef.current; if (!geo) return;
+    function drawFrame(): boolean {
+      const geo = geoRef.current; if (!geo) return false;
       const { verts, faces, cents, adj, names, region, rgbMap } = geo;
 
       // Zoom lerp (desktop) / snap (mobile pinch end)
       if (snapZoom) { zoomRef.current = zoomTargetRef.current; snapZoom = false; }
       else           { zoomRef.current += (zoomTargetRef.current - zoomRef.current) * 0.10; }
 
-      const canvas = canvasRef.current; if (!canvas) return;
+      const canvas = canvasRef.current; if (!canvas) return false;
       const W = canvas.offsetWidth, H = canvas.offsetHeight;
-      if (!W || !H) return;
-      const ctx = canvas.getContext("2d"); if (!ctx) return;
+      if (!W || !H) return false;
+      const ctx = canvas.getContext("2d"); if (!ctx) return false;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);  // HiDPI
 
       const R = Math.min(W,H) * 0.34 * zoomRef.current;
@@ -922,6 +923,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
         ctx.globalAlpha=1.0;
       }
       ctx.textBaseline="alphabetic";
+      return true;
     }
 
     // ── Shared zoom helper ────────────────────────────────────────────────
@@ -1056,6 +1058,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
               if(h.subgenre){
                 const next=selectedSubgenreRef.current===h.subgenre?null:h.subgenre;
                 selectedSubgenreRef.current=next;setSelectedSubgenre(next);
+                dirtyRef.current=true;
                 console.log("[subgenre-click] mobile label path", {clickedSubgenre:h.subgenre,highlightedSubgenre:next,fetchSubgenre:next,panelTitleSubgenre:next});
               }
               else{const isDe=selectedRef.current===h.name;autoSelectedRef.current=false;selectedSubgenreRef.current=null;setSelectedSubgenre(null);zoomSubgenreRef.current=null;setZoomSubgenre(null);setSelected(prev=>prev===h.name?null:h.name);if(!isDe)zoomTargetRef.current=Math.max(zoomTargetRef.current,2.5);}
@@ -1079,6 +1082,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
               const si=subRegionRef.current.get(bsf)??0,sn=activeSubsRef.current[si]?.name??subPolesRef.current[0]?.name??"";
               const next=selectedSubgenreRef.current===sn?null:sn;
               selectedSubgenreRef.current=next;setSelectedSubgenre(next);
+              dirtyRef.current=true;
               console.log("[subgenre-click] mobile polygon path", {clickedSubgenre:sn,highlightedSubgenre:next,fetchSubgenre:next,panelTitleSubgenre:next});
             } else {
               const isDe=selectedRef.current===bestTName;autoSelectedRef.current=false;selectedSubgenreRef.current=null;setSelectedSubgenre(null);zoomSubgenreRef.current=null;setZoomSubgenre(null);setSelected(prev=>prev===bestTName?null:bestTName);
@@ -1105,8 +1109,8 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
       const zoomDiff = Math.abs(zoomRef.current - zoomTargetRef.current);
       const stillLerping = zoomDiff > 0.001;
       if (dirtyRef.current || stillLerping || dragRef.current.active) {
-        drawFrame();
-        if (!stillLerping && !dragRef.current.active) {
+        const drew = drawFrame();
+        if (drew && !stillLerping && !dragRef.current.active) {
           dirtyRef.current = false;
         }
       }
