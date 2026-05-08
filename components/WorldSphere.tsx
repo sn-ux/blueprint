@@ -605,13 +605,20 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
   const dirtyRef        = useRef(true);
   const mouseMoveRafRef = useRef(false);
 
-  // ── Friends World: URL-param auto-selection ───────────────────────────────
+  // ── Friends World: URL-param auto-selection + centering ──────────────────
   // When navigating from an individual world via the Venn button, the URL
   // carries ?genre=... and optionally ?subgenre=...  These refs hold the
   // decoded values so they can be applied once data has loaded.
   const urlGenreParamRef    = useRef<string | null>(null);
   const pendingSubgenreRef  = useRef<string | null>(null);
   const urlParamAppliedRef  = useRef(false);
+  // urlSubgenreParamRef stores the original ?subgenre value permanently so
+  // the subgenre geometry effect can rotate to it after poles are built.
+  // (pendingSubgenreRef is cleared once the selection is applied.)
+  const urlSubgenreParamRef   = useRef<string | null>(null);
+  // One-shot flags: prevent re-centering after the user starts dragging.
+  const urlGenreCenteredRef   = useRef(false);
+  const urlSubgenreCenteredRef = useRef(false);
 
   // ── Mobile detection ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -642,8 +649,9 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
   useEffect(() => {
     if (!friendsWorld || typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
-    urlGenreParamRef.current   = params.get("genre");
-    pendingSubgenreRef.current = params.get("subgenre");
+    urlGenreParamRef.current    = params.get("genre");
+    pendingSubgenreRef.current  = params.get("subgenre");
+    urlSubgenreParamRef.current = params.get("subgenre"); // permanent copy for centering
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Friends World: apply genre param once world data has loaded ───────────
@@ -1048,6 +1056,25 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
 
     // Store geometry in ref so drawFrame and subgenre effect can read it
     geoRef.current = { verts, faces, cents, adj, names, region, rgbMap };
+
+    // ── Venn / URL-param genre centering ────────────────────────────────────
+    // If the page was opened with ?genre=... (e.g. via the Venn button), rotate
+    // the sphere so that genre region faces the camera immediately.
+    // This runs exactly once per navigation; urlGenreCenteredRef prevents any
+    // re-centering after the user starts dragging.
+    // When a subgenre is also targeted (urlSubgenreParamRef is set), we still
+    // do a quick genre-level center here so something useful shows immediately;
+    // the subgenre geometry effect below will then refine to the subgenre pole.
+    if (urlGenreParamRef.current && !urlGenreCenteredRef.current) {
+      const entry = regionPolesRef.current.find(r => r.name === urlGenreParamRef.current);
+      if (entry) {
+        urlGenreCenteredRef.current = true;
+        // Rotate: bring genre pole to (0,0,1) — the "facing camera" direction.
+        const q = quatFromTo(entry.pole, [0, 0, 1] as V3);
+        rotMatRef.current = mat3Ortho(matFromQuat(q));
+      }
+    }
+
     dirtyRef.current = true;
 
     const FOV = 900;
@@ -1458,6 +1485,24 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
         subPolesRef.current=actSubs.map((sub,i)=>({name:sub.name,pole:pCnt[i]>0?norm3([pAcc[i][0]/pCnt[i],pAcc[i][1]/pCnt[i],pAcc[i][2]/pCnt[i]]):cents[seedFaces[i]]}));
       }
     }
+
+    // ── Venn / URL-param subgenre centering ──────────────────────────────────
+    // If the page was opened with ?subgenre=... rotate the sphere so that
+    // subgenre region faces the camera.  Runs once per navigation after the
+    // subgenre poles have just been computed above.
+    if (urlSubgenreParamRef.current && !urlSubgenreCenteredRef.current && subPolesRef.current.length > 0) {
+      const targetSub = urlSubgenreParamRef.current;
+      const entry = subPolesRef.current.find(sp => sp.name === targetSub);
+      if (entry) {
+        urlSubgenreCenteredRef.current = true;
+        // Rotate: bring subgenre pole to (0,0,1) — the "facing camera" direction.
+        // This overrides the genre-level rotation set earlier so the view is
+        // centered precisely on the subgenre region.
+        const q = quatFromTo(entry.pole, [0, 0, 1] as V3);
+        rotMatRef.current = mat3Ortho(matFromQuat(q));
+      }
+    }
+
     dirtyRef.current = true;
   }, [selected, subgenres]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1550,7 +1595,13 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
   };
 
   const stopDrag   = () => { dragRef.current.active = false; };
-  const onMouseLeave = () => { dragRef.current.active = false; hoveredRef.current = null; };
+  const onMouseLeave = () => {
+    dragRef.current.active = false;
+    hoveredRef.current     = null;
+    dirtyRef.current       = true; // redraw to erase hover highlight immediately
+    // Also clear hoveredSubgenre state so it can't influence anything on re-enter
+    if (hoveredSubgRef.current !== null) { hoveredSubgRef.current = null; setHoveredSubgenre(null); }
+  };
 
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (dragRef.current.moved) return;
@@ -1618,11 +1669,12 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
 
   const selectedColor   = selected ? (COLORS[selected] ?? "#ffffff") : "#ffffff";
   const [sr, sg, sb]    = selected ? hexRgb(COLORS[selected] ?? "#ffffff") : [255, 255, 255];
-  // On mobile the panel uses hoveredSubgenre only for hover preview; zoom never drives it.
-  // On desktop, zoomSubgenre also feeds the panel.
-  const focusedSubgenre = isMobile
-    ? (hoveredSubgenre ?? selectedSubgenre)
-    : (hoveredSubgenre ?? selectedSubgenre ?? zoomSubgenre);
+  // focusedSubgenre is ONLY driven by clicked/locked state — never by hover.
+  // hoveredSubgenre drives canvas visual highlighting (via hoveredRef.current in
+  // the RAF draw loop) but must never affect the side-panel title or tracklist.
+  // Hovering while moving toward the side panel would otherwise silently swap
+  // the displayed genre/subgenre out from under the user's clicked selection.
+  const focusedSubgenre = selectedSubgenre;
   const displayedTracks = focusedSubgenre
     ? tracks.filter(t => t.blueprintSubgenre === focusedSubgenre)
     : tracks;
