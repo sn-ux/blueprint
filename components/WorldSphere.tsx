@@ -1858,7 +1858,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
       {/* ── Mobile bottom sheet ───────────────────────────────────────────────── */}
       {isMobile && viewportH > 0 && (() => {
         const sheetH = Math.round(viewportH * 0.90);
-        const snapTY = sheetSnap === 0 ? sheetH + 20 : sheetSnap === 1 ? sheetH - 200 : 0;
+        const snapTY = sheetSnap === 0 ? sheetH + 20 : sheetSnap === 1 ? sheetH - 260 : 0;
         return (
           <div
             onTouchStart={e => { if (mobileTracklistRef.current?.contains(e.target as Node)) return; sheetSwipeStartY.current = e.touches[0].clientY; sheetSwipeStartTime.current = Date.now(); }}
@@ -1875,25 +1875,25 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
             {/* Accent line */}
             <div style={{ height: 2, background: selectedColor ?? "rgba(255,255,255,0.12)", opacity: 0.85, flexShrink: 0 }} />
 
-            {/* Sheet header */}
-            <div className="flex-shrink-0 pl-5 pr-4 pt-3 pb-2.5 flex items-center gap-2" style={{ minHeight: 56 }}>
-              <div className="flex items-center min-w-0 flex-1">
-                <h2 className="text-lg font-bold leading-tight truncate" style={{ color: selectedColor }}>
+            {/* ── Sheet header — two-row button layout ────────────────────── */}
+            <div style={{ flexShrink: 0, padding: "12px 16px 10px" }}>
+
+              {/* Title + track count */}
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 12, overflow: "hidden" }}>
+                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: selectedColor, lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flexShrink: 1, minWidth: 0 }}>
                   {focusedSubgenre ?? (selected ? shortLabel(selected) : "")}
                 </h2>
-                <span className="flex-shrink-0 text-xs" style={{ color: "rgba(255,255,255,0.30)", marginLeft: 8 }}>
+                <span style={{ fontSize: 12, color: "rgba(255,255,255,0.30)", flexShrink: 0 }}>
                   {displayedTracks.length} tracks
                 </span>
-                {/* Error messages only — no success text */}
+                {/* Error messages only */}
                 {playlistMsg && (
-                  <span className="flex-shrink-0 text-xs" style={{ marginLeft: 8, color: "#ef4444" }}>
-                    {playlistMsg}
-                  </span>
+                  <span style={{ fontSize: 12, color: "#ef4444", flexShrink: 0 }}>{playlistMsg}</span>
                 )}
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 18, flexShrink: 0 }}>
-                <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
-                <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
+
+              {/* Button row 1 — Playlist · Spotify · Collapse */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-around", marginBottom: 10 }}>
                 <PlaylistButton loading={playlistLoading} success={!!(playlistKey && createdPlaylistKeys.has(playlistKey))} onClick={handlePlaylistPush} color={selectedColor} />
                 <SpotifyLogoButton track={playingTrack} size={36} />
                 <button
@@ -1904,6 +1904,13 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                   {sheetSnap === 1 ? "↑" : "↓"}
                 </button>
               </div>
+
+              {/* Button row 2 — Popularity · Live Events */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-around" }}>
+                <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
+                <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
+              </div>
+
             </div>
 
             {/* Tracklist */}
@@ -1978,7 +1985,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
 
       {/* ── Mobile zoom pill ──────────────────────────────────────────────────── */}
       {isMobile && selected !== null && sheetSnap !== 2 && (
-        <div style={{ position: "fixed", right: 12, bottom: sheetSnap === 1 ? 216 : 84, zIndex: 120, display: "flex", flexDirection: "column", alignItems: "center", borderRadius: zoomAbove2 ? "50%" : 24, width: zoomAbove2 ? 44 : undefined, height: zoomAbove2 ? 44 : undefined, overflow: "hidden", background: "rgba(0,0,0,0.80)", border: "1px solid rgba(255,255,255,0.10)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", transition: "bottom 0.3s ease, border-radius 0.2s ease, width 0.2s ease, height 0.2s ease", pointerEvents: "auto" } as React.CSSProperties}>
+        <div style={{ position: "fixed", right: 12, bottom: sheetSnap === 1 ? 276 : 84, zIndex: 120, display: "flex", flexDirection: "column", alignItems: "center", borderRadius: zoomAbove2 ? "50%" : 24, width: zoomAbove2 ? 44 : undefined, height: zoomAbove2 ? 44 : undefined, overflow: "hidden", background: "rgba(0,0,0,0.80)", border: "1px solid rgba(255,255,255,0.10)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", transition: "bottom 0.3s ease, border-radius 0.2s ease, width 0.2s ease, height 0.2s ease", pointerEvents: "auto" } as React.CSSProperties}>
           {!zoomAbove2 && (
             <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); handleZoomPlus(); }} style={{ width: 44, height: 46, background: "none", border: "none", color: "rgba(255,255,255,0.88)", fontSize: 22, fontWeight: 300, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1, userSelect: "none" }} aria-label="Zoom in">+</button>
           )}
