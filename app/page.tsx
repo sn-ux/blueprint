@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useSession, signIn } from "next-auth/react";
 import SphereCanvas from "@/components/SphereCanvas";
 import MiniSphere from "@/components/MiniSphere";
@@ -9,6 +9,9 @@ import Footer from "@/components/Footer";
 import { SPHERE_INIT_RX, SPHERE_INIT_RY } from "@/lib/sphereConfig";
 import { PlaylistButton } from "@/components/PlaylistButton";
 import LiveEventsIcon from "@/components/LiveEventsIcon";
+import { getCinematicFrame } from "@/lib/cinematic/timeline";
+import { resolveSequence }    from "@/lib/cinematic/sequences";
+import type { RecordingState } from "@/lib/cinematic/types";
 
 // ── Genre display-name overrides (short labels for sphere + UI) ───────────────
 // Keys are the full canonical genre names used as data keys everywhere.
@@ -809,6 +812,16 @@ export default function LandingPage() {
   // (No pendingToggleRestoreRef needed: page.tsx selected effect doesn't reset
   // socialSort/liveMode, so we can set them before calling setSelected.)
   const pendingSubgenreRef      = useRef<string | null>(null);
+
+  // ── Cinematic recording ───────────────────────────────────────────────────
+  // cinematicStateRef  — active recording session (null = not recording).
+  // recordingFrameRef  — virtual frame counter (drives deterministic clock).
+  // cinematicCanvasRef — hidden off-screen canvas at target resolution.
+  // isRecording        — React state for the recording indicator badge only.
+  const cinematicStateRef       = useRef<RecordingState | null>(null);
+  const recordingFrameRef       = useRef<number>(0);
+  const cinematicCanvasRef      = useRef<HTMLCanvasElement | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
 
   // ── Fetch worlds on mount ────────────────────────────────────────────────
   useEffect(() => {
@@ -2137,7 +2150,46 @@ export default function LandingPage() {
     canvas.addEventListener("touchend",    onTouchEnd,    { passive: false });
     canvas.addEventListener("touchcancel", onTouchCancel, { passive: true  });
 
-    function animate() { drawFrame(); rafRef.current = requestAnimationFrame(animate); }
+    function animate() {
+      // ── Cinematic mode: override camera state before drawing ──────────────
+      // When cinematicStateRef is set, drive zoom + rotation from the timeline
+      // using a deterministic virtual clock (frame index ÷ fps = seconds).
+      // User interaction is completely bypassed; the sphere follows the script.
+      const cState = cinematicStateRef.current;
+      if (cState && !cState.done) {
+        const virtualT = recordingFrameRef.current / cState.sequence.fps;
+        const frame    = getCinematicFrame(cState.sequence, virtualT);
+        // Apply directly to refs — bypasses the zoom lerp (we control it).
+        zoomRef.current        = frame.zoom;
+        zoomTargetRef.current  = frame.zoom;
+        rotMatRef.current      = [...frame.rotMat];
+      }
+
+      drawFrame();
+
+      // ── Cinematic mode: copy rendered frame to recording canvas ───────────
+      if (cState && !cState.done) {
+        const recCanvas = cinematicCanvasRef.current;
+        if (recCanvas && canvas) {
+          const rCtx = recCanvas.getContext("2d");
+          if (rCtx) {
+            rCtx.clearRect(0, 0, recCanvas.width, recCanvas.height);
+            rCtx.drawImage(canvas, 0, 0, recCanvas.width, recCanvas.height);
+          }
+        }
+
+        recordingFrameRef.current++;
+
+        // Check if we've rendered all frames (add 1s buffer for MediaRecorder flush)
+        const nextT = recordingFrameRef.current / cState.sequence.fps;
+        if (nextT >= cState.sequence.duration + 1.0 && !cState.done) {
+          cState.done = true;
+          setTimeout(finalizeCinematicCapture, 300);
+        }
+      }
+
+      rafRef.current = requestAnimationFrame(animate);
+    }
     rafRef.current = requestAnimationFrame(animate);
 
     return () => {
@@ -2154,6 +2206,121 @@ export default function LandingPage() {
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [worlds, selected, subgenres]);
+
+  // ── Cinematic: finalize (stop recorder, build file, download) ─────────────
+  const finalizeCinematicCapture = useCallback(() => {
+    const cState = cinematicStateRef.current;
+    if (!cState || cState.mediaRecorder.state === "inactive") return;
+
+    cState.mediaRecorder.onstop = () => {
+      const isMP4 = cState.mediaRecorder.mimeType.includes("mp4");
+      const ext   = isMP4 ? "mp4" : "webm";
+      const blob  = new Blob(cState.chunks, { type: cState.mediaRecorder.mimeType });
+      const url   = URL.createObjectURL(blob);
+      const a     = document.createElement("a");
+      a.href      = url;
+      a.download  = `blueprint-${cState.sequence.name}-${Date.now()}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 15_000);
+      console.log(
+        `[Cinematic] ✓ exported ${(blob.size / 1024 / 1024).toFixed(1)} MB as ${a.download}`,
+      );
+    };
+
+    cState.mediaRecorder.stop();
+    cinematicStateRef.current  = null;
+    cinematicCanvasRef.current = null;
+    setIsRecording(false);
+    console.log("[Cinematic] Recording stopped — building file…");
+  }, []);
+
+  // ── Cinematic: start recording ────────────────────────────────────────────
+  // sequenceName: "40s" | "15s" | "loop"  (default "40s")
+  //
+  // Creates a hidden HTMLCanvasElement at the target resolution, starts
+  // a MediaRecorder on its captureStream, and sets cinematicStateRef so the
+  // RAF loop (inside the canvas effect) picks up the cinematic camera each tick.
+  const startCinematicCapture = useCallback((sequenceName?: string) => {
+    if (cinematicStateRef.current) {
+      console.warn("[Cinematic] Already recording — ignoring start request.");
+      return;
+    }
+    if (!canvasRef.current) {
+      console.warn("[Cinematic] Canvas not ready.");
+      return;
+    }
+
+    const sequence = resolveSequence(sequenceName);
+
+    // Create hidden recording canvas at target resolution.
+    const recCanvas   = document.createElement("canvas");
+    recCanvas.width   = sequence.resolution.width;
+    recCanvas.height  = sequence.resolution.height;
+    cinematicCanvasRef.current = recCanvas;
+
+    // Pick best available codec: prefer H.264 MP4, fall back to VP9 / VP8 WebM.
+    const CODEC_CANDIDATES = [
+      "video/mp4;codecs=avc1.42e01e",
+      "video/mp4",
+      "video/webm;codecs=vp9",
+      "video/webm;codecs=vp8",
+      "video/webm",
+    ];
+    const mimeType = CODEC_CANDIDATES.find(c => {
+      try { return MediaRecorder.isTypeSupported(c); } catch { return false; }
+    }) ?? "video/webm";
+
+    const stream = recCanvas.captureStream(sequence.fps);
+    const mr     = new MediaRecorder(stream, {
+      mimeType,
+      videoBitsPerSecond: 25_000_000, // 25 Mbps — high quality
+    });
+
+    const chunks: BlobPart[] = [];
+    mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+
+    cinematicStateRef.current  = { sequence, mediaRecorder: mr, chunks, done: false };
+    recordingFrameRef.current  = 0;
+
+    mr.start(100); // flush a chunk every 100 ms
+    setIsRecording(true);
+
+    console.log(
+      `[Cinematic] ▶ Recording "${sequence.name}" — ` +
+      `${sequence.resolution.width}×${sequence.resolution.height} ` +
+      `${sequence.fps}fps ${(sequence.duration).toFixed(0)}s — codec: ${mimeType}`,
+    );
+  }, []);
+
+  // ── Cinematic: keyboard shortcut ──────────────────────────────────────────
+  // Shift+R → 40s presentation
+  // Shift+L → 15s social clip
+  // Shift+O → 8s seamless loop
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.shiftKey) return;
+      if (e.key === "R") { e.preventDefault(); startCinematicCapture("40s");   return; }
+      if (e.key === "L") { e.preventDefault(); startCinematicCapture("15s");   return; }
+      if (e.key === "O") { e.preventDefault(); startCinematicCapture("loop");  return; }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [startCinematicCapture]);
+
+  // ── Cinematic: query-param auto-start ─────────────────────────────────────
+  // ?record=40s  →  start 40-second sequence on page load
+  // ?record=15s  →  start 15-second sequence
+  // ?record=loop →  start seamless loop
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const param = new URLSearchParams(window.location.search).get("record");
+    if (!param) return;
+    // Delay slightly so worlds data has time to load first.
+    const t = setTimeout(() => startCinematicCapture(param), 1500);
+    return () => clearTimeout(t);
+  }, [startCinematicCapture]);
 
   // ── playTrack ─────────────────────────────────────────────────────────────
   // MUST remain synchronous. audio.play() must be called in the same
@@ -4282,6 +4449,56 @@ export default function LandingPage() {
       </section>
 
       <Footer />
+
+      {/* ── Cinematic recording indicator ────────────────────────────────────
+          Fixed badge visible only while a capture is in progress.
+          Hidden dev controls: hold Shift and press R/L/O to start a sequence.
+          Or add ?record=40s to the URL for auto-start on load.            */}
+      {isRecording && (
+        <div
+          style={{
+            position:      "fixed",
+            bottom:        24,
+            right:         24,
+            zIndex:        9999,
+            display:       "flex",
+            alignItems:    "center",
+            gap:            8,
+            padding:       "8px 14px",
+            borderRadius:  8,
+            background:    "rgba(0,0,0,0.85)",
+            border:        "1px solid rgba(255,60,60,0.55)",
+            backdropFilter:"blur(10px)",
+            color:         "#fff",
+            fontSize:       12,
+            fontWeight:    500,
+            letterSpacing: "0.04em",
+            userSelect:    "none",
+            pointerEvents: "none",
+          }}
+        >
+          {/* Pulsing red dot */}
+          <span
+            style={{
+              width:        8,
+              height:       8,
+              borderRadius: "50%",
+              background:   "#ff3c3c",
+              flexShrink:   0,
+              animation:    "cinematicDotPulse 1s ease-in-out infinite",
+            }}
+          />
+          REC · {(recordingFrameRef.current / 60).toFixed(1)}s
+        </div>
+      )}
+
+      {/* Keyframe animation for the recording indicator dot */}
+      <style>{`
+        @keyframes cinematicDotPulse {
+          0%, 100% { opacity: 1; }
+          50%       { opacity: 0.25; }
+        }
+      `}</style>
 
     </div>
   );
