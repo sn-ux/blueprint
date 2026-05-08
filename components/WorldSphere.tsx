@@ -309,7 +309,18 @@ function PinButton({
 // When disabled (genre/subgenre absent from Friends World) renders as a muted
 // non-interactive span instead of a navigable link.
 
-function VennButton({ href, color, disabled = false }: { href: string; color: string; disabled?: boolean }) {
+function VennButton({
+  href,
+  color,
+  disabled = false,
+  onBeforeNavigate,
+}: {
+  href:               string;
+  color:              string;
+  disabled?:          boolean;
+  /** Called synchronously before the Link navigates — use to write sessionStorage. */
+  onBeforeNavigate?:  () => void;
+}) {
   const circles = (
     <svg width={20} height={14} viewBox="0 0 22 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden="true">
       <circle cx="7"  cy="7" r="6" />
@@ -339,7 +350,10 @@ function VennButton({ href, color, disabled = false }: { href: string; color: st
   return (
     <Link
       href={href}
-      onClick={e => e.stopPropagation()}
+      onClick={e => {
+        e.stopPropagation();
+        onBeforeNavigate?.();
+      }}
       aria-label="Compare in Friends World"
       title="Open this genre in Friends World"
       style={{
@@ -1846,6 +1860,25 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
       : `/midvale/friends?genre=${encodeURIComponent(selected)}`
     : null;
 
+  // Called by VennButton just before navigating to the Friends World.
+  // Pre-writes this world's owner as the substitute profile so the Friends
+  // World loads with "Viewing as <this user>" and the Unheard button works.
+  // Works on every individual world (homepage /world, /midvale/[userId], etc.)
+  const handleVennNavigate = (): void => {
+    const subId   = userId ?? sessionUserId;
+    const subName = userName ?? "";
+    if (!subId) return;
+    const profile = { userId: subId, userName: subName };
+    try {
+      sessionStorage.setItem("blueprint:substituteProfile", JSON.stringify(profile));
+      // Also dispatch the event so any already-mounted WorldSphere (e.g. opened
+      // in another same-tab route) picks it up without a page reload.
+      window.dispatchEvent(
+        new CustomEvent("blueprint:substituteChange", { detail: profile }),
+      );
+    } catch { /* sessionStorage unavailable — degrade gracefully */ }
+  };
+
   // Venn enabled — true only when the current genre (and subgenre, if focused)
   // actually exists in the Friends aggregate world.
   // Remains false while friendsGenres is still loading (null).
@@ -2095,7 +2128,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                         <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{focusedSubgenre}</h2>
                         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                           {substituteProfile && <UnheardButton active={unheardMode} onClick={() => setUnheardMode(v => !v)} color={selectedColor} />}
-                          {vennHref && <VennButton href={vennHref} color={selectedColor} disabled={!vennEnabled} />}
+                          {vennHref && <VennButton href={vennHref} color={selectedColor} disabled={!vennEnabled} onBeforeNavigate={handleVennNavigate} />}
                           <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
                           <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
                           <PlaylistButton loading={playlistLoading} success={!!(playlistKey && createdPlaylistKeys.has(playlistKey))} onClick={handlePlaylistPush} color={selectedColor} />
@@ -2110,7 +2143,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                         <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{shortLabel(selected)}</h2>
                         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                           {substituteProfile && <UnheardButton active={unheardMode} onClick={() => setUnheardMode(v => !v)} color={selectedColor} />}
-                          {vennHref && <VennButton href={vennHref} color={selectedColor} disabled={!vennEnabled} />}
+                          {vennHref && <VennButton href={vennHref} color={selectedColor} disabled={!vennEnabled} onBeforeNavigate={handleVennNavigate} />}
                           <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
                           <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
                           <PlaylistButton loading={playlistLoading} success={!!(playlistKey && createdPlaylistKeys.has(playlistKey))} onClick={handlePlaylistPush} color={selectedColor} />
@@ -2371,7 +2404,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                       )}
                       {vennHref && (
                         <div style={W}>
-                          <VennButton href={vennHref} color={selectedColor} disabled={!vennEnabled} />
+                          <VennButton href={vennHref} color={selectedColor} disabled={!vennEnabled} onBeforeNavigate={handleVennNavigate} />
                         </div>
                       )}
                       <div style={W}>

@@ -3,5 +3,10 @@ import { getCurrentUser } from "@/lib/current-user";
 
 export default async function WorldPage() {
   const user = await getCurrentUser();
-  return <WorldSphere userName={user?.name ?? undefined} />;
+  return (
+    <WorldSphere
+      userId={user?.id   ?? undefined}
+      userName={user?.name ?? undefined}
+    />
+  );
 }
