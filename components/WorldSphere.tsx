@@ -1365,7 +1365,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
   // ── Compound sort + live-event enrichment ────────────────────────────────
   // Enrich each track with t.liveEvent from the session map so JSX can use
   // t.liveEvent directly (avoids IIFE lookups and keeps null checks explicit).
-  // Sort priority: live events first (date asc) > social count > original order.
+  // Sort priority: live events first > socialCount desc > earliest date > original order.
   const sortedTracks = useMemo(() => {
     // Attach liveEvent to each track when mode is on
     const enrich = (t: TrackItem): TrackItem => {
@@ -1382,8 +1382,12 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
       const withEv = base.filter(t => !!t.liveEvent);
       const noEv   = base.filter(t => !t.liveEvent);
 
-      // Events: earliest date first
-      withEv.sort((a, b) => (a.liveEvent!.date).localeCompare(b.liveEvent!.date));
+      // Events: social popularity first, then earliest date as tie-breaker
+      withEv.sort((a, b) => {
+        const sc = tallyCount(b) - tallyCount(a);
+        if (sc !== 0) return sc;
+        return (a.liveEvent!.date).localeCompare(b.liveEvent!.date);
+      });
 
       // Non-events: social sort if active, else original order
       if (socialSort) noEv.sort((a, b) => tallyCount(b) - tallyCount(a));
