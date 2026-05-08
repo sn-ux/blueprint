@@ -558,21 +558,23 @@ function PinButton({ active, loading, onClick, color }: { active: boolean; loadi
 
 // ── VennButton ────────────────────────────────────────────────────────────────
 function VennButton({ href, color, disabled = false, onBeforeNavigate }: { href: string; color: string; disabled?: boolean; onBeforeNavigate?: () => void }) {
-  const circles = (
-    <svg width={20} height={14} viewBox="0 0 22 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="7"  cy="7" r="6" />
-      <circle cx="15" cy="7" r="6" />
+  // Sparkle / plus-star — same icon used by UnheardButton, communicates discovery.
+  const sparkle = (
+    <svg width={18} height={18} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
+      aria-hidden="true">
+      <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
     </svg>
   );
   if (disabled) {
     return <span aria-label="Not in Friends World" title="Not in Friends World"
-      style={{ flexShrink: 0, display: "flex", alignItems: "center", lineHeight: 1, color: "rgba(255,255,255,0.18)", cursor: "default" }}>{circles}</span>;
+      style={{ flexShrink: 0, display: "flex", alignItems: "center", lineHeight: 1, color: "rgba(255,255,255,0.18)", cursor: "default" }}>{sparkle}</span>;
   }
   return (
     <a href={href} onClick={e => { e.stopPropagation(); onBeforeNavigate?.(); }}
       aria-label="Compare in Friends World" title="Open this genre in Friends World"
       style={{ flexShrink: 0, display: "flex", alignItems: "center", color, lineHeight: 1, textDecoration: "none", transition: "color 0.20s ease" }}>
-      {circles}
+      {sparkle}
     </a>
   );
 }
