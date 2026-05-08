@@ -559,6 +559,16 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
   substituteProfileRef.current = substituteProfile;
   const [unheardMode, setUnheardMode] = useState(false);
 
+  // ── showUnheard: whether to render the Unheard/star button ───────────────
+  // • Homepage (/world — no userId, not friendsWorld)  → never show
+  // • Individual world (/midvale/[userId])             → only when a substitute
+  //   profile is selected AND it differs from this world's owner
+  // • Friends World (/midvale/friends)                 → show when any substitute
+  //   profile is selected
+  const showUnheard: boolean = friendsWorld
+    ? substituteProfile !== null
+    : (userId !== undefined && substituteProfile !== null && substituteProfile.userId !== userId);
+
   const selectedSubgenreRef = useRef<string | null>(null);
   const [zoomSubgenre,     setZoomSubgenre]      = useState<string | null>(null);
   const zoomSubgenreRef    = useRef<string | null>(null);
@@ -755,6 +765,22 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
       window.removeEventListener("blueprint:substituteChange", onSubChange);
       window.removeEventListener("storage", onStorage);
     };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Auto-enable Unheard mode on Friends World arrival ────────────────────
+  // When the user clicks Venn from any individual world, handleVennNavigate
+  // writes "blueprint:autoEnableUnheard" to sessionStorage before navigating.
+  // On Friends World mount we read it once, activate unheard mode, then delete
+  // the flag so it never fires again unless a fresh Venn click sets it.
+  useEffect(() => {
+    if (!friendsWorld) return;
+    try {
+      const flag = sessionStorage.getItem("blueprint:autoEnableUnheard");
+      if (flag === "true") {
+        if (substituteProfileRef.current) setUnheardMode(true);
+        sessionStorage.removeItem("blueprint:autoEnableUnheard");
+      }
+    } catch { /* sessionStorage unavailable — skip */ }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Refetch tracks when substitute profile changes ────────────────────────
@@ -1866,6 +1892,8 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
     const profile = { userId: subId, userName: subName };
     try {
       sessionStorage.setItem("blueprint:substituteProfile", JSON.stringify(profile));
+      // Signal Friends World to auto-enable Unheard mode on arrival.
+      sessionStorage.setItem("blueprint:autoEnableUnheard", "true");
       // Also dispatch the event so any already-mounted WorldSphere (e.g. opened
       // in another same-tab route) picks it up without a page reload.
       window.dispatchEvent(
@@ -2122,7 +2150,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                       <div className="flex items-center justify-between gap-4">
                         <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{focusedSubgenre}</h2>
                         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                          {substituteProfile && <UnheardButton active={unheardMode} onClick={() => setUnheardMode(v => !v)} color={selectedColor} />}
+                          {showUnheard && <UnheardButton active={unheardMode} onClick={() => setUnheardMode(v => !v)} color={selectedColor} />}
                           {vennHref && <VennButton href={vennHref} color={selectedColor} disabled={!vennEnabled} onBeforeNavigate={handleVennNavigate} />}
                           <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
                           <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
@@ -2137,7 +2165,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                       <div className="flex items-center justify-between gap-4">
                         <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{shortLabel(selected)}</h2>
                         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                          {substituteProfile && <UnheardButton active={unheardMode} onClick={() => setUnheardMode(v => !v)} color={selectedColor} />}
+                          {showUnheard && <UnheardButton active={unheardMode} onClick={() => setUnheardMode(v => !v)} color={selectedColor} />}
                           {vennHref && <VennButton href={vennHref} color={selectedColor} disabled={!vennEnabled} onBeforeNavigate={handleVennNavigate} />}
                           <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
                           <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
@@ -2390,7 +2418,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                         Unheard and Venn are conditional; Popularity/Live always shown.
                         Row expands left with each additional conditional button.      */}
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      {substituteProfile && (
+                      {showUnheard && (
                         <div style={W}>
                           <UnheardButton active={unheardMode} onClick={() => setUnheardMode(v => !v)} color={selectedColor} />
                         </div>

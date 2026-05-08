@@ -2550,6 +2550,8 @@ export default function LandingPage() {
     const profile = { userId: subId, userName: subName };
     try {
       sessionStorage.setItem("blueprint:substituteProfile", JSON.stringify(profile));
+      // Signal Friends World to auto-enable Unheard mode on arrival.
+      sessionStorage.setItem("blueprint:autoEnableUnheard", "true");
       window.dispatchEvent(new CustomEvent("blueprint:substituteChange", { detail: profile }));
     } catch {}
   };
@@ -2792,7 +2794,6 @@ export default function LandingPage() {
                     <div className="flex items-center justify-between gap-4">
                       <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{focusedSubgenre}</h2>
                       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                        {substituteProfile && <UnheardButton active={unheardMode} onClick={() => setUnheardMode(v => !v)} color={selectedColor} />}
                         {vennHref && <VennButton href={vennHref} color={selectedColor} disabled={!vennEnabled} onBeforeNavigate={handleVennNavigate} />}
                         <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
                         <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
@@ -2807,7 +2808,6 @@ export default function LandingPage() {
                     <div className="flex items-center justify-between gap-4">
                       <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{selected ? shortLabel(selected) : ""}</h2>
                       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                        {substituteProfile && <UnheardButton active={unheardMode} onClick={() => setUnheardMode(v => !v)} color={selectedColor} />}
                         {vennHref && <VennButton href={vennHref} color={selectedColor} disabled={!vennEnabled} onBeforeNavigate={handleVennNavigate} />}
                         <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
                         <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
@@ -3070,7 +3070,7 @@ export default function LandingPage() {
                         </div>
                         {/* Row 2: [Unheard] · [Venn] · BarChart · Pin */}
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                          {substituteProfile && <div style={W}><UnheardButton active={unheardMode} onClick={() => setUnheardMode(v => !v)} color={selectedColor} /></div>}
+                          {/* Unheard button suppressed on homepage — homepage is always the owner's own world */}
                           {vennHref && <div style={W}><VennButton href={vennHref} color={selectedColor} disabled={!vennEnabled} onBeforeNavigate={handleVennNavigate} /></div>}
                           <div style={W}><BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} /></div>
                           <div style={W}><PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} /></div>
