@@ -96,7 +96,8 @@ const DEMO_SUBGENRES: Record<string, SubItem[]> = {
   ],
 };
 
-type TrackItem = { id: string; name: string; artist: string; album?: string | null; imageUrl?: string | null; previewUrl?: string | null; spotifyId?: string | null; blueprintSubgenre: string };
+type LiveEvent = { artistName: string; eventName: string; city: string; venue: string; date: string; url: string; };
+type TrackItem = { id: string; name: string; artist: string; album?: string | null; imageUrl?: string | null; previewUrl?: string | null; spotifyId?: string | null; blueprintSubgenre: string; socialCount?: number; socialUsers?: { id: string; name: string | null }[]; isUnheardForSelectedUser?: boolean; liveEvent?: LiveEvent; };
 const DEMO_TRACKS: Record<string, TrackItem[]> = {
   "Rap / Hip-Hop": [
     { id: "r1", name: "HUMBLE.", artist: "Kendrick Lamar", blueprintSubgenre: "Conscious Rap" },
@@ -510,13 +511,108 @@ function SpotifyLogoButton({
   );
 }
 
+// ── BarChartButton ────────────────────────────────────────────────────────────
+function BarChartButton({ active, onClick, color }: { active: boolean; onClick: () => void; color: string }) {
+  return (
+    <button onClick={e => { e.stopPropagation(); onClick(); }}
+      aria-label={active ? "Clear social sort" : "Sort by social popularity"}
+      title={active ? "Sorted by how many Friends users share this track" : "Sort by Friends popularity"}
+      style={{ flexShrink: 0, background: "none", border: "none", padding: "2px", cursor: "pointer",
+               color: active ? color : "rgba(255,255,255,0.22)", transition: "color 0.20s ease",
+               display: "flex", alignItems: "center", lineHeight: 1 }}>
+      <svg width={19} height={17} viewBox="0 0 12 10" fill="currentColor" aria-hidden="true">
+        <rect x="0"   y="5.5" width="2.8" height="4.5" rx="0.5"/>
+        <rect x="4.6" y="2.5" width="2.8" height="7.5" rx="0.5"/>
+        <rect x="9.2" y="0"   width="2.8" height="10"  rx="0.5"/>
+      </svg>
+    </button>
+  );
+}
+
+// ── PinButton ─────────────────────────────────────────────────────────────────
+function PinButton({ active, loading, onClick, color }: { active: boolean; loading: boolean; onClick: () => void; color: string }) {
+  return (
+    <button onClick={e => { e.stopPropagation(); onClick(); }}
+      aria-label={active ? "Hide live events" : "Find live events in California"}
+      title={loading ? "Searching for CA live events…" : active ? "Live events mode on — click to turn off" : "Find upcoming CA live events for these artists"}
+      disabled={loading}
+      style={{ flexShrink: 0, background: "none", border: "none", padding: "2px",
+               cursor: loading ? "default" : "pointer",
+               color: active ? color : "rgba(255,255,255,0.22)", opacity: loading ? 0.55 : 1,
+               transition: "color 0.20s ease, opacity 0.20s ease", display: "flex", alignItems: "center", lineHeight: 1 }}>
+      {loading ? (
+        <svg width={19} height={17} viewBox="0 0 18 10" aria-hidden="true">
+          {[0, 6, 12].map((cx, i) => (
+            <circle key={i} cx={cx + 3} cy="5" r="1.6" fill="currentColor">
+              <animate attributeName="opacity" values="0.25;1;0.25" dur="1.1s" repeatCount="indefinite" begin={`${i * 0.22}s`} />
+            </circle>
+          ))}
+        </svg>
+      ) : (
+        <svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <line x1="12" y1="17" x2="12" y2="22" />
+          <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z" />
+        </svg>
+      )}
+    </button>
+  );
+}
+
+// ── VennButton ────────────────────────────────────────────────────────────────
+function VennButton({ href, color, disabled = false, onBeforeNavigate }: { href: string; color: string; disabled?: boolean; onBeforeNavigate?: () => void }) {
+  const circles = (
+    <svg width={20} height={14} viewBox="0 0 22 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="7"  cy="7" r="6" />
+      <circle cx="15" cy="7" r="6" />
+    </svg>
+  );
+  if (disabled) {
+    return <span aria-label="Not in Friends World" title="Not in Friends World"
+      style={{ flexShrink: 0, display: "flex", alignItems: "center", lineHeight: 1, color: "rgba(255,255,255,0.18)", cursor: "default" }}>{circles}</span>;
+  }
+  return (
+    <a href={href} onClick={e => { e.stopPropagation(); onBeforeNavigate?.(); }}
+      aria-label="Compare in Friends World" title="Open this genre in Friends World"
+      style={{ flexShrink: 0, display: "flex", alignItems: "center", color, lineHeight: 1, textDecoration: "none", transition: "color 0.20s ease" }}>
+      {circles}
+    </a>
+  );
+}
+
+// ── UnheardButton ─────────────────────────────────────────────────────────────
+function UnheardButton({ active, onClick, color }: { active: boolean; onClick: () => void; color: string }) {
+  return (
+    <button type="button" onClick={e => { e.stopPropagation(); onClick(); }}
+      aria-label={active ? "Disable unheard filter" : "Show unheard tracks first"}
+      title={active ? "Showing unheard tracks first" : "Sort unheard tracks to top"}
+      style={{ flexShrink: 0, background: "none", border: "none", padding: "2px", cursor: "pointer",
+               color: active ? color : "rgba(255,255,255,0.28)", transition: "color 0.20s ease",
+               display: "flex", alignItems: "center", lineHeight: 1 }}>
+      <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+      </svg>
+    </button>
+  );
+}
+
+// ── SocialBadge ───────────────────────────────────────────────────────────────
+function SocialBadge({ count, color }: { count: number; color: string }) {
+  return (
+    <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 600, color,
+                   background: `${color}22`, borderRadius: 4, padding: "1px 5px",
+                   lineHeight: "16px", cursor: "pointer", userSelect: "none" }}>
+      {count}
+    </span>
+  );
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function LandingPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // ── Auth session ──────────────────────────────────────────────────────────────
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
 
   // ── Audio playback ────────────────────────────────────────────────────────────
   // Preview: plain HTML5 Audio. Full: Spotify Web Playback SDK.
@@ -657,6 +753,24 @@ export default function LandingPage() {
   // snaps to one of the two visible states (1 = peek, 2 = fullscreen).
   const sheetSwipeStartY    = useRef<number | null>(null);
   const sheetSwipeStartTime = useRef<number>(0);
+
+  // ── Social / live / substitute state ────────────────────────────────────
+  const [socialSort,    setSocialSort]   = useState(true);
+  const [liveMode,      setLiveMode]     = useState(false);
+  const [liveLoading,   setLiveLoading]  = useState(false);
+  const [liveEventMap,  setLiveEventMap] = useState<Record<string, LiveEvent | null>>({});
+  const [substituteProfile, setSubstituteProfile] = useState<{ userId: string; userName: string } | null>(() => {
+    if (typeof window === "undefined") return null;
+    try { const raw = sessionStorage.getItem("blueprint:substituteProfile"); return raw ? JSON.parse(raw) : null; } catch { return null; }
+  });
+  const [unheardMode,   setUnheardMode]  = useState(false);
+  const [friendsGenres, setFriendsGenres] = useState<Record<string, number> | null>(null);
+  const [friendsSubgenres, setFriendsSubgenres] = useState<Record<string, string[]>>({});
+  const [playlistAuthError, setPlaylistAuthError] = useState<"signin" | "reconnect" | null>(null);
+  const [popoverData, setPopoverData] = useState<{ users: { id: string; name: string | null }[]; top: number; right: number } | null>(null);
+  const friendsSubgenresFetchedRef = useRef<Set<string>>(new Set());
+  const substituteProfileRef = useRef(substituteProfile);
+  substituteProfileRef.current = substituteProfile;
 
   // ── Interaction refs ──────────────────────────────────────────────────────
   const zoomRef          = useRef(1);       // visual zoom — lerped each RAF frame
@@ -809,6 +923,59 @@ export default function LandingPage() {
       .then(d => setSubgenres(d?.subgenres ?? []))
       .catch(() => setSubgenres([]));
   }, [selected]);
+
+  // ── Friends genres fetch (always once on mount) ───────────────────────────
+  useEffect(() => {
+    fetch("/api/world/friends")
+      .then(r => r.json())
+      .then(d => setFriendsGenres(d ?? {}))
+      .catch(() => setFriendsGenres({}));
+  }, []);
+
+  // ── Friends subgenres lazy fetch ──────────────────────────────────────────
+  useEffect(() => {
+    if (!selected || !selectedSubgenre) return;
+    if (friendsSubgenresFetchedRef.current.has(selected)) return;
+    friendsSubgenresFetchedRef.current.add(selected);
+    const enc = encodeURIComponent(selected);
+    fetch(`/api/world/friends/${enc}/subgenres`)
+      .then(r => r.json())
+      .then(d => {
+        const names = (d?.subgenres ?? []).map((s: { name: string }) => s.name);
+        setFriendsSubgenres(prev => ({ ...prev, [selected]: names }));
+      })
+      .catch(() => {});
+  }, [selected, selectedSubgenre]);
+
+  // ── Substitute profile listener ───────────────────────────────────────────
+  useEffect(() => {
+    const onSubChange = (e: Event) => {
+      const profile = (e as CustomEvent<{ userId: string; userName: string } | null>).detail;
+      setSubstituteProfile(profile);
+      setUnheardMode(false);
+    };
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== "blueprint:substituteProfile") return;
+      try { const p = e.newValue ? JSON.parse(e.newValue) : null; setSubstituteProfile(p); setUnheardMode(false); } catch {}
+    };
+    window.addEventListener("blueprint:substituteChange", onSubChange);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener("blueprint:substituteChange", onSubChange);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, []);
+
+  // ── Refetch tracks when substituteProfile changes ─────────────────────────
+  useEffect(() => {
+    if (!selected) return;
+    const enc = encodeURIComponent(selected);
+    const subId = substituteProfileRef.current?.userId;
+    const url = subId
+      ? `/api/world/${enc}?unheardForUserId=${encodeURIComponent(subId)}`
+      : `/api/world/${enc}`;
+    fetch(url).then(r => r.json()).then(d => { setTracks(d?.tracks ?? []); }).catch(() => {});
+  }, [substituteProfile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Auto-rotate company carousel ─────────────────────────────────────────
   // 5000ms per slide (up from 4200ms) — enough time to read both the right-side
@@ -2355,6 +2522,71 @@ export default function LandingPage() {
   const focusedSubgenre = hoveredSubgenre ?? selectedSubgenre;
   const displayedTracks = focusedSubgenre ? tracks.filter(t => t.blueprintSubgenre === focusedSubgenre) : tracks;
 
+  // ── Social sort tally helper ──────────────────────────────────────────────
+  const tallyCount = (t: TrackItem) => t.socialUsers?.length ?? t.socialCount ?? 0;
+
+  // ── Normalize artist name for live event lookup ───────────────────────────
+  const normalizeArtist = (name: string) =>
+    name.toLowerCase().replace(/\s+&\s+/g, " and ").replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
+
+  // ── Venn navigation ───────────────────────────────────────────────────────
+  const vennHref: string | null = selected
+    ? focusedSubgenre
+      ? `/midvale/friends?genre=${encodeURIComponent(selected)}&subgenre=${encodeURIComponent(focusedSubgenre)}`
+      : `/midvale/friends?genre=${encodeURIComponent(selected)}`
+    : null;
+
+  const vennEnabled: boolean = (() => {
+    if (!selected || friendsGenres === null) return false;
+    if (!(selected in friendsGenres)) return false;
+    if (!focusedSubgenre) return true;
+    const subs = friendsSubgenres[selected];
+    if (!subs) return false;
+    return subs.includes(focusedSubgenre);
+  })();
+
+  const handleVennNavigate = () => {
+    const subId   = session?.user?.id;
+    const subName = session?.user?.name ?? "Surya";
+    if (!subId) return;
+    const profile = { userId: subId, userName: subName };
+    try {
+      sessionStorage.setItem("blueprint:substituteProfile", JSON.stringify(profile));
+      window.dispatchEvent(new CustomEvent("blueprint:substituteChange", { detail: profile }));
+    } catch {}
+  };
+
+  // ── sortedTracks ──────────────────────────────────────────────────────────
+  const sortedTracks: TrackItem[] = (() => {
+    if (!unheardMode && !liveMode && !socialSort) return displayedTracks;
+    const withLive = displayedTracks.map(t => {
+      if (!liveMode) return t;
+      const ev = liveEventMap[normalizeArtist(t.artist)];
+      return ev ? { ...t, liveEvent: ev } : { ...t, liveEvent: undefined };
+    });
+    if (!unheardMode && !liveMode && !socialSort) return withLive;
+    return [...withLive].sort((a, b) => {
+      // 1. Unheard first
+      if (unheardMode) {
+        const av = a.isUnheardForSelectedUser, bv = b.isUnheardForSelectedUser;
+        if (av !== bv) {
+          if (av === true) return -1; if (bv === true) return 1;
+          if (av === false) return -1;
+          return 1;
+        }
+      }
+      // 2. Live events
+      if (liveMode) {
+        const aHas = !!a.liveEvent, bHas = !!b.liveEvent;
+        if (aHas !== bHas) return aHas ? -1 : 1;
+        if (aHas && bHas) return a.liveEvent!.date.localeCompare(b.liveEvent!.date);
+      }
+      // 3. Social
+      if (socialSort) return tallyCount(b) - tallyCount(a);
+      return 0;
+    });
+  })();
+
   // ── Playlist push handler ─────────────────────────────────────────────────
   // Scope key: "user:{userId}:{genre}:{subgenre|all}"
   const playlistKey: string | null = selected
@@ -2365,6 +2597,12 @@ export default function LandingPage() {
     if (!selected || playlistLoading) return;
     setPlaylistLoading(true);
     setPlaylistMsg(null);
+    setPlaylistAuthError(null);
+    if (sessionStatus === "unauthenticated") {
+      setPlaylistLoading(false);
+      setPlaylistAuthError("signin");
+      return;
+    }
     try {
       const body = {
         worldType: "user" as const,
@@ -2379,9 +2617,13 @@ export default function LandingPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setPlaylistMsg(data.error === "missing_scope"
-          ? "Reconnect Spotify to create playlists."
-          : (data.message ?? data.error ?? "Failed to create playlist."));
+        if (res.status === 401 || data.error === "Not authenticated") {
+          setPlaylistAuthError("signin");
+        } else if (res.status === 403 || data.error === "missing_scope") {
+          setPlaylistAuthError("reconnect");
+        } else {
+          setPlaylistMsg(data.message ?? data.error ?? "Failed to create playlist.");
+        }
         return;
       }
       window.open(data.playlistUrl, "_blank", "noopener,noreferrer");
@@ -2399,6 +2641,24 @@ export default function LandingPage() {
       setPlaylistMsg("Failed to create playlist.");
     } finally {
       setPlaylistLoading(false);
+    }
+  };
+
+  // ── Live events toggle handler ────────────────────────────────────────────
+  const handleLiveToggle = async () => {
+    if (liveMode) { setLiveMode(false); return; }
+    setLiveMode(true);
+    const allArtists = [...new Set(displayedTracks.map(t => normalizeArtist(t.artist)))];
+    const needed = allArtists.filter(a => !(a in liveEventMap));
+    if (needed.length === 0) return;
+    setLiveLoading(true);
+    try {
+      const res = await fetch(`/api/events/live?artists=${encodeURIComponent(needed.join(","))}`);
+      if (!res.ok) return;
+      const data: Record<string, LiveEvent | null> = await res.json();
+      setLiveEventMap(prev => ({ ...prev, ...data }));
+    } catch {} finally {
+      setLiveLoading(false);
     }
   };
 
@@ -2534,6 +2794,10 @@ export default function LandingPage() {
                     <div className="flex items-center justify-between gap-4">
                       <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{focusedSubgenre}</h2>
                       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                        {substituteProfile && <UnheardButton active={unheardMode} onClick={() => setUnheardMode(v => !v)} color={selectedColor} />}
+                        {vennHref && <VennButton href={vennHref} color={selectedColor} disabled={!vennEnabled} onBeforeNavigate={handleVennNavigate} />}
+                        <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
+                        <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
                         <PlaylistButton loading={playlistLoading} success={!!(playlistKey && createdPlaylistKeys.has(playlistKey))} onClick={handlePlaylistPush} color={selectedColor} />
                         <SpotifyLogoButton track={playingTrack} />
                       </div>
@@ -2545,6 +2809,10 @@ export default function LandingPage() {
                     <div className="flex items-center justify-between gap-4">
                       <h2 className="text-2xl font-bold leading-tight truncate" style={{ color: selectedColor }}>{selected ? shortLabel(selected) : ""}</h2>
                       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                        {substituteProfile && <UnheardButton active={unheardMode} onClick={() => setUnheardMode(v => !v)} color={selectedColor} />}
+                        {vennHref && <VennButton href={vennHref} color={selectedColor} disabled={!vennEnabled} onBeforeNavigate={handleVennNavigate} />}
+                        <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
+                        <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
                         <PlaylistButton loading={playlistLoading} success={!!(playlistKey && createdPlaylistKeys.has(playlistKey))} onClick={handlePlaylistPush} color={selectedColor} />
                         <SpotifyLogoButton track={playingTrack} />
                       </div>
@@ -2553,7 +2821,23 @@ export default function LandingPage() {
                 )}
                 <p className="text-zinc-600 text-xs mt-1.5">
                   {displayedTracks.length} tracks
-                  {playlistMsg && (
+                  {playlistAuthError === "signin" && (
+                    <button type="button" onClick={() => signIn("spotify", { callbackUrl: window.location.href })}
+                      style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, color: "#1db954",
+                               background: "rgba(29,185,84,0.12)", border: "1px solid rgba(29,185,84,0.30)",
+                               borderRadius: 6, padding: "2px 8px", cursor: "pointer", lineHeight: 1.5 }}>
+                      Sign in with Spotify
+                    </button>
+                  )}
+                  {playlistAuthError === "reconnect" && (
+                    <button type="button" onClick={() => signIn("spotify", { callbackUrl: window.location.href })}
+                      style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, color: "#fb923c",
+                               background: "rgba(251,146,60,0.10)", border: "1px solid rgba(251,146,60,0.28)",
+                               borderRadius: 6, padding: "2px 8px", cursor: "pointer", lineHeight: 1.5 }}>
+                      Reconnect Spotify
+                    </button>
+                  )}
+                  {!playlistAuthError && playlistMsg && (
                     <span style={{ marginLeft: 8, color: "#ef4444" }}>{playlistMsg}</span>
                   )}
                 </p>
@@ -2580,11 +2864,11 @@ export default function LandingPage() {
                 </div>
               )}
               <div className="overflow-y-auto flex-1" style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(255,255,255,0.08) transparent" }}>
-                {displayedTracks.length === 0 ? (
+                {sortedTracks.length === 0 ? (
                   <p className="text-zinc-700 text-xs px-7 py-8 text-center">No tracks</p>
                 ) : (
                   <div className="flex flex-col pt-1 pb-6">
-                    {displayedTracks.map((t, idx) => {
+                    {sortedTracks.map((t, idx) => {
                       const canPlay = !!(deezerPreviews[t.id] || t.previewUrl || (spotifyReady && !notPremium && t.spotifyId));
                       const isPending = pendingTrackId === t.id;
                       const isActive  = nowPlayingId === t.id || isPending;
@@ -2632,6 +2916,32 @@ export default function LandingPage() {
                                 <span style={{ color: "rgba(255,255,255,0.22)", marginLeft: 4 }}>(No Preview)</span>
                               ) : null}
                             </span>
+                          </div>
+                          {/* Social badge + live pin */}
+                          <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 6 }}>
+                            {t.liveEvent && (
+                              <a href={t.liveEvent.url} target="_blank" rel="noopener noreferrer"
+                                onClick={e => e.stopPropagation()}
+                                title={`${t.liveEvent.eventName} · ${t.liveEvent.venue}, ${t.liveEvent.city} · ${t.liveEvent.date}`}
+                                style={{ flexShrink: 0, color: selectedColor, display: "flex", alignItems: "center" }}>
+                                <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                  <line x1="12" y1="17" x2="12" y2="22" /><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z" />
+                                </svg>
+                              </a>
+                            )}
+                            {tallyCount(t) > 0 && (
+                              <span onClick={e => {
+                                e.stopPropagation();
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                setPopoverData({ users: t.socialUsers ?? [], top: rect.top, right: window.innerWidth - rect.right + 28 });
+                              }}>
+                                <SocialBadge count={tallyCount(t)} color={`rgba(${sr},${sg},${sb},0.80)`} />
+                              </span>
+                            )}
+                            {unheardMode && t.isUnheardForSelectedUser === true && (
+                              <span aria-label="Not in selected user's library"
+                                style={{ flexShrink: 0, width: 6, height: 6, borderRadius: "50%", background: selectedColor, opacity: 0.70, display: "inline-block" }} />
+                            )}
                           </div>
                         </div>
                       );
@@ -2720,54 +3030,58 @@ export default function LandingPage() {
                 {/* Color accent line — always present at top of sheet */}
                 <div style={{ height: 2, background: selectedColor ?? "rgba(255,255,255,0.12)", opacity: 0.85, flexShrink: 0 }} />
 
-                {/* ── Header — genre name · track count · arrow toggle · close ── */}
-                <div
-                  className="flex-shrink-0 pl-5 pr-4 pt-3 pb-2.5 flex items-center gap-2"
-                  style={{ minHeight: 56 }}
-                >
-                  {/* Genre / subgenre name + track count */}
-                  <div className="flex items-center min-w-0 flex-1">
-                    <h2
-                      className="text-lg font-bold leading-tight truncate"
-                      style={{ color: selectedColor }}
-                    >
+                {/* ── Sheet header — left title / right button cluster ─────────── */}
+                <div style={{ flexShrink: 0, padding: "12px 16px 10px", display: "flex", alignItems: "flex-start", gap: 12 }}>
+                  {/* LEFT — genre title + track count */}
+                  <div style={{ flex: 1, minWidth: 0, paddingTop: 3 }}>
+                    <h2 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 700, color: selectedColor, lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {focusedSubgenre ?? (selected ? shortLabel(selected) : "")}
                     </h2>
-                    <span
-                      className="flex-shrink-0 text-xs"
-                      style={{ color: "rgba(255,255,255,0.30)", marginLeft: 8 }}
-                    >
-                      {displayedTracks.length} tracks
-                    </span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 12, color: "rgba(255,255,255,0.30)" }}>{displayedTracks.length} tracks</span>
+                      {playlistAuthError === "signin" && (
+                        <button type="button" onClick={() => signIn("spotify", { callbackUrl: window.location.href })}
+                          style={{ fontSize: 11, fontWeight: 600, color: "#1db954", background: "rgba(29,185,84,0.12)", border: "1px solid rgba(29,185,84,0.30)", borderRadius: 6, padding: "2px 8px", cursor: "pointer", lineHeight: 1.5 }}>
+                          Sign in with Spotify
+                        </button>
+                      )}
+                      {playlistAuthError === "reconnect" && (
+                        <button type="button" onClick={() => signIn("spotify", { callbackUrl: window.location.href })}
+                          style={{ fontSize: 11, fontWeight: 600, color: "#fb923c", background: "rgba(251,146,60,0.10)", border: "1px solid rgba(251,146,60,0.28)", borderRadius: 6, padding: "2px 8px", cursor: "pointer", lineHeight: 1.5 }}>
+                          Reconnect Spotify
+                        </button>
+                      )}
+                      {!playlistAuthError && playlistMsg && (
+                        <span style={{ fontSize: 12, color: "#ef4444" }}>{playlistMsg}</span>
+                      )}
+                    </div>
                   </div>
 
-                  {/* Playlist + Spotify logo + arrow toggle */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 18, flexShrink: 0 }}>
-                    <PlaylistButton loading={playlistLoading} success={!!(playlistKey && createdPlaylistKeys.has(playlistKey))} onClick={handlePlaylistPush} color={selectedColor} />
-                    {/* Spotify logo — lights up when a track is selected */}
-                    <SpotifyLogoButton track={playingTrack} size={36} />
-
-                    {/* Arrow toggle: ↑ expands to fullscreen, ↓ collapses to peek */}
-                    <button
-                      onClick={() => setSheetSnap(sheetSnap === 1 ? 2 : 1)}
-                      aria-label={sheetSnap === 1 ? "Expand to fullscreen" : "Collapse to preview"}
-                      style={{
-                        flexShrink:      0,
-                        width:           36,
-                        height:          36,
-                        display:         "flex",
-                        alignItems:      "center",
-                        justifyContent:  "center",
-                        borderRadius:    "50%",
-                        background:      "rgba(255,255,255,0.07)",
-                        color:           "rgba(255,255,255,0.60)",
-                        fontSize:        16,
-                        lineHeight:      1,
-                      }}
-                    >
-                      {sheetSnap === 1 ? "↑" : "↓"}
-                    </button>
-                  </div>
+                  {/* RIGHT — two-row button cluster */}
+                  {(() => {
+                    const W: React.CSSProperties = { flexShrink: 0, width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", background: "rgba(255,255,255,0.07)" };
+                    return (
+                      <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+                        {/* Row 1: Playlist · Spotify · Collapse */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <div style={W}><PlaylistButton loading={playlistLoading} success={!!(playlistKey && createdPlaylistKeys.has(playlistKey))} onClick={handlePlaylistPush} color={selectedColor} /></div>
+                          <div style={W}><SpotifyLogoButton track={playingTrack} size={20} /></div>
+                          <button onClick={() => setSheetSnap(sheetSnap === 1 ? 2 : 1)}
+                            aria-label={sheetSnap === 1 ? "Expand to fullscreen" : "Collapse to preview"}
+                            style={{ flexShrink: 0, width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.60)", fontSize: 16, lineHeight: 1 }}>
+                            {sheetSnap === 1 ? "↑" : "↓"}
+                          </button>
+                        </div>
+                        {/* Row 2: [Unheard] · [Venn] · BarChart · Pin */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          {substituteProfile && <div style={W}><UnheardButton active={unheardMode} onClick={() => setUnheardMode(v => !v)} color={selectedColor} /></div>}
+                          {vennHref && <div style={W}><VennButton href={vennHref} color={selectedColor} disabled={!vennEnabled} onBeforeNavigate={handleVennNavigate} /></div>}
+                          <div style={W}><BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} /></div>
+                          <div style={W}><PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} /></div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* ── Track list — scrollable, shared between peek + fullscreen ─ */}
@@ -2776,11 +3090,11 @@ export default function LandingPage() {
                   className="overflow-y-auto flex-1"
                   style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" } as React.CSSProperties}
                 >
-                  {displayedTracks.length === 0 ? (
+                  {sortedTracks.length === 0 ? (
                     <p className="text-zinc-700 text-xs px-6 py-8 text-center">No tracks</p>
                   ) : (
                     <div className="flex flex-col pt-1 pb-8">
-                      {displayedTracks.map((t, idx) => {
+                      {sortedTracks.map((t, idx) => {
                         const canPlay = !!(deezerPreviews[t.id] || t.previewUrl || (spotifyReady && !notPremium && t.spotifyId));
                         const isPending = pendingTrackId === t.id;
                         const isActive  = nowPlayingId === t.id || isPending;
@@ -2828,6 +3142,32 @@ export default function LandingPage() {
                                   <span style={{ color: "rgba(255,255,255,0.22)", marginLeft: 4 }}>(No Preview)</span>
                                 ) : null}
                               </span>
+                            </div>
+                            {/* Social badge + live pin */}
+                            <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 6 }}>
+                              {t.liveEvent && (
+                                <a href={t.liveEvent.url} target="_blank" rel="noopener noreferrer"
+                                  onClick={e => e.stopPropagation()}
+                                  title={`${t.liveEvent.eventName} · ${t.liveEvent.venue}, ${t.liveEvent.city} · ${t.liveEvent.date}`}
+                                  style={{ flexShrink: 0, color: selectedColor, display: "flex", alignItems: "center" }}>
+                                  <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                    <line x1="12" y1="17" x2="12" y2="22" /><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z" />
+                                  </svg>
+                                </a>
+                              )}
+                              {tallyCount(t) > 0 && (
+                                <span onClick={e => {
+                                  e.stopPropagation();
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  setPopoverData({ users: t.socialUsers ?? [], top: rect.top, right: window.innerWidth - rect.right + 28 });
+                                }}>
+                                  <SocialBadge count={tallyCount(t)} color={`rgba(${sr},${sg},${sb},0.80)`} />
+                                </span>
+                              )}
+                              {unheardMode && t.isUnheardForSelectedUser === true && (
+                                <span aria-label="Not in selected user's library"
+                                  style={{ flexShrink: 0, width: 6, height: 6, borderRadius: "50%", background: selectedColor, opacity: 0.70, display: "inline-block" }} />
+                              )}
                             </div>
                           </div>
                         );
@@ -2920,6 +3260,32 @@ export default function LandingPage() {
           )}
 
         </div>
+
+        {/* Social tally popover */}
+        {popoverData && (
+          <>
+            <div onClick={() => setPopoverData(null)} style={{ position: "fixed", inset: 0, zIndex: 300 }} />
+            <div style={{ position: "fixed", top: popoverData.top, right: popoverData.right, zIndex: 301,
+                          background: "rgba(12,12,18,0.97)", border: "1px solid rgba(255,255,255,0.10)",
+                          borderRadius: 10, padding: "10px 14px", minWidth: 140, maxWidth: 220,
+                          backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
+                          boxShadow: "0 8px 32px rgba(0,0,0,0.55)" }}>
+              <p style={{ fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.30)", marginBottom: 8, lineHeight: 1 }}>Also in Friends</p>
+              {popoverData.users.length === 0 ? (
+                <p style={{ fontSize: 12, color: "rgba(255,255,255,0.45)" }}>No one else</p>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {popoverData.users.map(u => (
+                    <a key={u.id} href={`/midvale/${u.id}`} onClick={() => setPopoverData(null)}
+                      style={{ fontSize: 13, fontWeight: 500, color: "rgba(255,255,255,0.88)", textDecoration: "none", display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {u.name ?? "Unknown"}
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
 
       </section>
 
