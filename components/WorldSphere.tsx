@@ -312,6 +312,7 @@ function PlaylistButton({
 }) {
   return (
     <button
+      type="button"
       onClick={e => { e.stopPropagation(); onClick(); }}
       aria-label="Create a Spotify playlist from this tracklist"
       title={loading ? "Creating playlist…" : "Save tracklist to Spotify playlist"}
@@ -415,7 +416,7 @@ function possessiveHeadline(name: string | undefined): string {
 }
 
 export default function WorldSphere({ userId, backHref, userName, friendsWorld = false }: WorldSphereProps = {}) {
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const sessionUserId = session?.user?.id ?? null;
 
   // True when viewing our own world (no userId prop, or userId matches session).
@@ -1471,6 +1472,17 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
     setPlaylistLoading(true);
     setPlaylistMsg(null);
 
+    // ── Diagnostic ──────────────────────────────────────────────────────────
+    console.log("[playlist-push] invoked", {
+      surface:       isMobile ? "mobile" : "desktop",
+      sessionStatus,
+      sessionUserId,
+      hasCookie:     document.cookie.length > 0,
+      selected,
+      focusedSubgenre,
+      friendsWorld,
+    });
+
     try {
       const body: {
         worldType: "user" | "friends";
@@ -1480,16 +1492,19 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
       } = {
         worldType: friendsWorld ? "friends" : "user",
         genre:     selected,
-        ...(userId   ? { userId }                               : {}),
+        ...(userId        ? { userId }                          : {}),
         ...(focusedSubgenre ? { subgenre: focusedSubgenre }     : {}),
       };
 
       const res  = await fetch("/api/spotify/playlist-push", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify(body),
+        method:      "POST",
+        credentials: "include",          // always send session cookies
+        headers:     { "Content-Type": "application/json" },
+        body:        JSON.stringify(body),
       });
       const data = await res.json();
+
+      console.log("[playlist-push] response", { status: res.status, data });
 
       if (!res.ok) {
         if (data.error === "missing_scope") {

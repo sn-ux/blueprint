@@ -45,8 +45,20 @@ async function spotifyFetch(
 // ── Route handler ─────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
+  // ── Diagnostic ──────────────────────────────────────────────────────────────
+  const cookieHeader = req.headers.get("cookie") ?? "";
+  const hasCookie    = cookieHeader.length > 0;
+  const userAgent    = req.headers.get("user-agent") ?? "(none)";
+  console.log("[playlist-push] route hit", {
+    hasCookie,
+    hasSessionToken: cookieHeader.includes("next-auth.session-token") ||
+                     cookieHeader.includes("__Secure-next-auth.session-token"),
+    userAgent: userAgent.slice(0, 80),
+  });
+
   // ── Auth ────────────────────────────────────────────────────────────────────
   const user = await getCurrentUser();
+  console.log("[playlist-push] auth", { userFound: !!user, userId: user?.id ?? null });
   if (!user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
