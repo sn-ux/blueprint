@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { SPHERE_INIT_RX, SPHERE_INIT_RY } from "@/lib/sphereConfig";
@@ -56,6 +56,15 @@ type LiveEvent = {
 };
 type V3  = [number, number, number];
 type Tri = [number, number, number];
+type Geometry = {
+  verts:   V3[];
+  faces:   Tri[];
+  cents:   V3[];
+  adj:     number[][];
+  names:   string[];
+  region:  number[];
+  rgbMap:  [number, number, number][];
+};
 
 // ── Arcball math (identical to homepage) ──────────────────────────────────────
 
@@ -442,6 +451,9 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
   const autoSelectedRef = useRef(false);
   const selectedRef     = useRef<string | null>(null);
   selectedRef.current   = selected;
+  const geoRef          = useRef<Geometry | null>(null);
+  const dirtyRef        = useRef(true);
+  const mouseMoveRafRef = useRef(false);
 
   // ── Mobile detection ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -484,18 +496,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
     };
   }, [isMobile, selected]);
 
-  // ── Poll zoomRef → zoomAbove2 (mobile zoom pill stage) ───────────────────
-  useEffect(() => {
-    if (!isMobile) return;
-    const id = setInterval(() => {
-      const above = zoomRef.current >= 2.0;
-      if (above !== zoomAbove2Ref.current) {
-        zoomAbove2Ref.current = above;
-        setZoomAbove2(above);
-      }
-    }, 100);
-    return () => clearInterval(id);
-  }, [isMobile]);
+  // zoomAbove2 is now driven from the RAF animate() loop — no setInterval needed.
 
   // ── Data fetching ─────────────────────────────────────────────────────────
 
@@ -640,28 +641,22 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
 
     const enc = encodeURIComponent(selected);
     setTracksLoading(true);
-    fetch(genreUrl(enc)).then(r=>r.json()).then(d => {
-      const loaded: TrackItem[] = d.tracks ?? [];
-      setTracks(loaded);
-      const fetchPrev = (t: TrackItem) =>
-        fetch(`/api/preview?track=${encodeURIComponent(t.name)}&artist=${encodeURIComponent(t.artist)}`)
-          .then(r=>r.json()).then((data:{previewUrl:string|null})=>{
-            if(data.previewUrl){deezerPreviewsRef.current[t.id]=data.previewUrl;setDeezerPreviews(prev=>({...prev,[t.id]:data.previewUrl!}));}
-          }).catch(()=>{});
-      (async()=>{for(let i=0;i<loaded.length;i+=5)await Promise.all(loaded.slice(i,i+5).map(fetchPrev));})();
-    }).catch(()=>setTracks([])).finally(()=>setTracksLoading(false));
-
-    fetch(subgenreUrl(enc)).then(r=>r.json()).then(d=>setSubgenres(d.subgenres??[])).catch(()=>setSubgenres([]));
+    fetch(genreUrl(enc))
+      .then(r => r.json())
+      .then(d => {
+        setTracks(d.tracks ?? []);
+        if (Array.isArray(d.subgenres)) {
+          setSubgenres(d.subgenres);
+        } else {
+          // Fallback: subgenres not bundled in response — fetch separately
+          fetch(subgenreUrl(enc)).then(r=>r.json()).then(d2=>setSubgenres(d2.subgenres??[])).catch(()=>setSubgenres([]));
+        }
+      })
+      .catch(() => setTracks([]))
+      .finally(() => setTracksLoading(false));
   }, [selected]);
 
-  // ── Poll hoveredRef → hoveredSubgenre state ───────────────────────────────
-  useEffect(() => {
-    const id = setInterval(() => {
-      const ns = zoomRef.current >= 2.0 ? (hoveredRef.current?.subgenre ?? null) : null;
-      if (ns !== hoveredSubgRef.current) { hoveredSubgRef.current = ns; setHoveredSubgenre(ns); }
-    }, 100);
-    return () => clearInterval(id);
-  }, []);
+  // hoveredSubgenre is now driven directly from onMouseMove/onTouchMove — no setInterval needed.
 
   // ── playTrack ─────────────────────────────────────────────────────────────
   const playTrack = (t: TrackItem) => {
@@ -733,8 +728,8 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
     const canvas = canvasRef.current;
     if (!canvas || loading || Object.keys(worlds).length === 0) return;
 
-    // High-DPI: cap at 2× to avoid wasting GPU fill-rate on 3× screens
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    // High-DPI: cap at 1.5× on mobile, 2× on desktop
+    const dpr = Math.min(window.devicePixelRatio || 1, isMobileRef.current ? 1.5 : 2);
 
     const sync = () => {
       const w = canvas.offsetWidth, h = canvas.offsetHeight;
@@ -763,56 +758,21 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
     faceCentsRef.current  = cents;
     faceRegionRef.current = region;
 
-    // ── Subgenre Voronoi ──────────────────────────────────────────────────
-    subRegionRef.current = new Map(); activeSubsRef.current = []; subPolesRef.current = [];
-    if (selected !== null && subgenres.length > 0) {
-      const selIdx = names.indexOf(selected);
-      if (selIdx >= 0) {
-        const gfi = faces.map((_,i)=>i).filter(i=>region[i]===selIdx);
-        if (gfi.length > 0) {
-          const maxSubs = Math.max(1, Math.floor(gfi.length/3));
-          const actSubs = subgenres.slice(0, maxSubs);
-          activeSubsRef.current = actSubs;
-          const n = actSubs.length;
-          const gfiSet = new Set(gfi);
-          const subAdj = new Map<number,number[]>(gfi.map(fi=>[fi,adj[fi].filter(ni=>gfiSet.has(ni))]));
-          const subTotal = actSubs.reduce((s,sg)=>s+sg.count,0)||1;
-          const targets  = actSubs.map(sg=>Math.max(1,Math.round((sg.count/subTotal)*gfi.length)));
-          const tSum = targets.reduce((s,t)=>s+t,0); let surplus=gfi.length-tSum;
-          if(surplus>0){for(let i=0;surplus>0;i=(i+1)%n){targets[i]++;surplus--;}}
-          else if(surplus<0){for(let i=n-1;surplus<0;i=((i-1)+n)%n){if(targets[i]>1){targets[i]--;surplus++;}}}
-          let psx=0,psy=0,psz=0;
-          for(const fi of gfi){psx+=cents[fi][0];psy+=cents[fi][1];psz+=cents[fi][2];}
-          psx/=gfi.length;psy/=gfi.length;psz/=gfi.length;
-          let firstSeed=gfi[0],bestCentDot=-Infinity;
-          for(const fi of gfi){const d=cents[fi][0]*psx+cents[fi][1]*psy+cents[fi][2]*psz;if(d>bestCentDot){bestCentDot=d;firstSeed=fi;}}
-          const seedFaces=[firstSeed];
-          const minDist=new Float32Array(gfi.length).fill(Infinity);
-          const updateDists=(sf:number)=>{const[sx,sy,sz]=cents[sf];for(let j=0;j<gfi.length;j++){const[fx,fy,fz]=cents[gfi[j]];const dot=Math.min(1,Math.max(-1,fx*sx+fy*sy+fz*sz));const d=Math.acos(dot);if(d<minDist[j])minDist[j]=d;}};
-          updateDists(firstSeed);
-          for(let s=1;s<n;s++){let fj=0;for(let j=1;j<gfi.length;j++){if(minDist[j]>minDist[fj])fj=j;}seedFaces.push(gfi[fj]);updateDists(gfi[fj]);}
-          const assignment=new Map<number,number>(),frontiers: number[][]=Array.from({length:n},()=>[]);
-          const rCounts=new Array<number>(n).fill(0);
-          for(let i=0;i<n;i++){assignment.set(seedFaces[i],i);frontiers[i].push(seedFaces[i]);rCounts[i]=1;}
-          let totalA=n;
-          while(totalA<gfi.length){let grew=false;for(let i=0;i<n;i++){if(rCounts[i]>=targets[i]||!frontiers[i].length)continue;let found=false;while(frontiers[i].length>0&&!found){const fi2=frontiers[i][0];let cl=false;for(const ni of(subAdj.get(fi2)??[])){if(!assignment.has(ni)){assignment.set(ni,i);rCounts[i]++;totalA++;frontiers[i].push(ni);cl=true;found=true;grew=true;break;}}if(!cl)frontiers[i].shift();}}if(!grew)break;}
-          let mopping=true;while(mopping){mopping=false;for(const fi of gfi){if(assignment.has(fi))continue;for(const ni of(subAdj.get(fi)??[])){if(assignment.has(ni)){assignment.set(fi,assignment.get(ni)!);mopping=true;break;}}}}
-          for(const fi of gfi){if(!assignment.has(fi))assignment.set(fi,0);}
-          subRegionRef.current=assignment;
-          const pAcc: V3[]=Array.from({length:n},()=>[0,0,0] as V3);const pCnt=new Int32Array(n);
-          for(const[fi2,si] of assignment){pAcc[si][0]+=cents[fi2][0];pAcc[si][1]+=cents[fi2][1];pAcc[si][2]+=cents[fi2][2];pCnt[si]++;}
-          subPolesRef.current=actSubs.map((sub,i)=>({name:sub.name,pole:pCnt[i]>0?norm3([pAcc[i][0]/pCnt[i],pAcc[i][1]/pCnt[i],pAcc[i][2]/pCnt[i]]):cents[seedFaces[i]]}));
-        }
-      }
-    }
-
     const rgbMap: [number,number,number][] = names.map(n=>hexRgb(COLORS[n]??"#71717a"));
+
+    // Store geometry in ref so drawFrame and subgenre effect can read it
+    geoRef.current = { verts, faces, cents, adj, names, region, rgbMap };
+    dirtyRef.current = true;
+
     const FOV = 900;
     const MIN_ZOOM = 1.0, MAX_ZOOM = 5.0;
     let snapZoom = false;  // set on mobile pinch-end for immediate snap
 
     // ── drawFrame ──────────────────────────────────────────────────────────
     function drawFrame() {
+      const geo = geoRef.current; if (!geo) return;
+      const { verts, faces, cents, adj, names, region, rgbMap } = geo;
+
       // Zoom lerp (desktop) / snap (mobile pinch end)
       if (snapZoom) { zoomRef.current = zoomTargetRef.current; snapZoom = false; }
       else           { zoomRef.current += (zoomTargetRef.current - zoomRef.current) * 0.10; }
@@ -840,7 +800,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
       });
 
       const fd=faces.map((tri,i)=>({tri,fi:i,depth:(pv[tri[0]].z+pv[tri[1]].z+pv[tri[2]].z)/3,ri:region[i]})).sort((a,b)=>a.depth-b.depth);
-      const selectedIdx=selected!==null?names.indexOf(selected):-1;
+      const selectedIdx=selectedRef.current!==null?names.indexOf(selectedRef.current):-1;
       const hoveredGenre=hoveredRef.current?.genre??null;
       const hoveredSubName=hoveredRef.current?.subgenre??null;
       const hoveredIdx=hoveredGenre!==null?names.indexOf(hoveredGenre):-1;
@@ -940,7 +900,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
           if(isAS){ctx.strokeStyle=`rgba(${cr},${cg},${cb},1.0)`;ctx.lineWidth=1.5;ctx.beginPath();ctx.roundRect(bx,by,bw,bh,rad);ctx.stroke();}
           else if(isHS){ctx.strokeStyle=`rgba(${cr},${cg},${cb},0.60)`;ctx.lineWidth=1.0;ctx.beginPath();ctx.roundRect(bx,by,bw,bh,rad);ctx.stroke();}
           ctx.fillStyle=isHS?`rgb(${cr},${cg},${cb})`:`rgba(${cr},${cg},${cb},0.80)`;ctx.fillText(sub.name,lx,ly);
-          labelHitsRef.current.push({name:selected!,subgenre:sub.name,x1:bx,y1:by,x2:bx+bw,y2:by+bh});
+          labelHitsRef.current.push({name:selectedRef.current!,subgenre:sub.name,x1:bx,y1:by,x2:bx+bw,y2:by+bh});
         });
         ctx.globalAlpha=1.0;
       }
@@ -1039,8 +999,11 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
         touchDrag.lx=t.clientX;touchDrag.ly=t.clientY;
         if(Math.abs(dx)>3||Math.abs(dy)>3)touchDrag.moved=true;
         hoveredRef.current=null;
-        if(selected!==null&&zoomRef.current>=1.1&&regionPolesRef.current.length>0){
-          const se=regionPolesRef.current.find(r=>r.name===selected);
+        dirtyRef.current=true;
+        // Update hoveredSubgenre state (clear on drag)
+        if(hoveredSubgRef.current!==null){hoveredSubgRef.current=null;setHoveredSubgenre(null);}
+        if(selectedRef.current!==null&&zoomRef.current>=1.1&&regionPolesRef.current.length>0){
+          const se=regionPolesRef.current.find(r=>r.name===selectedRef.current);
           if(se){const[px,py,pz]=se.pole;const[,,,,,,sm6,sm7,sm8]=rotMatRef.current;if(sm6*px+sm7*py+sm8*pz<0){autoSelectedRef.current=false;selectedSubgenreRef.current=null;setSelectedSubgenre(null);zoomSubgenreRef.current=null;setZoomSubgenre(null);setSelected(null);}}
         }
       } else if(touches.length===2&&pinchActive){
@@ -1049,7 +1012,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
         const newDist=Math.sqrt(dx*dx+dy*dy);
         const newZoom=Math.max(MIN_ZOOM,Math.min(MAX_ZOOM,pinchZoom0*(newDist/pinchDist0)));
         // Write both so there's no lerp lag during pinch
-        zoomTargetRef.current=newZoom;zoomRef.current=newZoom;
+        zoomTargetRef.current=newZoom;zoomRef.current=newZoom;dirtyRef.current=true;
         if(newZoom>=1.2&&selectedRef.current===null&&regionPolesRef.current.length>0){
           const[,,,,,,pm6,pm7,pm8]=rotMatRef.current;let bn=regionPolesRef.current[0].name,bz=-Infinity;
           for(const{name,pole:[px,py,pz]} of regionPolesRef.current){const z2=pm6*px+pm7*py+pm8*pz;if(z2>bz){bz=z2;bn=name;}}
@@ -1090,7 +1053,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
             let bestTName: string;
             if(fCT.length>0&&fRT.length>0){let bi=0,bd=-Infinity;for(let i=0;i<fCT.length;i++){const d=fCT[i][0]*x_w+fCT[i][1]*y_w+fCT[i][2]*z_w;if(d>bd){bd=d;bi=i;}}bestTName=regionPolesRef.current[fRT[bi]]?.name??regionPolesRef.current[0].name;}
             else{let bt=regionPolesRef.current[0],bdot=-Infinity;for(const rd of regionPolesRef.current){const d=rd.pole[0]*x_w+rd.pole[1]*y_w+rd.pole[2]*z_w;if(d>bdot){bdot=d;bt=rd;}}bestTName=bt.name;}
-            if(selected!==null&&zoomRef.current>=2.0&&bestTName===selected&&subPolesRef.current.length>0){
+            if(selectedRef.current!==null&&zoomRef.current>=2.0&&bestTName===selectedRef.current&&subPolesRef.current.length>0){
               const sft=[...subRegionRef.current.keys()];let bsf=sft[0]??-1,bsd=-Infinity;for(const fi of sft){const c=fCT[fi];if(!c)continue;const d=c[0]*x_w+c[1]*y_w+c[2]*z_w;if(d>bsd){bsd=d;bsf=fi;}}
               const si=subRegionRef.current.get(bsf)??0,sn=activeSubsRef.current[si]?.name??subPolesRef.current[0]?.name??"";
               const next=selectedSubgenreRef.current===sn?null:sn;selectedSubgenreRef.current=next;setSelectedSubgenre(next);
@@ -1115,7 +1078,23 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
     canvas.addEventListener("touchend",    onTouchEnd,    { passive: false });
     canvas.addEventListener("touchcancel", onTouchCancel, { passive: true  });
 
-    function animate() { drawFrame(); rafRef.current = requestAnimationFrame(animate); }
+    function animate() {
+      const zoomDiff = Math.abs(zoomRef.current - zoomTargetRef.current);
+      const stillLerping = zoomDiff > 0.001;
+      if (dirtyRef.current || stillLerping || dragRef.current.active) {
+        drawFrame();
+        if (!stillLerping && !dragRef.current.active) {
+          dirtyRef.current = false;
+        }
+      }
+      // Drive zoomAbove2 state from RAF (replaces setInterval poller)
+      const above = zoomRef.current >= 2.0;
+      if (above !== zoomAbove2Ref.current) {
+        zoomAbove2Ref.current = above;
+        setZoomAbove2(above);
+      }
+      rafRef.current = requestAnimationFrame(animate);
+    }
     rafRef.current = requestAnimationFrame(animate);
 
     return () => {
@@ -1130,7 +1109,62 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
       canvas.removeEventListener("touchend",       onTouchEnd);
       canvas.removeEventListener("touchcancel",    onTouchCancel);
     };
-  }, [worlds, loading, selected, subgenres]);
+  }, [worlds, loading]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Subgenre Voronoi — recomputes only when selected genre or subgenres change ──
+  useEffect(() => {
+    const geo = geoRef.current;
+    // Clear sub-voronoi state
+    subRegionRef.current = new Map();
+    activeSubsRef.current = [];
+    subPolesRef.current = [];
+
+    if (!geo || selected === null || subgenres.length === 0) {
+      dirtyRef.current = true;
+      return;
+    }
+
+    const { faces, cents, adj, names, region } = geo;
+    const selIdx = names.indexOf(selected);
+    if (selIdx >= 0) {
+      const gfi = faces.map((_,i)=>i).filter(i=>region[i]===selIdx);
+      if (gfi.length > 0) {
+        const maxSubs = Math.max(1, Math.floor(gfi.length/3));
+        const actSubs = subgenres.slice(0, maxSubs);
+        activeSubsRef.current = actSubs;
+        const n = actSubs.length;
+        const gfiSet = new Set(gfi);
+        const subAdj = new Map<number,number[]>(gfi.map(fi=>[fi,adj[fi].filter(ni=>gfiSet.has(ni))]));
+        const subTotal = actSubs.reduce((s,sg)=>s+sg.count,0)||1;
+        const targets  = actSubs.map(sg=>Math.max(1,Math.round((sg.count/subTotal)*gfi.length)));
+        const tSum = targets.reduce((s,t)=>s+t,0); let surplus=gfi.length-tSum;
+        if(surplus>0){for(let i=0;surplus>0;i=(i+1)%n){targets[i]++;surplus--;}}
+        else if(surplus<0){for(let i=n-1;surplus<0;i=((i-1)+n)%n){if(targets[i]>1){targets[i]--;surplus++;}}}
+        let psx=0,psy=0,psz=0;
+        for(const fi of gfi){psx+=cents[fi][0];psy+=cents[fi][1];psz+=cents[fi][2];}
+        psx/=gfi.length;psy/=gfi.length;psz/=gfi.length;
+        let firstSeed=gfi[0],bestCentDot=-Infinity;
+        for(const fi of gfi){const d=cents[fi][0]*psx+cents[fi][1]*psy+cents[fi][2]*psz;if(d>bestCentDot){bestCentDot=d;firstSeed=fi;}}
+        const seedFaces=[firstSeed];
+        const minDist=new Float32Array(gfi.length).fill(Infinity);
+        const updateDists=(sf:number)=>{const[sx,sy,sz]=cents[sf];for(let j=0;j<gfi.length;j++){const[fx,fy,fz]=cents[gfi[j]];const dot=Math.min(1,Math.max(-1,fx*sx+fy*sy+fz*sz));const d=Math.acos(dot);if(d<minDist[j])minDist[j]=d;}};
+        updateDists(firstSeed);
+        for(let s=1;s<n;s++){let fj=0;for(let j=1;j<gfi.length;j++){if(minDist[j]>minDist[fj])fj=j;}seedFaces.push(gfi[fj]);updateDists(gfi[fj]);}
+        const assignment=new Map<number,number>(),frontiers: number[][]=Array.from({length:n},()=>[]);
+        const rCounts=new Array<number>(n).fill(0);
+        for(let i=0;i<n;i++){assignment.set(seedFaces[i],i);frontiers[i].push(seedFaces[i]);rCounts[i]=1;}
+        let totalA=n;
+        while(totalA<gfi.length){let grew=false;for(let i=0;i<n;i++){if(rCounts[i]>=targets[i]||!frontiers[i].length)continue;let found=false;while(frontiers[i].length>0&&!found){const fi2=frontiers[i][0];let cl=false;for(const ni of(subAdj.get(fi2)??[])){if(!assignment.has(ni)){assignment.set(ni,i);rCounts[i]++;totalA++;frontiers[i].push(ni);cl=true;found=true;grew=true;break;}}if(!cl)frontiers[i].shift();}}if(!grew)break;}
+        let mopping=true;while(mopping){mopping=false;for(const fi of gfi){if(assignment.has(fi))continue;for(const ni of(subAdj.get(fi)??[])){if(assignment.has(ni)){assignment.set(fi,assignment.get(ni)!);mopping=true;break;}}}}
+        for(const fi of gfi){if(!assignment.has(fi))assignment.set(fi,0);}
+        subRegionRef.current=assignment;
+        const pAcc: V3[]=Array.from({length:n},()=>[0,0,0] as V3);const pCnt=new Int32Array(n);
+        for(const[fi2,si] of assignment){pAcc[si][0]+=cents[fi2][0];pAcc[si][1]+=cents[fi2][1];pAcc[si][2]+=cents[fi2][2];pCnt[si]++;}
+        subPolesRef.current=actSubs.map((sub,i)=>({name:sub.name,pole:pCnt[i]>0?norm3([pAcc[i][0]/pCnt[i],pAcc[i][1]/pCnt[i],pAcc[i][2]/pCnt[i]]):cents[seedFaces[i]]}));
+      }
+    }
+    dirtyRef.current = true;
+  }, [selected, subgenres]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Desktop mouse handlers (arcball, same model as mobile) ────────────────
 
@@ -1156,42 +1190,60 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
       dragRef.current.lx = e.clientX; dragRef.current.ly = e.clientY;
       dragRef.current.moved = true;
       hoveredRef.current = null;
-      if (selected !== null && zoomRef.current >= 1.1 && regionPolesRef.current.length > 0) {
-        const se = regionPolesRef.current.find(r => r.name === selected);
+      dirtyRef.current = true;
+      // Update hoveredSubgenre state (clear on drag)
+      if (hoveredSubgRef.current !== null) { hoveredSubgRef.current = null; setHoveredSubgenre(null); }
+      if (selectedRef.current !== null && zoomRef.current >= 1.1 && regionPolesRef.current.length > 0) {
+        const se = regionPolesRef.current.find(r => r.name === selectedRef.current);
         if (se) { const [px,py,pz]=se.pole; const [,,,,,,dm6,dm7,dm8]=rotMatRef.current; if(dm6*px+dm7*py+dm8*pz<0){autoSelectedRef.current=false;selectedSubgenreRef.current=null;setSelectedSubgenre(null);zoomSubgenreRef.current=null;setZoomSubgenre(null);setSelected(null);}}
       }
       return;
     }
-    const canvas=canvasRef.current; if(!canvas)return;
-    const rect=canvas.getBoundingClientRect();
-    const mx=e.clientX-rect.left,my=e.clientY-rect.top;
-    for(const h of labelHitsRef.current){if(mx>=h.x1&&mx<=h.x2&&my>=h.y1&&my<=h.y2){hoveredRef.current=h.subgenre?{genre:h.name,subgenre:h.subgenre}:{genre:h.name};return;}}
-    // Sphere hit test
-    const W=canvas.clientWidth,H=canvas.clientHeight,R=Math.min(W,H)*0.35*zoomRef.current;
-    const nx=(mx-W/2)/R,ny=(my-H/2)/R;
-    if(nx*nx+ny*ny>1){hoveredRef.current=null;return;}
-    const nz=Math.sqrt(Math.max(0,1-nx*nx-ny*ny));
-    const[hm0,hm1,hm2,hm3,hm4,hm5,hm6,hm7,hm8]=rotMatRef.current;
-    const x_w=hm0*nx+hm3*ny+hm6*nz,y_w=hm1*nx+hm4*ny+hm7*nz,z_w=hm2*nx+hm5*ny+hm8*nz;
-    const fC=faceCentsRef.current,fR=faceRegionRef.current;
-    let genreName: string;
-    if(fC.length>0&&fR.length>0){let bi=0,bd=-Infinity;for(let i=0;i<fC.length;i++){const d=fC[i][0]*x_w+fC[i][1]*y_w+fC[i][2]*z_w;if(d>bd){bd=d;bi=i;}}genreName=regionPolesRef.current[fR[bi]]?.name??"";}
-    else{let bt=regionPolesRef.current[0],bdot=-Infinity;for(const rd of regionPolesRef.current){const d=rd.pole[0]*x_w+rd.pole[1]*y_w+rd.pole[2]*z_w;if(d>bdot){bdot=d;bt=rd;}}genreName=bt.name;}
-    if(!genreName){hoveredRef.current=null;return;}
-    if(selected!==null&&zoomRef.current>=2.0&&genreName===selected&&subPolesRef.current.length>0){
-      const nx2=(mx-W/2)/R,ny2=(my-H/2)/R;
-      if(nx2*nx2+ny2*ny2<=1){
-        const nz2=Math.sqrt(Math.max(0,1-nx2*nx2-ny2*ny2));
-        const[mm0,mm1,mm2,mm3,mm4,mm5,mm6,mm7,mm8]=rotMatRef.current;
-        const x_w2=mm0*nx2+mm3*ny2+mm6*nz2,y_w2=mm1*nx2+mm4*ny2+mm7*nz2,z_w2=mm2*nx2+mm5*ny2+mm8*nz2;
-        const sft=[...subRegionRef.current.keys()];let bsf=sft[0]??-1,bsd=-Infinity;
-        for(const fi of sft){const c=fC[fi];if(!c)continue;const d=c[0]*x_w2+c[1]*y_w2+c[2]*z_w2;if(d>bsd){bsd=d;bsf=fi;}}
-        const si=subRegionRef.current.get(bsf)??0;
-        const sn=activeSubsRef.current[si]?.name??subPolesRef.current[0]?.name??"";
-        hoveredRef.current={genre:genreName,subgenre:sn};return;
-      }
+    // Hover hit test: throttle to one per RAF
+    if (!mouseMoveRafRef.current) {
+      const mx = e.clientX, my = e.clientY; // capture before async
+      mouseMoveRafRef.current = true;
+      requestAnimationFrame(() => {
+        mouseMoveRafRef.current = false;
+        const canvas=canvasRef.current; if(!canvas)return;
+        const rect=canvas.getBoundingClientRect();
+        const lx=mx-rect.left,ly=my-rect.top;
+        for(const h of labelHitsRef.current){if(lx>=h.x1&&lx<=h.x2&&ly>=h.y1&&ly<=h.y2){hoveredRef.current=h.subgenre?{genre:h.name,subgenre:h.subgenre}:{genre:h.name};dirtyRef.current=true;return;}}
+        // Sphere hit test
+        const W=canvas.clientWidth,H=canvas.clientHeight,R=Math.min(W,H)*0.35*zoomRef.current;
+        const nx=(lx-W/2)/R,ny=(ly-H/2)/R;
+        if(nx*nx+ny*ny>1){hoveredRef.current=null;dirtyRef.current=true;return;}
+        const nz=Math.sqrt(Math.max(0,1-nx*nx-ny*ny));
+        const[hm0,hm1,hm2,hm3,hm4,hm5,hm6,hm7,hm8]=rotMatRef.current;
+        const x_w=hm0*nx+hm3*ny+hm6*nz,y_w=hm1*nx+hm4*ny+hm7*nz,z_w=hm2*nx+hm5*ny+hm8*nz;
+        const fC=faceCentsRef.current,fR=faceRegionRef.current;
+        let genreName: string;
+        if(fC.length>0&&fR.length>0){let bi=0,bd=-Infinity;for(let i=0;i<fC.length;i++){const d=fC[i][0]*x_w+fC[i][1]*y_w+fC[i][2]*z_w;if(d>bd){bd=d;bi=i;}}genreName=regionPolesRef.current[fR[bi]]?.name??"";}
+        else{let bt=regionPolesRef.current[0],bdot=-Infinity;for(const rd of regionPolesRef.current){const d=rd.pole[0]*x_w+rd.pole[1]*y_w+rd.pole[2]*z_w;if(d>bdot){bdot=d;bt=rd;}}genreName=bt.name;}
+        if(!genreName){hoveredRef.current=null;dirtyRef.current=true;return;}
+        if(selectedRef.current!==null&&zoomRef.current>=2.0&&genreName===selectedRef.current&&subPolesRef.current.length>0){
+          if(nx*nx+ny*ny<=1){
+            const nz2=Math.sqrt(Math.max(0,1-nx*nx-ny*ny));
+            const[mm0,mm1,mm2,mm3,mm4,mm5,mm6,mm7,mm8]=rotMatRef.current;
+            const x_w2=mm0*nx+mm3*ny+mm6*nz2,y_w2=mm1*nx+mm4*ny+mm7*nz2,z_w2=mm2*nx+mm5*ny+mm8*nz2;
+            const sft=[...subRegionRef.current.keys()];let bsf=sft[0]??-1,bsd=-Infinity;
+            for(const fi of sft){const c=fC[fi];if(!c)continue;const d=c[0]*x_w2+c[1]*y_w2+c[2]*z_w2;if(d>bsd){bsd=d;bsf=fi;}}
+            const si=subRegionRef.current.get(bsf)??0;
+            const sn=activeSubsRef.current[si]?.name??subPolesRef.current[0]?.name??"";
+            hoveredRef.current={genre:genreName,subgenre:sn};
+            // Drive hoveredSubgenre state directly
+            const ns = zoomRef.current >= 2.0 ? sn : null;
+            if (ns !== hoveredSubgRef.current) { hoveredSubgRef.current = ns; setHoveredSubgenre(ns); }
+            dirtyRef.current=true;return;
+          }
+        }
+        hoveredRef.current={genre:genreName};
+        // Clear subgenre hover if not zoomed enough
+        const ns2 = null;
+        if (ns2 !== hoveredSubgRef.current) { hoveredSubgRef.current = ns2; setHoveredSubgenre(ns2); }
+        dirtyRef.current=true;
+      });
     }
-    hoveredRef.current={genre:genreName};
   };
 
   const stopDrag   = () => { dragRef.current.active = false; };
@@ -1212,7 +1264,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
     let bestName: string;
     if(fC.length>0&&fR.length>0){let bi=0,bd=-Infinity;for(let i=0;i<fC.length;i++){const d=fC[i][0]*x_w+fC[i][1]*y_w+fC[i][2]*z_w;if(d>bd){bd=d;bi=i;}}bestName=regionPolesRef.current[fR[bi]]?.name??regionPolesRef.current[0].name;}
     else{let bt=regionPolesRef.current[0],bdot=-Infinity;for(const rd of regionPolesRef.current){const d=rd.pole[0]*x_w+rd.pole[1]*y_w+rd.pole[2]*z_w;if(d>bdot){bdot=d;bt=rd;}}bestName=bt.name;}
-    if(selected!==null&&zoomRef.current>=2.0&&bestName===selected&&subPolesRef.current.length>0){
+    if(selectedRef.current!==null&&zoomRef.current>=2.0&&bestName===selectedRef.current&&subPolesRef.current.length>0){
       const sft=[...subRegionRef.current.keys()];let bsf=sft[0]??-1,bsd=-Infinity;for(const fi of sft){const c=fC[fi];if(!c)continue;const d=c[0]*x_w+c[1]*y_w+c[2]*z_w;if(d>bsd){bsd=d;bsf=fi;}}
       const si=subRegionRef.current.get(bsf)??0,sn=activeSubsRef.current[si]?.name??subPolesRef.current[0]?.name??"";
       const next=selectedSubgenreRef.current===sn?null:sn;selectedSubgenreRef.current=next;setSelectedSubgenre(next);return;
@@ -1249,7 +1301,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
   // Enrich each track with t.liveEvent from the session map so JSX can use
   // t.liveEvent directly (avoids IIFE lookups and keeps null checks explicit).
   // Sort priority: live events first (date asc) > social count > original order.
-  const sortedTracks = (() => {
+  const sortedTracks = useMemo(() => {
     // Attach liveEvent to each track when mode is on
     const enrich = (t: TrackItem): TrackItem => {
       if (!liveMode) return t;
@@ -1276,7 +1328,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
 
     // Only social sort
     return base.sort((a, b) => tallyCount(b) - tallyCount(a));
-  })();
+  }, [displayedTracks, liveMode, socialSort, liveEventMap]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Live-events toggle handler ────────────────────────────────────────────
   // • Mode OFF → ON : fetch uncached artists, merge into liveEventMap, log results.
@@ -1545,7 +1597,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                           <div key={t.id} className="flex items-center gap-3 px-7 py-2 cursor-pointer" style={{ borderBottom: "1px solid rgba(255,255,255,0.035)" }} onClick={() => playTrack(t)}>
                             <span style={{ flexShrink: 0, width: 20, textAlign: "center", fontSize: 11, lineHeight: 1, userSelect: "none", color: isActive ? selectedColor : "rgba(255,255,255,0.22)" }}>{idx + 1}</span>
                             <div className="flex-shrink-0" style={{ width: 36, height: 36, borderRadius: 4, overflow: "hidden", background: `rgba(${sr},${sg},${sb},0.10)` }}>
-                              {t.imageUrl && <img src={t.imageUrl} alt="" width={36} height={36} style={{ width: 36, height: 36, objectFit: "cover", display: "block" }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />}
+                              {t.imageUrl && <img src={t.imageUrl} alt="" width={36} height={36} loading="lazy" style={{ width: 36, height: 36, objectFit: "cover", display: "block" }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />}
                             </div>
                             <div className="flex flex-col min-w-0 flex-1">
                               <div className="flex items-center gap-2 min-w-0">
@@ -1643,7 +1695,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
               if (vel < -0.3 || deltaY < -40) { setSheetSnap(2); return; }
               if (vel > 0.3  || deltaY > 40)  { if (sheetSnapRef.current === 2) setSheetSnap(1); return; }
             }}
-            style={{ position: "fixed", bottom: 0, left: 0, right: 0, height: sheetH, zIndex: 100, display: "flex", flexDirection: "column", overflow: "hidden", background: "rgba(4,4,8,0.97)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)", borderTop: sheetSnap > 0 ? `1px solid rgba(${sr},${sg},${sb},0.18)` : "1px solid rgba(255,255,255,0.06)", borderTopLeftRadius: 18, borderTopRightRadius: 18, transform: `translateY(${snapTY}px)`, transition: "transform 0.36s cubic-bezier(0.32,0.72,0,1)", pointerEvents: sheetSnap === 0 ? "none" : "auto" } as React.CSSProperties}
+            style={{ position: "fixed", bottom: 0, left: 0, right: 0, height: sheetH, zIndex: 100, display: "flex", flexDirection: "column", overflow: "hidden", background: "rgba(4,4,8,0.97)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", borderTop: sheetSnap > 0 ? `1px solid rgba(${sr},${sg},${sb},0.18)` : "1px solid rgba(255,255,255,0.06)", borderTopLeftRadius: 18, borderTopRightRadius: 18, transform: `translateY(${snapTY}px)`, transition: "transform 0.36s cubic-bezier(0.32,0.72,0,1)", pointerEvents: sheetSnap === 0 ? "none" : "auto" } as React.CSSProperties}
           >
             {/* Accent line */}
             <div style={{ height: 2, background: selectedColor ?? "rgba(255,255,255,0.12)", opacity: 0.85, flexShrink: 0 }} />
@@ -1686,7 +1738,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                       <div key={t.id} className="flex items-center gap-3 px-5 py-2.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.04)", cursor: "pointer" }} onClick={() => playTrack(t)}>
                         <span style={{ flexShrink: 0, width: 20, textAlign: "center", fontSize: 11, lineHeight: 1, userSelect: "none", color: isActive ? selectedColor : "rgba(255,255,255,0.22)" }}>{idx + 1}</span>
                         <div className="flex-shrink-0" style={{ width: 36, height: 36, borderRadius: 4, overflow: "hidden", background: `rgba(${sr},${sg},${sb},0.10)` }}>
-                          {t.imageUrl && <img src={t.imageUrl} alt="" width={36} height={36} style={{ width: 36, height: 36, objectFit: "cover", display: "block" }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />}
+                          {t.imageUrl && <img src={t.imageUrl} alt="" width={36} height={36} loading="lazy" style={{ width: 36, height: 36, objectFit: "cover", display: "block" }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />}
                         </div>
                         <div className="flex flex-col min-w-0 flex-1">
                           <div className="flex items-center gap-2 min-w-0">

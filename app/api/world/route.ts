@@ -3,12 +3,15 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/current-user";
 
 export async function GET(req: NextRequest) {
+  const t0 = Date.now();
+
   // Priority:
   //  1. ?userId=<id>  — explicit userId (Midvale public view, no auth required)
   //  2. Authenticated session  — user views their own world
   //  3. Fallback — first user in DB who has imported tracks (unauthenticated homepage)
   const { searchParams } = new URL(req.url);
   const queryUserId = searchParams.get("userId");
+  const isPublicView = !!queryUserId;
 
   let user;
   if (queryUserId) {
@@ -24,8 +27,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({});
   }
 
+  // Only need blueprintWorld + count — select minimal fields
   const tracks = await prisma.track.findMany({
-    where: { userId: user.id },
+    where:  { userId: user.id },
+    select: { blueprintWorld: true },
   });
 
   const worlds: Record<string, number> = {};
@@ -37,7 +42,15 @@ export async function GET(req: NextRequest) {
     Object.entries(worlds).sort((a, b) => b[1] - a[1])
   );
 
+  console.log(`[perf] /api/world (userId=${queryUserId ?? "session"}) → ${Object.keys(sortedWorlds).length} genres in ${Date.now() - t0}ms`);
+
+  // Public Midvale views: allow short-lived CDN + client cache.
+  // Own-world: no-store so auto-sync changes are always reflected.
+  const cacheHeader = isPublicView
+    ? "public, max-age=60, stale-while-revalidate=300"
+    : "no-store";
+
   return NextResponse.json(sortedWorlds, {
-    headers: { "Cache-Control": "no-store" },
+    headers: { "Cache-Control": cacheHeader },
   });
 }

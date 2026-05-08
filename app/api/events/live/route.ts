@@ -1,35 +1,31 @@
 // GET /api/events/live?artists=<comma-separated artist names>
 //
-// Proxies the Ticketmaster Discovery API for upcoming CA music events.
+// Multi-provider live event search for upcoming CA music events.
 // Returns: Record<normalizedArtistName, LiveEvent | null>
 //
-// Caching  : in-memory Map, 24-hour TTL per artist (persists across requests
-//            on the same server instance — best-effort, resets on cold start).
-// Rate limit: Ticketmaster allows 5 req/s.  We fire all uncached artists in
-//            parallel using Promise.allSettled so the 429s are caught and
-//            returned as null.  For a small personal app (<10 concurrent users,
-//            <50 unique artists per genre) this is well within limits.
-// Dedup    : normalized to lowercase+trim before lookup & storage.
-// Cap      : 50 artists max per call to prevent abuse.
+// Providers : Ticketmaster, SeatGeek, Bandsintown, Eventbrite (enabled by env vars).
+// Caching   : in-memory Map, 24-hour TTL per artist (persists across requests on
+//             same server instance — best-effort, resets on cold start).
+// Dedup     : events are deduped across providers by (normalizedArtist|venue|date).
+//             The earliest bookable event wins per artist.
+// Rate limit: all provider fetches run in parallel via Promise.allSettled.
+// Cap       : 50 artists max per call.
 
 import { NextRequest, NextResponse } from "next/server";
+import { getEnabledProviders           } from "@/lib/events/providers";
+import type { LiveEvent, ProviderSearchParams } from "@/lib/events/types";
 
-// ── Shared types (also exported for WorldSphere) ──────────────────────────────
-export type LiveEvent = {
-  artistName: string;
-  eventName:  string;
-  city:       string;
-  venue:      string;
-  date:       string;  // "YYYY-MM-DD"
-  url:        string;
-};
+// Re-export LiveEvent so WorldSphere can import the type from this route file
+// (WorldSphere currently defines its own local type, but re-exporting keeps
+// things tidy if a future import is added).
+export type { LiveEvent };
 
 // ── In-memory cache ───────────────────────────────────────────────────────────
 
 type CacheEntry = { event: LiveEvent | null; cachedAt: number };
 
-const CACHE     = new Map<string, CacheEntry>();
-const CACHE_TTL = 24 * 60 * 60 * 1_000;  // 24 h in ms
+const CACHE       = new Map<string, CacheEntry>();
+const CACHE_TTL   = 24 * 60 * 60 * 1_000;   // 24 h in ms
 const MAX_ARTISTS = 50;
 
 function evictExpired() {
@@ -39,86 +35,80 @@ function evictExpired() {
   }
 }
 
-// ── Ticketmaster fetch (one artist) ──────────────────────────────────────────
+// ── Deduplication helpers ─────────────────────────────────────────────────────
 
-// Status codes that mean no tickets are available / event won't happen
-const BAD_STATUSES = new Set(["cancelled", "postponed", "rescheduled", "offsale"]);
+/** Stable key for cross-provider event dedup: same artist at same venue on same date. */
+function eventKey(ev: LiveEvent): string {
+  return `${ev.artistName.toLowerCase()}|${ev.venue.toLowerCase().trim()}|${ev.date}`;
+}
 
-async function fetchArtistEvent(
-  artist:  string,
-  apiKey:  string,
+// ── Multi-provider search (one artist) ───────────────────────────────────────
+
+async function searchArtistEvents(
+  artistName: string,
+  params:     Omit<ProviderSearchParams, "artistName">,
 ): Promise<LiveEvent | null> {
-  try {
-    const now       = new Date();
-    const startDT   = now.toISOString().replace(/\.\d{3}Z$/, "Z"); // "YYYY-MM-DDTHH:MM:SSZ"
-    const todayDate = now.toISOString().slice(0, 10);               // "YYYY-MM-DD"
+  const providers = getEnabledProviders();
 
-    const url = new URL(
-      "https://app.ticketmaster.com/discovery/v2/events.json",
-    );
-    url.searchParams.set("apikey",             apiKey);
-    url.searchParams.set("classificationName", "music");
-    url.searchParams.set("countryCode",        "US");
-    url.searchParams.set("stateCode",          "CA");
-    url.searchParams.set("keyword",            artist);
-    url.searchParams.set("sort",               "date,asc");
-    url.searchParams.set("size",               "5");
-    url.searchParams.set("startDateTime",      startDT); // pre-filter on TM side
-
-    const res = await fetch(url.toString(), { cache: "no-store" });
-    if (!res.ok) return null;
-
-    const data   = await res.json();
-    const events = data?._embedded?.events;
-    if (!Array.isArray(events) || events.length === 0) return null;
-
-    // Walk events in date-asc order and return the first valid one
-    for (const ev of events) {
-      const date   = ev.dates?.start?.localDate as string | undefined;
-      const status = (ev.dates?.status?.code as string | undefined)?.toLowerCase();
-      const evUrl  = ev.url as string | undefined;
-
-      // Must have a date
-      if (!date) {
-        console.log(`[live-events] skip "${artist}" event "${ev.name}": no date`);
-        continue;
-      }
-
-      // Must be today or in the future (belt-and-suspenders over startDateTime param)
-      if (date < todayDate) {
-        console.log(`[live-events] skip "${artist}" event "${ev.name}": past date ${date}`);
-        continue;
-      }
-
-      // Must not be cancelled, postponed, rescheduled, or offsale
-      if (status && BAD_STATUSES.has(status)) {
-        console.log(`[live-events] skip "${artist}" event "${ev.name}": status=${status}`);
-        continue;
-      }
-
-      // Must have a booking URL
-      if (!evUrl) {
-        console.log(`[live-events] skip "${artist}" event "${ev.name}": no URL`);
-        continue;
-      }
-
-      const venue0 = ev._embedded?.venues?.[0];
-      console.log(`[live-events] ✓ "${artist}" → "${ev.name}" on ${date} (status=${status ?? "onsale"})`);
-      return {
-        artistName: artist,
-        eventName:  ev.name    ?? "",
-        city:       venue0?.city?.name ?? "",
-        venue:      venue0?.name       ?? "",
-        date,
-        url:        evUrl,
-      };
-    }
-
-    console.log(`[live-events] no valid events for "${artist}" after filtering ${events.length} results`);
-    return null;
-  } catch {
+  if (providers.length === 0) {
+    console.log(`[events] no providers enabled — check env vars`);
     return null;
   }
+
+  console.log(
+    `[events] querying ${providers.map(p => p.name).join(", ")} for "${artistName}"`,
+  );
+
+  // Fire all providers in parallel; collect settled results
+  const settled = await Promise.allSettled(
+    providers.map(p => p.search({ artistName, ...params })),
+  );
+
+  // Merge all results, deduping by (artist|venue|date)
+  const seen   = new Set<string>();
+  const merged: LiveEvent[] = [];
+
+  for (let i = 0; i < providers.length; i++) {
+    const result = settled[i];
+    if (result.status === "rejected") {
+      console.warn(`[events] provider "${providers[i].name}" threw:`, result.reason);
+      continue;
+    }
+    const events = result.value;
+    console.log(`[events] "${providers[i].name}" → ${events.length} events for "${artistName}"`);
+
+    for (const ev of events) {
+      const key = eventKey(ev);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(ev);
+    }
+  }
+
+  if (merged.length === 0) {
+    console.log(`[events] no valid events for "${artistName}"`);
+    return null;
+  }
+
+  // Sort by date asc; prefer providers with direct ticket URLs (Ticketmaster first
+  // as a tiebreaker since it has the most reliable primary ticket links).
+  const PROVIDER_RANK: Record<string, number> = {
+    ticketmaster: 0,
+    seatgeek:     1,
+    bandsintown:  2,
+    eventbrite:   3,
+  };
+
+  merged.sort((a, b) => {
+    if (a.date !== b.date) return a.date.localeCompare(b.date);
+    return (PROVIDER_RANK[a.provider] ?? 99) - (PROVIDER_RANK[b.provider] ?? 99);
+  });
+
+  const best = merged[0];
+  console.log(
+    `[events] ✓ "${artistName}" → "${best.eventName}" on ${best.date} via ${best.provider}`,
+  );
+  return best;
 }
 
 // ── Route handler ─────────────────────────────────────────────────────────────
@@ -126,14 +116,6 @@ async function fetchArtistEvent(
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
-  const apiKey = process.env.TICKETMASTER_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "TICKETMASTER_API_KEY not configured" },
-      { status: 500 },
-    );
-  }
-
   const { searchParams } = new URL(req.url);
   const raw = (searchParams.get("artists") ?? "")
     .split(",")
@@ -142,7 +124,7 @@ export async function GET(req: NextRequest) {
 
   // Deduplicate by normalized key, cap at MAX_ARTISTS
   const seen      = new Set<string>();
-  const artists: string[] = [];
+  const artists:  string[] = [];
   for (const a of raw) {
     const key = a.toLowerCase();
     if (!seen.has(key)) { seen.add(key); artists.push(a); }
@@ -155,7 +137,16 @@ export async function GET(req: NextRequest) {
 
   evictExpired();
 
-  // Split: serve cached immediately, fetch the rest in parallel
+  const now:    Date   = new Date();
+  const params: Omit<ProviderSearchParams, "artistName"> = {
+    stateCode:   "CA",
+    countryCode: "US",
+    now,
+  };
+
+  console.log(`[events] request for ${artists.length} artist(s):`, artists.slice(0, 10));
+
+  // Split: serve cached immediately, fetch the rest
   const result: Record<string, LiveEvent | null> = {};
   const needed:  string[] = [];
 
@@ -163,6 +154,7 @@ export async function GET(req: NextRequest) {
     const key   = artist.toLowerCase();
     const entry = CACHE.get(key);
     if (entry) {
+      console.log(`[events] cache hit: "${artist}" → ${entry.event ? `✓ ${entry.event.provider}` : "null"}`);
       result[key] = entry.event;
     } else {
       needed.push(artist);
@@ -170,8 +162,10 @@ export async function GET(req: NextRequest) {
   }
 
   if (needed.length > 0) {
+    console.log(`[events] cache misses: ${needed.length} artist(s) to fetch`);
+
     const settled = await Promise.allSettled(
-      needed.map(a => fetchArtistEvent(a, apiKey)),
+      needed.map(a => searchArtistEvents(a, params)),
     );
 
     for (let i = 0; i < needed.length; i++) {
@@ -179,15 +173,18 @@ export async function GET(req: NextRequest) {
       const res = settled[i];
 
       if (res.status === "fulfilled") {
-        // Cache both positive hits AND confirmed nulls (artist has no CA events)
         CACHE.set(key, { event: res.value, cachedAt: Date.now() });
         result[key] = res.value;
       } else {
         // Network/parse error — do NOT cache so we retry next time
+        console.warn(`[events] search failed for "${needed[i]}":`, res.reason);
         result[key] = null;
       }
     }
   }
+
+  const hits = Object.values(result).filter(Boolean).length;
+  console.log(`[events] returning ${hits} events out of ${artists.length} artists`);
 
   return NextResponse.json(result, {
     headers: { "Cache-Control": "no-store" },

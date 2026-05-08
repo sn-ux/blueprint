@@ -3,6 +3,7 @@
 // Deduplication: one track per spotifyId (best representative — prefers entries
 // with imageUrl).  socialUsers = every user who has that spotifyId; socialCount
 // = socialUsers.length (single source of truth, same as the per-user endpoint).
+// Also bundles subgenre counts so the frontend can skip the /subgenres fetch.
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -25,6 +26,7 @@ export async function GET(
   _req: NextRequest,
   context: { params: Promise<{ genre: string }> },
 ) {
+  const t0 = Date.now();
   const { genre } = await context.params;
   const blueprintWorld = decodeURIComponent(genre);
 
@@ -45,11 +47,13 @@ export async function GET(
     orderBy: [{ artist: "asc" }, { name: "asc" }],
   });
 
+  const tDB = Date.now();
+
   if (allTracks.length === 0) {
-    return NextResponse.json({ genre: blueprintWorld, tracks: [] });
+    return NextResponse.json({ genre: blueprintWorld, tracks: [], subgenres: [] });
   }
 
-  // ── Build two maps in one pass ────────────────────────────────────────────
+  // ── Build maps in one pass ────────────────────────────────────────────────
   // 1. best representative track per spotifyId (prefer entries with imageUrl)
   // 2. deduped socialUsers list per spotifyId
 
@@ -57,13 +61,10 @@ export async function GET(
   const socialUserMap = new Map<string, { id: string; name: string | null }[]>();
 
   for (const t of allTracks) {
-    // Representative selection
     const existing = repMap.get(t.spotifyId);
     if (!existing || (!existing.imageUrl && t.imageUrl)) {
       repMap.set(t.spotifyId, t);
     }
-
-    // Social users — dedupe by userId
     const list = socialUserMap.get(t.spotifyId) ?? [];
     if (!list.some(u => u.id === t.user.id)) {
       list.push(t.user);
@@ -71,28 +72,40 @@ export async function GET(
     socialUserMap.set(t.spotifyId, list);
   }
 
-  // ── Compose final tracks (strip the `user` relation, add social fields) ──
+  // ── Compose final tracks ──────────────────────────────────────────────────
   const tracks = [...repMap.values()]
     .sort((a, b) => a.artist.localeCompare(b.artist) || a.name.localeCompare(b.name))
     .map(({ user: _user, ...rest }) => {
       const socialUsers = socialUserMap.get(rest.spotifyId) ?? [];
-      const socialCount = socialUsers.length;   // single source of truth
+      const socialCount = socialUsers.length;
       return { ...rest, socialUsers, socialCount };
     });
 
-  // Debug log: first track that has social data
+  // ── Bundle subgenre counts (saves a second /subgenres round-trip) ─────────
+  const subgenreCounts: Record<string, number> = {};
+  for (const [, t] of repMap) {
+    const sub = t.blueprintSubgenre?.trim();
+    if (!sub) continue;
+    subgenreCounts[sub] = (subgenreCounts[sub] ?? 0) + 1;
+  }
+  const subgenres = Object.entries(subgenreCounts)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count);
+
   const firstSocial = tracks.find(t => t.socialCount > 0);
   if (firstSocial) {
     console.log(
       `[friends-social-debug] spotifyId=${firstSocial.spotifyId}` +
       ` socialUsers.length=${firstSocial.socialUsers.length}` +
-      ` socialCount=${firstSocial.socialCount}` +
-      ` renderedCount=${firstSocial.socialCount}`
+      ` socialCount=${firstSocial.socialCount}`,
     );
   }
 
+  console.log(`[perf] /api/world/friends/${blueprintWorld} → ${tracks.length} deduped tracks, ${subgenres.length} subgenres in ${Date.now() - t0}ms (db=${tDB - t0}ms)`);
+
   return NextResponse.json(
-    { genre: blueprintWorld, tracks },
-    { headers: { "Cache-Control": "no-store" } },
+    { genre: blueprintWorld, tracks, subgenres },
+    // Friends world data changes only when users import new tracks — short cache is safe.
+    { headers: { "Cache-Control": "public, max-age=60, stale-while-revalidate=300" } },
   );
 }
