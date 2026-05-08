@@ -65,7 +65,9 @@
       "Bash(echo \"exit: $?\")",
       "Bash(npx next *)",
       "Bash(curl -s http://localhost:3003/midvale/friends)",
-      "Bash(curl -s http://localhost:3003/world)"
+      "Bash(curl -s http://localhost:3003/world)",
+      "Bash(git -C /Users/blueprint/blueprint-v1 add components/WorldSphere.tsx)",
+      "Bash(git -C /Users/blueprint/blueprint-v1 commit -m ' *)"
     ]
   }
 }
