@@ -801,6 +801,13 @@ export default function LandingPage() {
   const selectedRef      = useRef<string | null>(null);
   selectedRef.current    = selected;
 
+  // ── Venn back-restore state ───────────────────────────────────────────────
+  // Mirrors the pendingSubgenreRef + pendingToggleRestoreRef in WorldSphere.tsx.
+  // pendingSubgenreRef: applied once when subgenres data arrives.
+  // (No pendingToggleRestoreRef needed: page.tsx selected effect doesn't reset
+  // socialSort/liveMode, so we can set them before calling setSelected.)
+  const pendingSubgenreRef      = useRef<string | null>(null);
+
   // ── Fetch worlds on mount ────────────────────────────────────────────────
   useEffect(() => {
     fetch("/api/world")
@@ -822,6 +829,61 @@ export default function LandingPage() {
       )
     ).then(arrays => setAllTracksData(arrays.flat()));
   }, [worlds]);
+
+  // ── Venn back-restore: re-apply state when returning from Friends World ────
+  // Reads blueprint:pendingRestore on mount.  If the stored route is "/world",
+  // immediately writes camera refs and schedules genre/subgenre/toggle restore.
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("blueprint:pendingRestore");
+      if (!raw) return;
+      const state = JSON.parse(raw) as {
+        route: string; genre: string | null; subgenre: string | null;
+        zoom: number; rotMat: number[];
+        socialSort: boolean; liveMode: boolean; unheardMode: boolean;
+      };
+      if (state.route !== "/world") return;
+      sessionStorage.removeItem("blueprint:pendingRestore");
+
+      // Restore camera (refs read by RAF on next tick — no re-render needed).
+      if (typeof state.zoom === "number") {
+        zoomRef.current       = state.zoom;
+        zoomTargetRef.current = state.zoom;
+      }
+      if (Array.isArray(state.rotMat) && state.rotMat.length === 9) {
+        rotMatRef.current = [...state.rotMat];
+      }
+
+      // Restore toggles (page.tsx selected-effect doesn't reset them, so safe
+      // to set before calling setSelected — they will not be overwritten).
+      setSocialSort(state.socialSort  ?? true);
+      setLiveMode  (state.liveMode    ?? false);
+
+      // Restore genre — triggers track/subgenre fetch.
+      if (state.genre) {
+        if (state.subgenre) {
+          pendingSubgenreRef.current = state.subgenre;
+          zoomTargetRef.current      = Math.max(state.zoom ?? 2.5, 3.2);
+        }
+        setSelected(state.genre);
+        selectedRef.current = state.genre;
+        setSheetSnap(1); // ensure mobile sheet is open
+      }
+    } catch { /* malformed storage or unavailable — skip */ }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Apply pending subgenre once subgenre list loads (Venn back-restore) ──
+  useEffect(() => {
+    const s = pendingSubgenreRef.current;
+    if (!s || subgenres.length === 0) return;
+    if (!subgenres.find(sg => sg.name === s)) {
+      pendingSubgenreRef.current = null; // subgenre not in world — skip
+      return;
+    }
+    pendingSubgenreRef.current      = null;
+    selectedSubgenreRef.current     = s;
+    setSelectedSubgenre(s);
+  }, [subgenres]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Blueprint logo reset — scroll to top + restore default sphere state ─────
   // Triggered by clicking the logo in Navbar (dispatches "blueprint-reset").
@@ -2552,6 +2614,19 @@ export default function LandingPage() {
       sessionStorage.setItem("blueprint:substituteProfile", JSON.stringify(profile));
       // Signal Friends World to auto-enable Unheard mode on arrival.
       sessionStorage.setItem("blueprint:autoEnableUnheard", "true");
+      // Store full origin state so the Friends World back button can return
+      // the user here with camera position, genre, and toggles intact.
+      const originState = {
+        route:    "/world",
+        genre:    selected   ?? null,
+        subgenre: selectedSubgenre ?? null,
+        zoom:     zoomRef.current,
+        rotMat:   Array.from(rotMatRef.current),
+        socialSort,
+        liveMode,
+        unheardMode: false, // homepage never has Unheard
+      };
+      sessionStorage.setItem("blueprint:vennOriginState", JSON.stringify(originState));
       window.dispatchEvent(new CustomEvent("blueprint:substituteChange", { detail: profile }));
     } catch {}
   };

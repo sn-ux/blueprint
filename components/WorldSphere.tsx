@@ -541,6 +541,19 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
   const [friendsSubgenres, setFriendsSubgenres] = useState<Record<string, string[]>>({});
   const friendsSubgenresFetchedRef              = useRef<Set<string>>(new Set());
 
+  // ── Venn origin route — Friends World back button target ────────────────
+  // When this WorldSphere is the Friends World and the user arrived via a Venn
+  // button, sessionStorage holds the origin route.  We read it once on mount
+  // so the back button can return to the exact world the user came from.
+  // For non-Friends worlds this stays null (they use backHref as-is).
+  const [vennOriginRoute] = useState<string | null>(() => {
+    if (!friendsWorld || typeof window === "undefined") return null;
+    try {
+      const raw = sessionStorage.getItem("blueprint:vennOriginState");
+      return raw ? (JSON.parse(raw).route ?? null) : null;
+    } catch { return null; }
+  });
+
   // ── Substitute profile & Unheard mode ────────────────────────────────────
   // substituteProfile: set on /midvale, stored in sessionStorage.
   // Drives ?unheardForUserId on track API requests.
@@ -635,6 +648,11 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
   const urlGenreParamRef    = useRef<string | null>(null);
   const pendingSubgenreRef  = useRef<string | null>(null);
   const urlParamAppliedRef  = useRef(false);
+  // Captures toggle state to re-apply after the selected-change effect resets it.
+  // Set by the Venn back-restore mount effect; consumed once by the selected effect.
+  const pendingToggleRestoreRef = useRef<{
+    socialSort: boolean; liveMode: boolean; unheardMode: boolean;
+  } | null>(null);
   // urlSubgenreParamRef stores the original ?subgenre value permanently so
   // the subgenre geometry effect can rotate to it after poles are built.
   // (pendingSubgenreRef is cleared once the selection is applied.)
@@ -781,6 +799,61 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
         sessionStorage.removeItem("blueprint:autoEnableUnheard");
       }
     } catch { /* sessionStorage unavailable — skip */ }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Venn back-restore: re-apply origin world state on return ─────────────
+  // When the user returns from Friends World via the back button, this effect
+  // reads blueprint:pendingRestore, validates the route matches, then:
+  //   • Immediately writes camera refs (zoom + rotation) so the sphere is
+  //     already at the right position before the first render frame.
+  //   • Sets selected genre (triggers the selected-change effect → track fetch).
+  //   • Stores subgenre in pendingSubgenreRef — applied by the existing
+  //     subgenre-pending effect once the subgenre list loads.
+  //   • Stores toggle state in pendingToggleRestoreRef — consumed by the
+  //     selected-change effect to override its default reset.
+  // Only runs on non-Friends worlds (individual + homepage).
+  useEffect(() => {
+    if (friendsWorld) return;
+    try {
+      const raw = sessionStorage.getItem("blueprint:pendingRestore");
+      if (!raw) return;
+      const state = JSON.parse(raw) as {
+        route: string; genre: string | null; subgenre: string | null;
+        zoom: number; rotMat: number[];
+        socialSort: boolean; liveMode: boolean; unheardMode: boolean;
+      };
+      const myRoute = userId ? `/midvale/${userId}` : "/world";
+      if (state.route !== myRoute) return; // restore meant for a different world
+      sessionStorage.removeItem("blueprint:pendingRestore");
+
+      // Restore camera immediately — refs are read by the render loop on the
+      // very next RAF tick, so no re-render is needed for camera state.
+      if (typeof state.zoom === "number") {
+        zoomRef.current       = state.zoom;
+        zoomTargetRef.current = state.zoom;
+      }
+      if (Array.isArray(state.rotMat) && state.rotMat.length === 9) {
+        rotMatRef.current = [...state.rotMat];
+      }
+
+      // Restore genre/subgenre/toggles.
+      // Setting selected genre triggers the selected-change effect which resets
+      // toggles and subgenre — pendingToggleRestoreRef + pendingSubgenreRef let
+      // us intercept that reset and re-apply the original values.
+      if (state.genre) {
+        pendingToggleRestoreRef.current = {
+          socialSort:  state.socialSort  ?? true,
+          liveMode:    state.liveMode    ?? false,
+          unheardMode: state.unheardMode ?? false,
+        };
+        if (state.subgenre) {
+          pendingSubgenreRef.current = state.subgenre;
+          zoomTargetRef.current      = Math.max(state.zoom ?? 2.5, 3.2);
+        }
+        setSelected(state.genre);
+        selectedRef.current = state.genre;
+      }
+    } catch { /* malformed storage or unavailable — skip */ }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Refetch tracks when substitute profile changes ────────────────────────
@@ -964,7 +1037,14 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
       setSocialSort(false); setLiveMode(false);
       return;
     }
-    setSocialSort(true); setLiveMode(false); setUnheardMode(false);
+    // Apply pending toggle restore (set by Venn back-restore effect) instead of
+    // the default reset, so returning users see the same socialSort/live/unheard
+    // state they left with.  Consumed once; null after first selected change.
+    const ptgl = pendingToggleRestoreRef.current;
+    pendingToggleRestoreRef.current = null;
+    setSocialSort(ptgl ? ptgl.socialSort  : true);
+    setLiveMode  (ptgl ? ptgl.liveMode    : false);
+    setUnheardMode(ptgl ? ptgl.unheardMode : false);
     setSelectedSubgenre(null); selectedSubgenreRef.current = null;
     setZoomSubgenre(null);     zoomSubgenreRef.current     = null;
     deezerPreviewsRef.current = {}; setDeezerPreviews({});
@@ -1894,6 +1974,19 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
       sessionStorage.setItem("blueprint:substituteProfile", JSON.stringify(profile));
       // Signal Friends World to auto-enable Unheard mode on arrival.
       sessionStorage.setItem("blueprint:autoEnableUnheard", "true");
+      // Store full origin state so the Friends World back button can return
+      // the user here with camera position, genre, and toggles intact.
+      const originState = {
+        route:      userId ? `/midvale/${userId}` : "/world",
+        genre:      selected,
+        subgenre:   selectedSubgenre,
+        zoom:       zoomRef.current,
+        rotMat:     Array.from(rotMatRef.current),
+        socialSort,
+        liveMode,
+        unheardMode,
+      };
+      sessionStorage.setItem("blueprint:vennOriginState", JSON.stringify(originState));
       // Also dispatch the event so any already-mounted WorldSphere (e.g. opened
       // in another same-tab route) picks it up without a page reload.
       window.dispatchEvent(
@@ -2009,8 +2102,21 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
           z-index 210 > zoom pill (120) > mobile sheet (100). */}
       {backHref && (
         <Link
-          href={backHref}
-          aria-label="Back to Friends"
+          href={vennOriginRoute ?? backHref}
+          aria-label={vennOriginRoute ? "Back to previous world" : "Back to Friends"}
+          onClick={() => {
+            // When leaving Friends World via back, transfer the origin state
+            // to blueprint:pendingRestore so the destination world can restore
+            // its exact camera + genre + toggle state.
+            if (!friendsWorld) return;
+            try {
+              const raw = sessionStorage.getItem("blueprint:vennOriginState");
+              if (raw) {
+                sessionStorage.setItem("blueprint:pendingRestore", raw);
+                sessionStorage.removeItem("blueprint:vennOriginState");
+              }
+            } catch {}
+          }}
           style={{
             // Sits flush below the fixed Navbar (height 56) with a 12 px gap.
             // left matches the Navbar's own paddingLeft so it aligns with the
