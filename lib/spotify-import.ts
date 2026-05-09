@@ -61,7 +61,27 @@ export interface ImportResult {
   dbDelta:                       number;
   noLikedSongs?:                 boolean;
   genreDistribution:             Record<string, number>;
+  // Error detail
   error?:                        string;
+  missingScopes?:                string[];   // set when required OAuth scopes absent
+  retryAfter?:                   number;     // seconds, set on Spotify 429
+}
+
+// Required OAuth scopes — user must have granted all of these.
+const REQUIRED_SCOPES = ["user-library-read", "playlist-read-private"] as const;
+
+// Zero-value result for early-exit error paths.
+function failResult(userId: string, error: string, extra?: Partial<ImportResult>): ImportResult {
+  return {
+    success: false, userId, error,
+    likedSongsFetched: 0, playlistsReturnedBySpotify: 0,
+    ownedPlaylistsCount: 0, skippedNonOwnedPlaylistsCount: 0,
+    ownedPlaylistTracksFetched: 0, uniqueAllowedTracks: 0,
+    tracksUpserted: 0, tracksRemoved: 0,
+    dbTrackCountBefore: 0, dbTrackCountAfter: 0, dbDelta: 0,
+    genreDistribution: {},
+    ...extra,
+  };
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -135,23 +155,42 @@ export async function runLikedSongsImport(userId: string): Promise<ImportResult>
 
   const account = await prisma.account.findFirst({
     where:  { userId, provider: "spotify" },
-    select: { id: true, access_token: true, refresh_token: true },
+    select: { id: true, access_token: true, refresh_token: true, scope: true },
   });
 
-  if (!account?.access_token) {
-    return {
-      success: false, userId, error: "Missing Spotify access token",
-      likedSongsFetched: 0, playlistsReturnedBySpotify: 0,
-      ownedPlaylistsCount: 0, skippedNonOwnedPlaylistsCount: 0,
-      ownedPlaylistTracksFetched: 0, uniqueAllowedTracks: 0,
-      tracksUpserted: 0, tracksRemoved: 0,
-      dbTrackCountBefore: 0, dbTrackCountAfter: 0, dbDelta: 0,
-      genreDistribution: {},
-    };
+  // ── Pre-flight checks ─────────────────────────────────────────────────────
+
+  if (!account) {
+    return failResult(userId, "No Spotify account linked — user needs to reconnect Spotify.");
+  }
+  if (!account.access_token) {
+    return failResult(userId, "Missing Spotify access token — user needs to reconnect Spotify.");
+  }
+  if (!account.refresh_token) {
+    return failResult(userId, "Missing refresh token — user needs to reconnect Spotify.");
+  }
+
+  // Scope check — ensure the required permissions were granted at OAuth time.
+  const grantedScopes = (account.scope ?? "").split(/\s+/).filter(Boolean);
+  const missingScopes = REQUIRED_SCOPES.filter(s => !grantedScopes.includes(s));
+  if (missingScopes.length > 0) {
+    console.warn(`[import] userId=${userId} missing scopes: ${missingScopes.join(", ")}`);
+    return failResult(
+      userId,
+      `Missing Spotify scopes: ${missingScopes.join(", ")} — user needs to reconnect Spotify.`,
+      { missingScopes: [...missingScopes] },
+    );
   }
 
   const dbTrackCountBefore = await prisma.track.count({ where: { userId } });
   console.log(`[import] dbTrackCountBefore=${dbTrackCountBefore}`);
+
+  // ── Stages 1–8 wrapped in try/catch so every Spotify error returns a clean ─
+  // ImportResult instead of throwing and crashing the calling route.
+  // 401 inside spotifyGet → token refresh is attempted automatically; a second
+  // 401 means the token is truly dead and we surface a reconnect message.
+  // 429 → Spotify rate-limit; we extract Retry-After and surface it.
+  try {
 
   // ── Stage 1: Get Spotify user identity ───────────────────────────────────
 
@@ -181,6 +220,9 @@ export async function runLikedSongsImport(userId: string): Promise<ImportResult>
       url = res.data.next ?? null;
     }
     console.log(`[import] likedSongsFetched=${likedSongsFetched}  (valid+deduped so far: ${trackMap.size})`);
+    if (likedSongsFetched === 0) {
+      console.log(`[import] note: no liked songs found for userId=${userId}`);
+    }
   }
 
   // ── Stage 3: Fetch user's playlists + filter to owned only ───────────────
@@ -319,7 +361,8 @@ export async function runLikedSongsImport(userId: string): Promise<ImportResult>
   );
 
   return {
-    success: true, userId,
+    success:    true,
+    userId,
     likedSongsFetched,
     playlistsReturnedBySpotify:    allPlaylists.length,
     ownedPlaylistsCount:           ownedPlaylists.length,
@@ -330,7 +373,60 @@ export async function runLikedSongsImport(userId: string): Promise<ImportResult>
     tracksRemoved:                 purge.count,
     dbTrackCountBefore,
     dbTrackCountAfter,
-    dbDelta: dbTrackCountAfter - dbTrackCountBefore,
+    dbDelta:    dbTrackCountAfter - dbTrackCountBefore,
+    noLikedSongs: likedSongsFetched === 0 && ownedPlaylistTracksFetched === 0,
     genreDistribution,
   };
+
+  } catch (err: unknown) {
+    // ── Structured error handling ──────────────────────────────────────────
+    // Map known Spotify HTTP errors to actionable messages; fall back to a
+    // generic string for anything unexpected.
+
+    const axErr = err as {
+      response?: { status?: number; headers?: Record<string, string>; data?: unknown };
+      message?:  string;
+    };
+    const status  = axErr?.response?.status;
+    const dbBefore = await prisma.track.count({ where: { userId } }).catch(() => 0);
+
+    if (status === 429) {
+      const ra = parseInt(
+        (axErr.response?.headers?.["retry-after"] ?? axErr.response?.headers?.["Retry-After"] ?? "60"),
+        10,
+      );
+      console.error(`[import] 429 rate-limited for userId=${userId}, retryAfter=${ra}s`);
+      return failResult(
+        userId,
+        `Rate limited by Spotify. Try again in ${ra} second${ra === 1 ? "" : "s"}.`,
+        { retryAfter: ra, dbTrackCountBefore: dbBefore, dbTrackCountAfter: dbBefore },
+      );
+    }
+
+    if (status === 401) {
+      console.error(`[import] 401 for userId=${userId} — token refresh failed or invalid`);
+      return failResult(
+        userId,
+        "Spotify returned 401 — access token invalid or refresh failed. User needs to reconnect Spotify.",
+        { dbTrackCountBefore: dbBefore, dbTrackCountAfter: dbBefore },
+      );
+    }
+
+    if (status === 403) {
+      console.error(`[import] 403 for userId=${userId} — scope or permission issue`);
+      return failResult(
+        userId,
+        "Spotify returned 403 — permission denied. User may need to reconnect Spotify with the correct scopes.",
+        { dbTrackCountBefore: dbBefore, dbTrackCountAfter: dbBefore },
+      );
+    }
+
+    const message = axErr?.message ?? String(err);
+    console.error(`[import] unexpected error for userId=${userId}:`, err);
+    return failResult(
+      userId,
+      `Import failed: ${message}`,
+      { dbTrackCountBefore: dbBefore, dbTrackCountAfter: dbBefore },
+    );
+  }
 }

@@ -482,6 +482,78 @@ function possessiveHeadline(name: string | undefined): string {
   return first.endsWith("s") ? `${first}' Music` : `${first}'s Music`;
 }
 
+// ── getDisplayTracks — canonical sort function (desktop + mobile share this) ─
+// Extracted from the useMemo so it is a named, importable, testable unit.
+// Both the desktop right-panel and the mobile bottom-sheet feed off the result
+// of this function via the sortedTracks useMemo — there is no platform-specific
+// sort path anywhere in WorldSphere.
+//
+// Sort priority:
+//   1. Unheard (isUnheardForSelectedUser === true) — only when unheardMode
+//   2. Live events (liveMode) — tracks with a concert bubble to the top
+//   3. Social count (socialSort) — secondary: most-shared first
+//   4. Default: original artist/name order from API
+function getDisplayTracks(
+  displayedTracks: TrackItem[],
+  opts: {
+    unheardMode:  boolean;
+    liveMode:     boolean;
+    socialSort:   boolean;
+    liveEventMap: Record<string, LiveEvent | null>;
+    tallyCount:   (t: TrackItem) => number;
+  },
+): TrackItem[] {
+  const { unheardMode, liveMode, socialSort, liveEventMap, tallyCount } = opts;
+
+  const enrich = (t: TrackItem): TrackItem => {
+    if (!liveMode) return t;
+    const ev = liveEventMap[normalizeArtist(t.artist)];
+    return ev ? { ...t, liveEvent: ev } : { ...t, liveEvent: undefined };
+  };
+
+  if (!unheardMode && !liveMode && !socialSort) return displayedTracks;
+
+  const base = displayedTracks.map(enrich);
+
+  // Compare two tracks by unheard status: true first, false second, undefined last.
+  // Returns 0 when unheardMode is off so it acts as a no-op secondary comparator.
+  const cmpUnheard = (a: TrackItem, b: TrackItem): number => {
+    if (!unheardMode) return 0;
+    const av = a.isUnheardForSelectedUser;
+    const bv = b.isUnheardForSelectedUser;
+    if (av === bv) return 0;
+    if (av === true)  return -1;
+    if (bv === true)  return  1;
+    if (av === false) return -1; // heard (false) sorts before no-spotifyId (undefined)
+    return 1;
+  };
+
+  if (liveMode) {
+    const withEv = base.filter(t => !!t.liveEvent);
+    const noEv   = base.filter(t => !t.liveEvent);
+    withEv.sort((a, b) => {
+      const u = cmpUnheard(a, b); if (u !== 0) return u;
+      const sc = tallyCount(b) - tallyCount(a); if (sc !== 0) return sc;
+      return (a.liveEvent!.date).localeCompare(b.liveEvent!.date);
+    });
+    noEv.sort((a, b) => {
+      const u = cmpUnheard(a, b); if (u !== 0) return u;
+      if (socialSort) return tallyCount(b) - tallyCount(a);
+      return 0;
+    });
+    return [...withEv, ...noEv];
+  }
+
+  if (socialSort) {
+    return base.sort((a, b) => {
+      const u = cmpUnheard(a, b); if (u !== 0) return u;
+      return tallyCount(b) - tallyCount(a);
+    });
+  }
+
+  return base.sort(cmpUnheard);
+}
+
 export default function WorldSphere({ userId, backHref, userName, friendsWorld = false }: WorldSphereProps = {}) {
   const { data: session, status: sessionStatus } = useSession();
   const sessionUserId = session?.user?.id ?? null;
@@ -509,6 +581,9 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
   // ── Genre / subgenre state ────────────────────────────────────────────────
   const [selected,         setSelected]         = useState<string | null>(null);
   const [tracks,           setTracks]           = useState<TrackItem[]>([]);
+  // Mirror tracks in a ref so effects can read the current value without a
+  // stale closure and without adding tracks to their dependency arrays.
+  const tracksRef = useRef<TrackItem[]>([]);
   const [tracksLoading,    setTracksLoading]     = useState(false);
   const [subgenres,        setSubgenres]         = useState<SubgenreItem[]>([]);
   const [selectedSubgenre, setSelectedSubgenre]  = useState<string | null>(null);
@@ -587,6 +662,8 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
   });
   const substituteProfileRef = useRef(substituteProfile);
   substituteProfileRef.current = substituteProfile;
+  // Keep tracksRef in sync every render (used by unheardMode refetch effect).
+  tracksRef.current = tracks;
   const [unheardMode, setUnheardMode] = useState(false);
 
   // ── showUnheard: whether to render the Unheard/star button ───────────────
@@ -888,6 +965,36 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
       .catch(() => {})
       .finally(() => setTracksLoading(false));
   }, [substituteProfile]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Refetch tracks when unheardMode turns ON and data is missing ─────────
+  // When the user clicks "New to me" while tracks were fetched without
+  // ?unheardForUserId (e.g. because unheard mode was off at load time on
+  // desktop), isUnheardForSelectedUser is undefined for every track — the sort
+  // has nothing to work with.  This effect detects that gap and forces a fresh
+  // fetch with the substitute param so both desktop and mobile always have the
+  // unheard data when the button is active.
+  //
+  // Only fires when:
+  //   • unheardMode just turned true
+  //   • a substitute profile is set
+  //   • current tracks lack isUnheardForSelectedUser (fetched without the param)
+  useEffect(() => {
+    if (!unheardMode) return;
+    const sub = substituteProfileRef.current;
+    if (!sub) return;
+    const gen = selectedRef.current;
+    if (!gen) return;
+    // If ANY track already has the field (true or false), data is present — skip.
+    if (tracksRef.current.some(t => t.isUnheardForSelectedUser !== undefined)) return;
+    // Tracks are missing unheard data — re-fetch now with the substitute ID.
+    const enc = encodeURIComponent(gen);
+    setTracksLoading(true);
+    fetch(trackUrl(enc, sub.userId))
+      .then(r => r.json())
+      .then(d => { setTracks(d.tracks ?? []); })
+      .catch(() => {})
+      .finally(() => setTracksLoading(false));
+  }, [unheardMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Body scroll lock when exploring on mobile ────────────────────────────
   useEffect(() => {
@@ -1828,7 +1935,8 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
   // Use socialUsers.length as authoritative count — always equals socialCount from the API.
   const tallyCount = (t: TrackItem) => t.socialUsers?.length ?? t.socialCount ?? 0;
 
-  // ── Compound sort + live-event enrichment ────────────────────────────────
+  // ── Canonical track sort — single source of truth for desktop + mobile ────
+  // Both platforms call this exact function through the useMemo below.
   // Sort priority (highest to lowest):
   //   1. Unheard mode  — isUnheardForSelectedUser === true first
   //                      false second, undefined last (no spotifyId)
@@ -1837,60 +1945,33 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
   //   4. Default       — original artist/name order from API
   // Within each tier the secondary tiers still apply for further ordering.
   const sortedTracks = useMemo(() => {
-    // Attach liveEvent to each track when mode is on
-    const enrich = (t: TrackItem): TrackItem => {
-      if (!liveMode) return t;
-      const ev = liveEventMap[normalizeArtist(t.artist)];
-      return ev ? { ...t, liveEvent: ev } : { ...t, liveEvent: undefined };
-    };
+    const result = getDisplayTracks(displayedTracks, {
+      unheardMode, liveMode, socialSort, liveEventMap,
+      tallyCount,
+    });
 
-    if (!unheardMode && !liveMode && !socialSort) return displayedTracks;
-
-    const base = displayedTracks.map(enrich);
-
-    // Helper: compare two tracks by unheard status (true < false < undefined)
-    const cmpUnheard = (a: TrackItem, b: TrackItem): number => {
-      if (!unheardMode) return 0;
-      const av = a.isUnheardForSelectedUser;
-      const bv = b.isUnheardForSelectedUser;
-      if (av === bv) return 0;
-      if (av === true)  return -1;
-      if (bv === true)  return  1;
-      if (av === false) return -1; // false (heard) sorts before undefined (no id)
-      return 1;
-    };
-
-    if (liveMode) {
-      const withEv = base.filter(t => !!t.liveEvent);
-      const noEv   = base.filter(t => !t.liveEvent);
-
-      // Events: unheard first → social desc → earliest date
-      withEv.sort((a, b) => {
-        const u = cmpUnheard(a, b); if (u !== 0) return u;
-        const sc = tallyCount(b) - tallyCount(a); if (sc !== 0) return sc;
-        return (a.liveEvent!.date).localeCompare(b.liveEvent!.date);
-      });
-
-      // Non-events: unheard first → social desc (if active)
-      noEv.sort((a, b) => {
-        const u = cmpUnheard(a, b); if (u !== 0) return u;
-        if (socialSort) return tallyCount(b) - tallyCount(a);
-        return 0;
-      });
-
-      return [...withEv, ...noEv];
-    }
-
-    // Social sort only (±unheard)
-    if (socialSort) {
-      return base.sort((a, b) => {
-        const u = cmpUnheard(a, b); if (u !== 0) return u;
-        return tallyCount(b) - tallyCount(a);
+    // ── Dev-only debug log ───────────────────────────────────────────────────
+    // Prints the first 5 tracks with their unheard status so you can verify
+    // desktop and mobile are receiving the same data and sort flags.
+    // Remove this block (or guard with NODE_ENV) before shipping.
+    if (process.env.NODE_ENV === "development" && unheardMode) {
+      const platform = typeof window !== "undefined" && window.innerWidth <= 768 ? "mobile" : "desktop";
+      console.log(`[sortedTracks] platform=${platform}`, {
+        genre:             selected,
+        subgenre:          focusedSubgenre,
+        substituteUserId:  substituteProfileRef.current?.userId,
+        unheardMode,
+        socialSort,
+        liveMode,
+        trackCount:        result.length,
+        first5:            result.slice(0, 5).map(t => ({
+          name:                  t.name,
+          isUnheardForSelectedUser: t.isUnheardForSelectedUser,
+        })),
       });
     }
 
-    // Unheard-only sort
-    return base.sort(cmpUnheard);
+    return result;
   }, [displayedTracks, liveMode, socialSort, unheardMode, liveEventMap]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Render ─────────────────────────────────────────────────────────────────

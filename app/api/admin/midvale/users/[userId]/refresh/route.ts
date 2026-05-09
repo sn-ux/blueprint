@@ -20,7 +20,12 @@ export async function POST(_req: NextRequest, ctx: Ctx) {
   const result = await runLikedSongsImport(userId);
 
   if (!result.success) {
-    return NextResponse.json({ error: result.error }, { status: 400 });
+    // Return the full result object so the admin UI gets retryAfter, missingScopes, etc.
+    const status = result.retryAfter !== undefined ? 429 : 400;
+    const headers: Record<string, string> = result.retryAfter !== undefined
+      ? { "Retry-After": String(result.retryAfter) }
+      : {};
+    return NextResponse.json(result, { status, headers });
   }
 
   return NextResponse.json(result);

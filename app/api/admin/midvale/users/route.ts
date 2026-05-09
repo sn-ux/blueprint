@@ -21,7 +21,7 @@ export async function GET() {
     users.length > 0
       ? prisma.account.findMany({
           where:  { userId: { in: users.map(u => u.id) }, provider: "spotify" },
-          select: { userId: true, scope: true, expires_at: true },
+          select: { userId: true, scope: true, expires_at: true, refresh_token: true },
         })
       : Promise.resolve([]),
   ]);
@@ -38,9 +38,10 @@ export async function GET() {
       email:            u.email,
       image:            u.image,
       trackCount:       countMap.get(u.id) ?? 0,
-      spotifyConnected: !!acc,
-      spotifyScope:     acc?.scope ?? null,
-      tokenExpiresAt:   acc?.expires_at ?? null,
+      spotifyConnected:  !!acc,
+      hasRefreshToken:   !!acc?.refresh_token,
+      spotifyScope:      acc?.scope ?? null,
+      tokenExpiresAt:    acc?.expires_at ?? null,
     };
   });
 

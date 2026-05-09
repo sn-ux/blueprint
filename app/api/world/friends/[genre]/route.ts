@@ -119,9 +119,15 @@ export async function GET(
 
   console.log(`[perf] /api/world/friends/${blueprintWorld} → ${tracks.length} deduped tracks, ${subgenres.length} subgenres in ${Date.now() - t0}ms (db=${tDB - t0}ms)`);
 
+  // Responses that include user-specific unheard data must be private (never
+  // served from a shared CDN cache to a different user).  Responses without
+  // the param are safe to cache publicly for a short window.
+  const cacheHeader = unheardForUserId
+    ? "private, no-cache"
+    : "public, max-age=60, stale-while-revalidate=300";
+
   return NextResponse.json(
     { genre: blueprintWorld, tracks, subgenres },
-    // Friends world data changes only when users import new tracks — short cache is safe.
-    { headers: { "Cache-Control": "public, max-age=60, stale-while-revalidate=300" } },
+    { headers: { "Cache-Control": cacheHeader } },
   );
 }

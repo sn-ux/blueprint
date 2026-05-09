@@ -81,6 +81,7 @@ export async function GET(req: NextRequest) {
     hasAccessToken:     !!account?.access_token,
     hasRefreshToken:    !!account?.refresh_token,
     scope:              account?.scope ?? null,
+    scopeHasUserLibraryRead:           account?.scope?.includes("user-library-read") ?? false,
     scopeHasPlaylistReadPrivate:       account?.scope?.includes("playlist-read-private") ?? false,
     scopeHasPlaylistReadCollaborative: account?.scope?.includes("playlist-read-collaborative") ?? false,
     tokenExpiresAt: account?.expires_at
