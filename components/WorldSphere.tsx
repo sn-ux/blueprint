@@ -1973,6 +1973,23 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
     return result;
   }, [displayedTracks, liveMode, socialSort, unheardMode, liveEventMap]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Live-events background fetch ─────────────────────────────────────────
+  // Silently fetches live event data whenever the displayed track list changes
+  // so ticket icons appear without the user having to click the button.
+  // liveEventMap is a session cache — each artist is queried at most once.
+  // This effect MUST stay above the if (loading) early return (hooks ordering).
+  useEffect(() => {
+    if (displayedTracks.length === 0) return;
+    const needed = [...new Set(displayedTracks.map(t => normalizeArtist(t.artist)))]
+      .filter(a => !(a in liveEventMap));
+    if (needed.length === 0) return;
+    const url = `/api/events/live?artists=${encodeURIComponent(needed.join(","))}`;
+    fetch(url)
+      .then(r => r.ok ? r.json() as Promise<Record<string, LiveEvent | null>> : null)
+      .then(data => { if (data) setLiveEventMap(prev => ({ ...prev, ...data })); })
+      .catch(() => {});
+  }, [displayedTracks]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Render ─────────────────────────────────────────────────────────────────
   // Early return placed AFTER all hooks (including useMemo above) so that
   // hooks are always called in the same order regardless of loading state.
