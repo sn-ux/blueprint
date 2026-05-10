@@ -446,23 +446,23 @@ function getDisplayTracks(
   displayedTracks: TrackItem[],
   opts: {
     unheardMode:  boolean;
+    liveMode:     boolean;
     socialSort:   boolean;
     liveEventMap: Record<string, LiveEvent | null>;
     tallyCount:   (t: TrackItem) => number;
   },
 ): TrackItem[] {
-  const { unheardMode, socialSort, liveEventMap, tallyCount } = opts;
+  const { unheardMode, liveMode, socialSort, liveEventMap, tallyCount } = opts;
 
-  // Always enrich every track with its live event (if any) so the ticket icon
-  // appears on the row regardless of sort mode.
   const enrich = (t: TrackItem): TrackItem => {
+    if (!liveMode) return t;
     const ev = liveEventMap[normalizeArtist(t.artist)];
     return ev ? { ...t, liveEvent: ev } : { ...t, liveEvent: undefined };
   };
 
-  const base = displayedTracks.map(enrich);
+  if (!unheardMode && !liveMode && !socialSort) return displayedTracks;
 
-  if (!unheardMode && !socialSort) return base;
+  const base = displayedTracks.map(enrich);
 
   // Compare two tracks by unheard status: true first, false second, undefined last.
   // Returns 0 when unheardMode is off so it acts as a no-op secondary comparator.
@@ -476,6 +476,22 @@ function getDisplayTracks(
     if (av === false) return -1; // heard (false) sorts before no-spotifyId (undefined)
     return 1;
   };
+
+  if (liveMode) {
+    const withEv = base.filter(t => !!t.liveEvent);
+    const noEv   = base.filter(t => !t.liveEvent);
+    withEv.sort((a, b) => {
+      const u = cmpUnheard(a, b); if (u !== 0) return u;
+      const sc = tallyCount(b) - tallyCount(a); if (sc !== 0) return sc;
+      return (a.liveEvent!.date).localeCompare(b.liveEvent!.date);
+    });
+    noEv.sort((a, b) => {
+      const u = cmpUnheard(a, b); if (u !== 0) return u;
+      if (socialSort) return tallyCount(b) - tallyCount(a);
+      return 0;
+    });
+    return [...withEv, ...noEv];
+  }
 
   if (socialSort) {
     return base.sort((a, b) => {
@@ -530,6 +546,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
 
   // ── Live events ───────────────────────────────────────────────────────────
   const [liveMode,     setLiveMode]     = useState(false);
+  const [liveLoading,  setLiveLoading]  = useState(false);
 
   // ── Playlist push ─────────────────────────────────────────────────────────
   const [playlistLoading,   setPlaylistLoading]   = useState(false);
@@ -1878,7 +1895,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
   // Within each tier the secondary tiers still apply for further ordering.
   const sortedTracks = useMemo(() => {
     const result = getDisplayTracks(displayedTracks, {
-      unheardMode, socialSort, liveEventMap,
+      unheardMode, liveMode, socialSort, liveEventMap,
       tallyCount,
     });
 
@@ -1891,6 +1908,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
         substituteUserId:  substituteProfileRef.current?.userId,
         unheardMode,
         socialSort,
+        liveMode,
         trackCount:        result.length,
         first5:            result.slice(0, 5).map(t => ({
           name:                  t.name,
@@ -1900,7 +1918,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
     }
 
     return result;
-  }, [displayedTracks, socialSort, unheardMode, liveEventMap]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [displayedTracks, liveMode, socialSort, unheardMode, liveEventMap]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Render ─────────────────────────────────────────────────────────────────
   // Early return placed AFTER all hooks (including useMemo above) so that
@@ -1913,23 +1931,31 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
     );
   }
 
-  // ── Live-events auto-fetch ────────────────────────────────────────────────
-  // Runs whenever the displayed tracklist changes (genre/subgenre selection).
-  // liveEventMap acts as a session cache — each artist is fetched at most once.
-  // Results flow into liveEventMap → getDisplayTracks enriches each track →
-  // the ticket icon renders on rows that have a live event.
-  useEffect(() => {
-    if (displayedTracks.length === 0) return;
+  // ── Live-events toggle handler ────────────────────────────────────────────
+  // Button removed from header — handler kept so liveMode session state still
+  // round-trips correctly via vennOriginState / pendingRestore.
+  const handleLiveToggle = async () => {
+    if (liveMode) { setLiveMode(false); return; }
+
+    setLiveMode(true);
+
     const allArtists = [...new Set(displayedTracks.map(t => normalizeArtist(t.artist)))];
     const needed     = allArtists.filter(a => !(a in liveEventMap));
     if (needed.length === 0) return;
 
-    const url = `/api/events/live?artists=${encodeURIComponent(needed.join(","))}`;
-    fetch(url)
-      .then(r => r.ok ? r.json() as Promise<Record<string, LiveEvent | null>> : null)
-      .then(data => { if (data) setLiveEventMap(prev => ({ ...prev, ...data })); })
-      .catch(() => {});
-  }, [displayedTracks]); // eslint-disable-line react-hooks/exhaustive-deps
+    setLiveLoading(true);
+    try {
+      const url = `/api/events/live?artists=${encodeURIComponent(needed.join(","))}`;
+      const res = await fetch(url);
+      if (!res.ok) return;
+      const data: Record<string, LiveEvent | null> = await res.json();
+      setLiveEventMap(prev => ({ ...prev, ...data }));
+    } catch {
+      // ignore
+    } finally {
+      setLiveLoading(false);
+    }
+  };
 
   // ── Playlist push handler ─────────────────────────────────────────────────
   // Unique key for the current view — used to track which playlists have
