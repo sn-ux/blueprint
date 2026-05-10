@@ -2612,14 +2612,23 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                   <div className="flex flex-col pt-1 pb-6">
                     {(() => {
                       const total = Object.values(worlds).reduce((s, c) => s + c, 0) || 1;
-                      return Object.entries(worlds).sort(([,a],[,b])=>b-a).map(([name, count]) => {
-                        const pct = Math.round(count / total * 100);
+                      // Sort: primary genres by count desc, "Other" always last.
+                      const sortedEntries = Object.entries(worlds).sort(([nameA, cntA], [nameB, cntB]) => {
+                        const aIsOther = nameA === "Other";
+                        const bIsOther = nameB === "Other";
+                        if (aIsOther && !bIsOther) return 1;
+                        if (!aIsOther && bIsOther) return -1;
+                        return cntB - cntA;
+                      });
+                      return sortedEntries.map(([name, count]) => {
+                        const pct   = Math.round(count / total * 100);
+                        const color = COLORS[name] ?? "#71717a";
                         return (
                           <div key={name} className="flex items-center gap-4 px-7 py-2.5 cursor-pointer hover:bg-white/[0.025]" style={{ borderBottom: "1px solid rgba(255,255,255,0.035)" }} onClick={() => { autoSelectedRef.current = false; setSelected(name); }}>
-                            <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: COLORS[name] ?? "#71717a" }} />
+                            <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: color }} />
                             <div className="flex flex-col min-w-0 flex-1">
-                              <span className="text-white text-sm font-medium truncate leading-snug">{shortLabel(name)}</span>
-                              <span className="text-zinc-500 text-xs">{count.toLocaleString()} tracks · {pct}%</span>
+                              <span className="text-sm font-medium truncate leading-snug" style={{ color }}>{shortLabel(name)}</span>
+                              <span className="text-xs" style={{ color }}>{count.toLocaleString()} tracks · {pct}%</span>
                             </div>
                           </div>
                         );
