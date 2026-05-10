@@ -531,18 +531,12 @@ function getDisplayTracks(
   };
 
   if (liveMode) {
+    // Split: ticketed tracks float to top, others stay in their original order.
+    // Ticketed rows sorted by social count (popularity) descending; ties preserve
+    // original relative order (JS sort is stable in V8/SpiderMonkey).
     const withEv = base.filter(t => !!t.liveEvent);
     const noEv   = base.filter(t => !t.liveEvent);
-    withEv.sort((a, b) => {
-      const u = cmpUnheard(a, b); if (u !== 0) return u;
-      const sc = tallyCount(b) - tallyCount(a); if (sc !== 0) return sc;
-      return (a.liveEvent!.date).localeCompare(b.liveEvent!.date);
-    });
-    noEv.sort((a, b) => {
-      const u = cmpUnheard(a, b); if (u !== 0) return u;
-      if (socialSort) return tallyCount(b) - tallyCount(a);
-      return 0;
-    });
+    withEv.sort((a, b) => tallyCount(b) - tallyCount(a));
     return [...withEv, ...noEv];
   }
 
@@ -2511,7 +2505,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                                     style={{ flexShrink: 0, width: 6, height: 6, borderRadius: "50%", background: selectedColor, opacity: 0.70, display: "inline-block" }}
                                   />
                                 )}
-                                {/* Live event ticket — shown in name area when liveMode is on */}
+                                {/* Live event ticket — always shown when artist has an event */}
                                 {t.liveEvent && (
                                   <button
                                     aria-label="Open live event booking page"
