@@ -691,6 +691,9 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
   const pendingAudioRef                     = useRef<HTMLAudioElement | null>(null);
   const [deezerPreviews, setDeezerPreviews] = useState<Record<string, string>>({});
   const deezerPreviewsRef                   = useRef<Record<string, string>>({});
+  // Tracks the id of the single track that was clicked and confirmed to have no
+  // available preview (Deezer returned null). Only that row shows "(No Preview)".
+  const [noPreviewTrackId, setNoPreviewTrackId] = useState<string | null>(null);
 
   // ── Mobile state ──────────────────────────────────────────────────────────
   const [isMobile, setIsMobile] = useState(false);
@@ -1199,6 +1202,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
         setNowPlayingId(null); setAudioPlaying(false); setPlayingTrack(null); return;
       }
       if (requestedTrackRef.current === t.id) return;
+      setNoPreviewTrackId(null); // clear any previous "No Preview" label while fetching
       requestedTrackRef.current = t.id; setPendingTrackId(t.id);
       if (pendingAudioRef.current) { pendingAudioRef.current.src = ""; pendingAudioRef.current = null; }
       const pa = new Audio(); pa.volume = 0.8; pendingAudioRef.current = pa;
@@ -1206,7 +1210,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
         .then(r=>r.json()).then((d:{previewUrl:string|null})=>{
           if (requestedTrackRef.current !== t.id) return;
           requestedTrackRef.current = null; setPendingTrackId(null);
-          if (!d.previewUrl) return;
+          if (!d.previewUrl) { setNoPreviewTrackId(t.id); return; }
           deezerPreviewsRef.current[t.id] = d.previewUrl; setDeezerPreviews(p=>({...p,[t.id]:d.previewUrl!}));
           const audio = pendingAudioRef.current; if (!audio) return;
           audio.src = d.previewUrl;
@@ -1224,6 +1228,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
       if (audioRef.current){audioRef.current.pause();audioRef.current.currentTime=0;audioRef.current=null;}
       setAudioPlaying(false);setNowPlayingId(null);setPlayingTrack(null);return;
     }
+    setNoPreviewTrackId(null);
     requestedTrackRef.current=null;setPendingTrackId(null);
     if(pendingAudioRef.current){pendingAudioRef.current.src="";pendingAudioRef.current=null;}
     if(audioRef.current){audioRef.current.pause();audioRef.current.currentTime=0;}
@@ -2542,7 +2547,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                                   </button>
                                 )}
                               </div>
-                              <span className="text-zinc-500 text-xs truncate">{t.artist}{isPending ? <span style={{ color: "rgba(255,255,255,0.32)", marginLeft: 4 }}>(Loading…)</span> : !canPlay ? <span style={{ color: "rgba(255,255,255,0.22)", marginLeft: 4 }}>(No Preview)</span> : null}</span>
+                              <span className="text-zinc-500 text-xs truncate">{t.artist}{isPending ? <span style={{ color: "rgba(255,255,255,0.32)", marginLeft: 4 }}>(Loading…)</span> : noPreviewTrackId === t.id ? <span style={{ color: "rgba(255,255,255,0.22)", marginLeft: 4 }}>(No Preview)</span> : null}</span>
                             </div>
                           </div>
                         );
@@ -2799,7 +2804,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                               </button>
                             )}
                           </div>
-                          <span className="text-zinc-500 text-xs truncate">{t.artist}{isPending ? <span style={{ color: "rgba(255,255,255,0.32)", marginLeft: 4 }}>(Loading…)</span> : !canPlay ? <span style={{ color: "rgba(255,255,255,0.22)", marginLeft: 4 }}>(No Preview)</span> : null}</span>
+                          <span className="text-zinc-500 text-xs truncate">{t.artist}{isPending ? <span style={{ color: "rgba(255,255,255,0.32)", marginLeft: 4 }}>(Loading…)</span> : noPreviewTrackId === t.id ? <span style={{ color: "rgba(255,255,255,0.22)", marginLeft: 4 }}>(No Preview)</span> : null}</span>
                         </div>
                       </div>
                     );
