@@ -249,57 +249,6 @@ function BarChartButton({ active, onClick, color }: { active: boolean; onClick: 
   );
 }
 
-// ── PinButton — live-events mode toggle ───────────────────────────────────────
-
-function PinButton({
-  active, loading, onClick, color,
-}: {
-  active:  boolean;
-  loading: boolean;
-  onClick: () => void;
-  color:   string;
-}) {
-  return (
-    <button
-      onClick={e => { e.stopPropagation(); onClick(); }}
-      aria-label={active ? "Hide live events" : "Find live events in California"}
-      title={loading
-        ? "Searching for CA live events…"
-        : active
-          ? "Live events mode on — click to turn off"
-          : "Find upcoming CA live events for these artists"}
-      disabled={loading}
-      style={{
-        flexShrink: 0,
-        background: "none",
-        border:     "none",
-        padding:    "2px",
-        cursor:     loading ? "default" : "pointer",
-        color:      active ? color : "rgba(255,255,255,0.22)",
-        opacity:    loading ? 0.55 : 1,
-        transition: "color 0.20s ease, opacity 0.20s ease",
-        display:    "flex",
-        alignItems: "center",
-        lineHeight: 1,
-      }}
-    >
-      {loading ? (
-        /* Three animated dots while searching */
-        <svg width={19} height={17} viewBox="0 0 18 10" aria-hidden="true">
-          {[0, 6, 12].map((cx, i) => (
-            <circle key={i} cx={cx + 3} cy="5" r="1.6" fill="currentColor">
-              <animate attributeName="opacity" values="0.25;1;0.25"
-                dur="1.1s" repeatCount="indefinite" begin={`${i * 0.22}s`} />
-            </circle>
-          ))}
-        </svg>
-      ) : (
-        <LiveEventsIcon size={17} />
-      )}
-    </button>
-  );
-}
-
 // ── VennButton — opens the current genre/subgenre in Friends World ────────────
 // Only rendered on individual user worlds (not on friendsWorld itself).
 // When disabled (genre/subgenre absent from Friends World) renders as a muted
@@ -497,23 +446,23 @@ function getDisplayTracks(
   displayedTracks: TrackItem[],
   opts: {
     unheardMode:  boolean;
-    liveMode:     boolean;
     socialSort:   boolean;
     liveEventMap: Record<string, LiveEvent | null>;
     tallyCount:   (t: TrackItem) => number;
   },
 ): TrackItem[] {
-  const { unheardMode, liveMode, socialSort, liveEventMap, tallyCount } = opts;
+  const { unheardMode, socialSort, liveEventMap, tallyCount } = opts;
 
+  // Always enrich every track with its live event (if any) so the ticket icon
+  // appears on the row regardless of sort mode.
   const enrich = (t: TrackItem): TrackItem => {
-    if (!liveMode) return t;
     const ev = liveEventMap[normalizeArtist(t.artist)];
     return ev ? { ...t, liveEvent: ev } : { ...t, liveEvent: undefined };
   };
 
-  if (!unheardMode && !liveMode && !socialSort) return displayedTracks;
-
   const base = displayedTracks.map(enrich);
+
+  if (!unheardMode && !socialSort) return base;
 
   // Compare two tracks by unheard status: true first, false second, undefined last.
   // Returns 0 when unheardMode is off so it acts as a no-op secondary comparator.
@@ -527,22 +476,6 @@ function getDisplayTracks(
     if (av === false) return -1; // heard (false) sorts before no-spotifyId (undefined)
     return 1;
   };
-
-  if (liveMode) {
-    const withEv = base.filter(t => !!t.liveEvent);
-    const noEv   = base.filter(t => !t.liveEvent);
-    withEv.sort((a, b) => {
-      const u = cmpUnheard(a, b); if (u !== 0) return u;
-      const sc = tallyCount(b) - tallyCount(a); if (sc !== 0) return sc;
-      return (a.liveEvent!.date).localeCompare(b.liveEvent!.date);
-    });
-    noEv.sort((a, b) => {
-      const u = cmpUnheard(a, b); if (u !== 0) return u;
-      if (socialSort) return tallyCount(b) - tallyCount(a);
-      return 0;
-    });
-    return [...withEv, ...noEv];
-  }
 
   if (socialSort) {
     return base.sort((a, b) => {
@@ -597,7 +530,6 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
 
   // ── Live events ───────────────────────────────────────────────────────────
   const [liveMode,     setLiveMode]     = useState(false);
-  const [liveLoading,  setLiveLoading]  = useState(false);
 
   // ── Playlist push ─────────────────────────────────────────────────────────
   const [playlistLoading,   setPlaylistLoading]   = useState(false);
@@ -1946,14 +1878,11 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
   // Within each tier the secondary tiers still apply for further ordering.
   const sortedTracks = useMemo(() => {
     const result = getDisplayTracks(displayedTracks, {
-      unheardMode, liveMode, socialSort, liveEventMap,
+      unheardMode, socialSort, liveEventMap,
       tallyCount,
     });
 
     // ── Dev-only debug log ───────────────────────────────────────────────────
-    // Prints the first 5 tracks with their unheard status so you can verify
-    // desktop and mobile are receiving the same data and sort flags.
-    // Remove this block (or guard with NODE_ENV) before shipping.
     if (process.env.NODE_ENV === "development" && unheardMode) {
       const platform = typeof window !== "undefined" && window.innerWidth <= 768 ? "mobile" : "desktop";
       console.log(`[sortedTracks] platform=${platform}`, {
@@ -1962,7 +1891,6 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
         substituteUserId:  substituteProfileRef.current?.userId,
         unheardMode,
         socialSort,
-        liveMode,
         trackCount:        result.length,
         first5:            result.slice(0, 5).map(t => ({
           name:                  t.name,
@@ -1972,7 +1900,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
     }
 
     return result;
-  }, [displayedTracks, liveMode, socialSort, unheardMode, liveEventMap]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [displayedTracks, socialSort, unheardMode, liveEventMap]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Render ─────────────────────────────────────────────────────────────────
   // Early return placed AFTER all hooks (including useMemo above) so that
@@ -1985,67 +1913,23 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
     );
   }
 
-  // ── Live-events toggle handler ────────────────────────────────────────────
-  // • Mode OFF → ON : fetch uncached artists, merge into liveEventMap, log results.
-  // • Mode ON  → OFF: just clear the flag; map is kept as session cache.
-  const handleLiveToggle = async () => {
-    if (liveMode) { setLiveMode(false); return; }
-
-    setLiveMode(true);
-
-    // Unique normalized artist names that haven't been looked up this session
+  // ── Live-events auto-fetch ────────────────────────────────────────────────
+  // Runs whenever the displayed tracklist changes (genre/subgenre selection).
+  // liveEventMap acts as a session cache — each artist is fetched at most once.
+  // Results flow into liveEventMap → getDisplayTracks enriches each track →
+  // the ticket icon renders on rows that have a live event.
+  useEffect(() => {
+    if (displayedTracks.length === 0) return;
     const allArtists = [...new Set(displayedTracks.map(t => normalizeArtist(t.artist)))];
     const needed     = allArtists.filter(a => !(a in liveEventMap));
+    if (needed.length === 0) return;
 
-    console.log("[live-events] mode ON — artists in view:", allArtists.length,
-      "| uncached:", needed.length, needed.slice(0, 10));
-
-    if (needed.length === 0) {
-      // All already cached — just log current mappings
-      const sample = displayedTracks.slice(0, 10).map(t => {
-        const key = normalizeArtist(t.artist);
-        const ev  = liveEventMap[key];
-        return `"${t.name}" / ${t.artist} → ${ev ? `✓ ${ev.eventName} (${ev.date})` : "no event"}`;
-      });
-      console.log("[live-events] (all cached) first 10 track→event:", sample);
-      return;
-    }
-
-    setLiveLoading(true);
-    try {
-      const url = `/api/events/live?artists=${encodeURIComponent(needed.join(","))}`;
-      console.log("[live-events] fetching:", url.slice(0, 120));
-      const res = await fetch(url);
-
-      if (!res.ok) {
-        console.warn("[live-events] API error", res.status, await res.text().catch(() => ""));
-        return;
-      }
-
-      const data: Record<string, LiveEvent | null> = await res.json();
-
-      const hits = Object.entries(data).filter(([, v]) => v !== null);
-      console.log(`[live-events] response: ${hits.length} events found out of ${Object.keys(data).length} artists queried`);
-      if (hits.length > 0) {
-        console.log("[live-events] matches:", hits.map(([k, v]) => `${k}: ${v!.eventName} @ ${v!.venue}, ${v!.city} (${v!.date})`));
-      }
-
-      const merged = { ...liveEventMap, ...data };
-      setLiveEventMap(merged);
-
-      // Log track→event for first 10 visible tracks using the merged map
-      const sample = displayedTracks.slice(0, 10).map(t => {
-        const key = normalizeArtist(t.artist);
-        const ev  = merged[key];
-        return `"${t.name}" / ${t.artist} → ${ev ? `✓ ${ev.eventName} (${ev.date})` : "no event"}`;
-      });
-      console.log("[live-events] first 10 track→event mappings:", sample);
-    } catch (err) {
-      console.error("[live-events] fetch failed:", err);
-    } finally {
-      setLiveLoading(false);
-    }
-  };
+    const url = `/api/events/live?artists=${encodeURIComponent(needed.join(","))}`;
+    fetch(url)
+      .then(r => r.ok ? r.json() as Promise<Record<string, LiveEvent | null>> : null)
+      .then(data => { if (data) setLiveEventMap(prev => ({ ...prev, ...data })); })
+      .catch(() => {});
+  }, [displayedTracks]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Playlist push handler ─────────────────────────────────────────────────
   // Unique key for the current view — used to track which playlists have
@@ -2437,7 +2321,6 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                           {showUnheard && <UnheardButton active={unheardMode} onClick={() => setUnheardMode(v => !v)} color={selectedColor} name={substituteProfile?.userName} />}
                           {vennHref && <VennButton href={vennHref} color={selectedColor} disabled={!vennEnabled} onBeforeNavigate={handleVennNavigate} />}
                           <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
-                          <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
                           <PlaylistButton loading={playlistLoading} success={!!(playlistKey && createdPlaylistKeys.has(playlistKey))} onClick={handlePlaylistPush} color={selectedColor} />
                           <SpotifyLogoButton track={playingTrack} />
                         </div>
@@ -2452,7 +2335,6 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                           {showUnheard && <UnheardButton active={unheardMode} onClick={() => setUnheardMode(v => !v)} color={selectedColor} name={substituteProfile?.userName} />}
                           {vennHref && <VennButton href={vennHref} color={selectedColor} disabled={!vennEnabled} onBeforeNavigate={handleVennNavigate} />}
                           <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
-                          <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
                           <PlaylistButton loading={playlistLoading} success={!!(playlistKey && createdPlaylistKeys.has(playlistKey))} onClick={handlePlaylistPush} color={selectedColor} />
                           <SpotifyLogoButton track={playingTrack} />
                         </div>
@@ -2516,7 +2398,31 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                         const isActive  = nowPlayingId === t.id || isPending;
                         return (
                           <div key={t.id} className="flex items-center gap-3 px-7 py-2 cursor-pointer" style={{ borderBottom: "1px solid rgba(255,255,255,0.035)" }} onClick={() => playTrack(t)}>
-                            <span style={{ flexShrink: 0, width: 20, textAlign: "center", fontSize: 11, lineHeight: 1, userSelect: "none", color: isActive ? selectedColor : "rgba(255,255,255,0.22)" }}>{idx + 1}</span>
+                            {/* Row number OR glowing ticket icon for tracks with a live event */}
+                            {t.liveEvent ? (
+                              <button
+                                aria-label="Open live event booking page"
+                                title={`${t.liveEvent.eventName} · ${t.liveEvent.venue}, ${t.liveEvent.city} · ${t.liveEvent.date}`}
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  if (window.confirm("Open live event booking page?")) {
+                                    window.open(t.liveEvent!.url, "_blank", "noopener,noreferrer");
+                                  }
+                                }}
+                                style={{
+                                  flexShrink: 0, width: 20, height: 20,
+                                  background: "none", border: "none", padding: 0,
+                                  cursor: "pointer", display: "flex",
+                                  alignItems: "center", justifyContent: "center",
+                                  color: selectedColor,
+                                  filter: `drop-shadow(0 0 5px ${selectedColor})`,
+                                }}
+                              >
+                                <LiveEventsIcon size={14} />
+                              </button>
+                            ) : (
+                              <span style={{ flexShrink: 0, width: 20, textAlign: "center", fontSize: 11, lineHeight: 1, userSelect: "none", color: isActive ? selectedColor : "rgba(255,255,255,0.22)" }}>{idx + 1}</span>
+                            )}
                             <div className="flex-shrink-0" style={{ width: 36, height: 36, borderRadius: 4, overflow: "hidden", background: `rgba(${sr},${sg},${sb},0.10)` }}>
                               {t.imageUrl && <img src={t.imageUrl} alt="" width={36} height={36} loading="lazy" style={{ width: 36, height: 36, objectFit: "cover", display: "block" }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />}
                             </div>
@@ -2530,22 +2436,6 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                                     title={`Not in ${substituteProfile?.userName ?? "selected user"}'s library`}
                                     style={{ flexShrink: 0, width: 6, height: 6, borderRadius: "50%", background: selectedColor, opacity: 0.70, display: "inline-block" }}
                                   />
-                                )}
-                                {/* Pin BEFORE social badge */}
-                                {t.liveEvent && (
-                                  <button
-                                    aria-label="Open live event booking page"
-                                    title={`${t.liveEvent.eventName} · ${t.liveEvent.venue}, ${t.liveEvent.city} · ${t.liveEvent.date}`}
-                                    onClick={e => {
-                                      e.stopPropagation();
-                                      if (window.confirm("Open live event booking page?")) {
-                                        window.open(t.liveEvent!.url, "_blank", "noopener,noreferrer");
-                                      }
-                                    }}
-                                    style={{ background: "none", border: "none", padding: "2px 0", cursor: "pointer", display: "flex", alignItems: "center", flexShrink: 0, color: `rgba(${sr},${sg},${sb},0.85)` }}
-                                  >
-                                    {<LiveEventsIcon size={12} />}
-                                  </button>
                                 )}
                                 {socialSort && tallyCount(t) > 0 && (
                                   <button
@@ -2750,9 +2640,6 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                       <div style={W}>
                         <BarChartButton active={socialSort} onClick={() => setSocialSort(v => !v)} color={selectedColor} />
                       </div>
-                      <div style={W}>
-                        <PinButton active={liveMode} loading={liveLoading} onClick={handleLiveToggle} color={selectedColor} />
-                      </div>
                     </div>
 
                   </div>
@@ -2773,7 +2660,31 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                     const isActive  = nowPlayingId === t.id || isPending;
                     return (
                       <div key={t.id} className="flex items-center gap-3 px-5 py-2.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.04)", cursor: "pointer" }} onClick={() => playTrack(t)}>
-                        <span style={{ flexShrink: 0, width: 20, textAlign: "center", fontSize: 11, lineHeight: 1, userSelect: "none", color: isActive ? selectedColor : "rgba(255,255,255,0.22)" }}>{idx + 1}</span>
+                        {/* Row number OR glowing ticket icon for tracks with a live event */}
+                        {t.liveEvent ? (
+                          <button
+                            aria-label="Open live event booking page"
+                            title={`${t.liveEvent.eventName} · ${t.liveEvent.venue}, ${t.liveEvent.city} · ${t.liveEvent.date}`}
+                            onClick={e => {
+                              e.stopPropagation();
+                              if (window.confirm("Open live event booking page?")) {
+                                window.open(t.liveEvent!.url, "_blank", "noopener,noreferrer");
+                              }
+                            }}
+                            style={{
+                              flexShrink: 0, width: 20, height: 20,
+                              background: "none", border: "none", padding: 0,
+                              cursor: "pointer", display: "flex",
+                              alignItems: "center", justifyContent: "center",
+                              color: selectedColor,
+                              filter: `drop-shadow(0 0 5px ${selectedColor})`,
+                            }}
+                          >
+                            <LiveEventsIcon size={14} />
+                          </button>
+                        ) : (
+                          <span style={{ flexShrink: 0, width: 20, textAlign: "center", fontSize: 11, lineHeight: 1, userSelect: "none", color: isActive ? selectedColor : "rgba(255,255,255,0.22)" }}>{idx + 1}</span>
+                        )}
                         <div className="flex-shrink-0" style={{ width: 36, height: 36, borderRadius: 4, overflow: "hidden", background: `rgba(${sr},${sg},${sb},0.10)` }}>
                           {t.imageUrl && <img src={t.imageUrl} alt="" width={36} height={36} loading="lazy" style={{ width: 36, height: 36, objectFit: "cover", display: "block" }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />}
                         </div>
@@ -2787,22 +2698,6 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                                 title={`Not in ${substituteProfile?.userName ?? "selected user"}'s library`}
                                 style={{ flexShrink: 0, width: 6, height: 6, borderRadius: "50%", background: selectedColor, opacity: 0.70, display: "inline-block" }}
                               />
-                            )}
-                            {/* Pin BEFORE social badge */}
-                            {t.liveEvent && (
-                              <button
-                                aria-label="Open live event booking page"
-                                title={`${t.liveEvent.eventName} · ${t.liveEvent.venue}, ${t.liveEvent.city} · ${t.liveEvent.date}`}
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  if (window.confirm("Open live event booking page?")) {
-                                    window.open(t.liveEvent!.url, "_blank", "noopener,noreferrer");
-                                  }
-                                }}
-                                style={{ background: "none", border: "none", padding: "2px 0", cursor: "pointer", display: "flex", alignItems: "center", flexShrink: 0, color: `rgba(${sr},${sg},${sb},0.85)` }}
-                              >
-                                {<LiveEventsIcon size={12} />}
-                              </button>
                             )}
                             {socialSort && tallyCount(t) > 0 && (
                               <button
