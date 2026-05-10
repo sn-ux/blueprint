@@ -5,90 +5,6 @@ import { signIn, signOut } from "next-auth/react";
 import { useEffect, useRef, useState } from "react";
 import SphereCanvas from "./SphereCanvas";
 
-// ── Genre palette — matches WorldSphere ───────────────────────────────────────
-const COLORS: Record<string, string> = {
-  "Rap / Hip-Hop":                  "#a78bfa",
-  "R&B / Soul / Funk":              "#fb923c",
-  "Rock / Indie / Alternative":     "#f87171",
-  "Pop / Dance":                    "#f472b6",
-  "Jazz / Blues":                   "#60a5fa",
-  "Electronic / Ambient":           "#22d3ee",
-  "Classical / Score / Soundtrack": "#fbbf24",
-  "World / Folk / Regional":        "#4ade80",
-  "Other":                          "#71717a",
-};
-
-// Shortened display labels for genre breakdown text
-const SHORT_GENRE: Record<string, string> = {
-  "Rap / Hip-Hop":                  "Rap",
-  "R&B / Soul / Funk":              "R&B",
-  "Rock / Indie / Alternative":     "Rock",
-  "Pop / Dance":                    "Pop",
-  "Jazz / Blues":                   "Jazz",
-  "Electronic / Ambient":           "Electronic",
-  "Classical / Score / Soundtrack": "Classical",
-  "World / Folk / Regional":        "World",
-  "Other":                          "Other",
-};
-
-// ── Genre breakdown helpers ───────────────────────────────────────────────────
-
-interface GenreSlice { genre: string; label: string; pct: number; color: string }
-
-/**
- * Returns ALL genres present in worlds:
- *  • Non-"Other" genres sorted by percentage descending.
- *  • "Other" is always appended last, regardless of its percentage.
- */
-function calcGenres(worlds: Record<string, number>): GenreSlice[] {
-  const total = Object.values(worlds).reduce((s, c) => s + c, 0) || 1;
-
-  const all: GenreSlice[] = Object.entries(worlds).map(([genre, count]) => ({
-    genre,
-    label: SHORT_GENRE[genre] ?? genre,
-    pct:   Math.round((count / total) * 100),
-    color: COLORS[genre] ?? "#71717a",
-  }));
-
-  const other    = all.find(g => g.genre === "Other");
-  const nonOther = all
-    .filter(g => g.genre !== "Other")
-    .sort((a, b) => b.pct - a.pct);
-
-  return other ? [...nonOther, other] : nonOther;
-}
-
-/**
- * Inline genre list: "Rap 34% · R&B 21% · … · Other 6%"
- * Text is centered so it aligns under centered spheres.
- */
-function GenreBreakdown({
-  worlds,
-  fontSize = 11,
-}: {
-  worlds:   Record<string, number>;
-  fontSize?: number;
-}) {
-  const genres = calcGenres(worlds);
-  return (
-    <p style={{
-      margin:     0,
-      fontSize,
-      lineHeight: 1.8,
-      color:      "rgba(255,255,255,0.36)",
-      textAlign:  "center",
-    }}>
-      {genres.map((g, i) => (
-        <span key={g.genre}>
-          {i > 0 && <span style={{ opacity: 0.40 }}> · </span>}
-          <span style={{ color: g.color, fontWeight: 500 }}>{g.label}</span>
-          {" "}<span>{g.pct}%</span>
-        </span>
-      ))}
-    </p>
-  );
-}
-
 // ── WorldGalleryTile — user with an imported library ─────────────────────────
 // Layout: sphere (square, centered in column) + centered text below.
 // Both desktop and mobile use the same column stack.
@@ -194,16 +110,13 @@ function WorldGalleryTile({
           </p>
           {totalTracks !== null && (
             <p style={{
-              margin:        "0 0 6px",
+              margin:        0,
               fontSize:      11,
               color:         "rgba(255,255,255,0.36)",
               letterSpacing: "0.01em",
             }}>
               {totalTracks.toLocaleString()} tracks
             </p>
-          )}
-          {worlds && (
-            <GenreBreakdown worlds={worlds} fontSize={10} />
           )}
         </div>
       </div>
@@ -407,16 +320,13 @@ export function FriendsWorldCard() {
           </p>
           {totalTracks !== null && (
             <p style={{
-              margin:        "0 0 8px",
+              margin:        0,
               fontSize:      "clamp(12px, 1.3vw, 14px)",
               color:         "rgba(255,255,255,0.36)",
               letterSpacing: "0.01em",
             }}>
               {totalTracks.toLocaleString()} tracks
             </p>
-          )}
-          {worlds && (
-            <GenreBreakdown worlds={worlds} fontSize={12} />
           )}
         </div>
       </div>

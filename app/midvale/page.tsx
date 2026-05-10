@@ -48,18 +48,6 @@ export default async function MidvalePage() {
     <>
       <main style={{ minHeight: "100vh", paddingTop: 80, paddingBottom: 100 }}>
 
-        {/* ── Page title ───────────────────────────────────────────────────── */}
-        <h1 style={{
-          margin:        "0 0 16px",
-          fontSize:      "clamp(32px, 5vw, 52px)",
-          fontWeight:    700,
-          letterSpacing: "-0.03em",
-          color:         "#ffffff",
-          lineHeight:    1.08,
-        }}>
-          Friends
-        </h1>
-
         {/* ── "Viewing as" substitute profile selector ─────────────────────
             Only shows registered users (those with a real userId/account).
             Guests see no selector if no users have connected yet.          */}
