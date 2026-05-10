@@ -505,15 +505,17 @@ function getDisplayTracks(
 ): TrackItem[] {
   const { unheardMode, liveMode, socialSort, liveEventMap, tallyCount } = opts;
 
+  // Always enrich every track with its live event so the ticket icon is visible
+  // regardless of whether liveMode is on. The sort block below is still gated
+  // on liveMode, so ordering is only affected when the button is active.
   const enrich = (t: TrackItem): TrackItem => {
-    if (!liveMode) return t;
     const ev = liveEventMap[normalizeArtist(t.artist)];
     return ev ? { ...t, liveEvent: ev } : { ...t, liveEvent: undefined };
   };
 
-  if (!unheardMode && !liveMode && !socialSort) return displayedTracks;
-
   const base = displayedTracks.map(enrich);
+
+  if (!unheardMode && !liveMode && !socialSort) return base;
 
   // Compare two tracks by unheard status: true first, false second, undefined last.
   // Returns 0 when unheardMode is off so it acts as a no-op secondary comparator.
