@@ -853,16 +853,19 @@ export default function LandingPage() {
   // ── Fetch worlds on mount ────────────────────────────────────────────────
   useEffect(() => {
     // 🔍 WORLD-TRACE
-    console.log("[WORLD-TRACE] personal world fetch START — isMobile at call time:", isMobileRef.current);
-    fetch("/api/world")
+    const worldUrl = "/api/world";
+    console.log("[WORLD-TRACE] personal world fetch START — url:", worldUrl, "isMobile:", isMobileRef.current);
+    fetch(worldUrl)
       .then(r => r.json())
-      .then(d => {
-        // 🔍 WORLD-TRACE
+      .then((d: Record<string, number>) => {
+        const worldKey = Object.keys(d).find(k => k.toLowerCase().includes("world"));
+        // 🔍 WORLD-TRACE — log the raw API response for the "World" genre specifically
         console.log("[WORLD-TRACE] personal world fetch RESOLVED —", {
           isMobile: isMobileRef.current,
           hasData: !!(d && Object.keys(d).length > 0),
-          keys: d ? Object.keys(d) : [],
-          totalTracks: d ? Object.values(d as Record<string,number>).reduce((s:number,c:number)=>s+c,0) : 0,
+          allGenreCounts: d,
+          "World/Folk/Regional count": worldKey ? d[worldKey] : "genre not present",
+          totalTracks: d ? Object.values(d).reduce((s,c)=>s+c,0) : 0,
         });
         if (d && Object.keys(d).length > 0) {
           setWorlds(d);
@@ -876,13 +879,28 @@ export default function LandingPage() {
   useEffect(() => {
     const genres = Object.keys(worlds);
     if (genres.length === 0) return;
+    // 🔍 WORLD-TRACE
+    console.log("[WORLD-TRACE] allTracksData fetch START — genres:", genres, "isMobile:", isMobileRef.current);
     Promise.all(
-      genres.map(g =>
-        fetch(`/api/world/${encodeURIComponent(g)}`)
+      genres.map(g => {
+        const url = `/api/world/${encodeURIComponent(g)}`;
+        return fetch(url)
           .then(r => r.json())
-          .then(d => (d?.tracks ?? []) as TrackItem[])
-          .catch(() => [] as TrackItem[])
-      )
+          .then(d => {
+            const arr = (d?.tracks ?? []) as TrackItem[];
+            if (g.toLowerCase().includes("world")) {
+              // 🔍 WORLD-TRACE — trace the World genre specifically
+              console.log("[WORLD-TRACE] allTracksData World genre resolved —", {
+                url,
+                isMobile: isMobileRef.current,
+                trackCount: arr.length,
+                firstTrack: arr[0] ? { name: arr[0].name, artist: arr[0].artist } : null,
+              });
+            }
+            return arr;
+          })
+          .catch(() => [] as TrackItem[]);
+      })
     ).then(arrays => setAllTracksData(arrays.flat()));
   }, [worlds]);
 
@@ -1026,10 +1044,29 @@ export default function LandingPage() {
     setDeezerPreviews({});
 
     const enc = encodeURIComponent(selected);
-    fetch(`/api/world/${enc}`)
+    const trackFetchUrl = `/api/world/${enc}`;
+    // 🔍 WORLD-TRACE
+    if (selected.toLowerCase().includes("world")) {
+      console.log("[WORLD-TRACE] selected-genre track fetch —", {
+        url: trackFetchUrl,
+        selected,
+        isMobile: isMobileRef.current,
+        substituteProfileAtFetchTime: substituteProfileRef.current,
+      });
+    }
+    fetch(trackFetchUrl)
       .then(r => r.json())
       .then(d => {
         const loadedTracks: TrackItem[] = d?.tracks ?? [];
+        // 🔍 WORLD-TRACE
+        if (selected.toLowerCase().includes("world")) {
+          console.log("[WORLD-TRACE] selected-genre track fetch RESOLVED —", {
+            url: trackFetchUrl,
+            isMobile: isMobileRef.current,
+            trackCount: loadedTracks.length,
+            firstTrack: loadedTracks[0] ? { name: loadedTracks[0].name, artist: loadedTracks[0].artist } : null,
+          });
+        }
         setTracks(loadedTracks);
 
         // Fetch preview URLs via our server-side proxy route (avoids CORS).
@@ -1128,7 +1165,26 @@ export default function LandingPage() {
     const url = subId
       ? `/api/world/${enc}?unheardForUserId=${encodeURIComponent(subId)}`
       : `/api/world/${enc}`;
-    fetch(url).then(r => r.json()).then(d => { setTracks(d?.tracks ?? []); }).catch(() => {});
+    // 🔍 WORLD-TRACE
+    if (selected.toLowerCase().includes("world")) {
+      console.log("[WORLD-TRACE] substituteProfile-change track refetch —", {
+        url,
+        selected,
+        isMobile: isMobileRef.current,
+        substituteProfile: substituteProfileRef.current,
+      });
+    }
+    fetch(url).then(r => r.json()).then(d => {
+      // 🔍 WORLD-TRACE
+      if (selected.toLowerCase().includes("world")) {
+        console.log("[WORLD-TRACE] substituteProfile-change track refetch RESOLVED —", {
+          url,
+          isMobile: isMobileRef.current,
+          trackCount: d?.tracks?.length ?? 0,
+        });
+      }
+      setTracks(d?.tracks ?? []);
+    }).catch(() => {});
   }, [substituteProfile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Auto-rotate company carousel ─────────────────────────────────────────
@@ -1440,11 +1496,13 @@ export default function LandingPage() {
   // ── Canvas render loop ────────────────────────────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current;
-    // 🔍 WORLD-TRACE: log every time canvas effect fires
+    // 🔍 WORLD-TRACE: log every time canvas effect fires — shows the definitive world snapshot
+    const worldKey = Object.keys(worlds).find(k => k.toLowerCase().includes("world"));
     console.log("[WORLD-TRACE] canvas effect fired —", {
       isMobile: isMobileRef.current,
       worldsEmpty: Object.keys(worlds).length === 0,
-      worldKeys: Object.keys(worlds),
+      allGenreCounts: { ...worlds },
+      "World/Folk/Regional count": worldKey ? worlds[worldKey] : "not present",
       selected,
     });
     if (!canvas || Object.keys(worlds).length === 0) return;
