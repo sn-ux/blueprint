@@ -618,6 +618,18 @@ function SocialBadge({ count, color }: { count: number; color: string }) {
 export default function LandingPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
+  // 🔍 WORLD-TRACE: first render — runs on every render but cheap
+  if (typeof window !== "undefined") {
+    const _isMobileNow = window.matchMedia("(max-width: 768px)").matches;
+    const _sub = (() => { try { return sessionStorage.getItem("blueprint:substituteProfile"); } catch { return null; } })();
+    const _restore = (() => { try { return sessionStorage.getItem("blueprint:pendingRestore"); } catch { return null; } })();
+    console.log("[WORLD-TRACE] LandingPage render —", {
+      isMobileViewport: _isMobileNow,
+      substituteProfile: _sub,
+      pendingRestore: _restore,
+    });
+  }
+
   // ── Auth session ──────────────────────────────────────────────────────────────
   const { data: session, status: sessionStatus } = useSession();
 
@@ -727,8 +739,13 @@ export default function LandingPage() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const mq = window.matchMedia("(max-width: 768px)");
+    // 🔍 WORLD-TRACE: log isMobile hydration
+    console.log("[WORLD-TRACE] isMobile effect mount — mq.matches:", mq.matches);
     setIsMobile(mq.matches);
-    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    const handler = (e: MediaQueryListEvent) => {
+      console.log("[WORLD-TRACE] isMobile changed →", e.matches);
+      setIsMobile(e.matches);
+    };
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
   }, []);
@@ -768,7 +785,13 @@ export default function LandingPage() {
   const [liveEventMap,  setLiveEventMap] = useState<Record<string, LiveEvent | null>>({});
   const [substituteProfile, setSubstituteProfile] = useState<{ userId: string; userName: string } | null>(() => {
     if (typeof window === "undefined") return null;
-    try { const raw = sessionStorage.getItem("blueprint:substituteProfile"); return raw ? JSON.parse(raw) : null; } catch { return null; }
+    try {
+      const raw = sessionStorage.getItem("blueprint:substituteProfile");
+      const parsed = raw ? JSON.parse(raw) : null;
+      // 🔍 WORLD-TRACE
+      console.log("[WORLD-TRACE] substituteProfile init from sessionStorage:", parsed);
+      return parsed;
+    } catch { return null; }
   });
   const [unheardMode,   setUnheardMode]  = useState(false);
   const [friendsGenres, setFriendsGenres] = useState<Record<string, number> | null>(null);
@@ -829,9 +852,20 @@ export default function LandingPage() {
 
   // ── Fetch worlds on mount ────────────────────────────────────────────────
   useEffect(() => {
+    // 🔍 WORLD-TRACE
+    console.log("[WORLD-TRACE] personal world fetch START — isMobile at call time:", isMobileRef.current);
     fetch("/api/world")
       .then(r => r.json())
-      .then(d => { if (d && Object.keys(d).length > 0) setWorlds(d); })
+      .then(d => {
+        // 🔍 WORLD-TRACE
+        console.log("[WORLD-TRACE] personal world fetch RESOLVED —", {
+          isMobile: isMobileRef.current,
+          hasData: !!(d && Object.keys(d).length > 0),
+          keys: d ? Object.keys(d) : [],
+          totalTracks: d ? Object.values(d as Record<string,number>).reduce((s:number,c:number)=>s+c,0) : 0,
+        });
+        if (d && Object.keys(d).length > 0) setWorlds(d);
+      })
       .catch(() => {});
   }, []);
 
@@ -855,6 +889,11 @@ export default function LandingPage() {
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem("blueprint:pendingRestore");
+      // 🔍 WORLD-TRACE
+      console.log("[WORLD-TRACE] pendingRestore effect —", {
+        isMobile: isMobileRef.current,
+        raw,
+      });
       if (!raw) return;
       const state = JSON.parse(raw) as {
         originKind?: string; route: string; genre: string | null;
@@ -865,6 +904,8 @@ export default function LandingPage() {
       // older stored states may still carry.
       const myRoute = typeof window !== "undefined" ? window.location.pathname : "/";
       const routeMatches = state.route === myRoute || state.route === "/world";
+      // 🔍 WORLD-TRACE
+      console.log("[WORLD-TRACE] pendingRestore — routeMatches:", routeMatches, "state.route:", state.route, "myRoute:", myRoute, "genre:", state.genre);
       if (!routeMatches) return;
       sessionStorage.removeItem("blueprint:pendingRestore");
 
@@ -1009,9 +1050,19 @@ export default function LandingPage() {
 
   // ── Friends genres fetch (always once on mount) ───────────────────────────
   useEffect(() => {
+    // 🔍 WORLD-TRACE
+    console.log("[WORLD-TRACE] friends genres fetch START — isMobile at call time:", isMobileRef.current);
     fetch("/api/world/friends")
       .then(r => r.json())
-      .then(d => setFriendsGenres(d ?? {}))
+      .then(d => {
+        // 🔍 WORLD-TRACE
+        console.log("[WORLD-TRACE] friends genres fetch RESOLVED —", {
+          isMobile: isMobileRef.current,
+          keys: d ? Object.keys(d) : [],
+          totalTracks: d ? Object.values(d as Record<string,number>).reduce((s:number,c:number)=>s+c,0) : 0,
+        });
+        setFriendsGenres(d ?? {});
+      })
       .catch(() => setFriendsGenres({}));
   }, []);
 
@@ -1369,6 +1420,13 @@ export default function LandingPage() {
   // ── Canvas render loop ────────────────────────────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current;
+    // 🔍 WORLD-TRACE: log every time canvas effect fires
+    console.log("[WORLD-TRACE] canvas effect fired —", {
+      isMobile: isMobileRef.current,
+      worldsEmpty: Object.keys(worlds).length === 0,
+      worldKeys: Object.keys(worlds),
+      selected,
+    });
     if (!canvas || Object.keys(worlds).length === 0) return;
 
     // Cap DPR at 2 — anything higher (e.g. 3× mobile screens) hits diminishing
