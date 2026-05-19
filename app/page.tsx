@@ -693,6 +693,9 @@ export default function LandingPage() {
   const pendingAudioRef   = useRef<HTMLAudioElement | null>(null);
 
   // ── Real data (same path as /world — starts empty, filled from API) ─────────
+  // worldsHydratedRef: flips to true the first time setWorlds receives real data.
+  // Guards all Friends-world-derived state from applying before personal data lands.
+  const worldsHydratedRef = useRef(false);
   const [worlds,   setWorlds]   = useState<Record<string, number>>({});
   const [subgenres, setSubgenres] = useState<SubItem[]>([]);
   const [tracks,   setTracks]   = useState<TrackItem[]>([]);
@@ -783,16 +786,13 @@ export default function LandingPage() {
   const [liveMode,      setLiveMode]     = useState(false);
   const [liveLoading,   setLiveLoading]  = useState(false);
   const [liveEventMap,  setLiveEventMap] = useState<Record<string, LiveEvent | null>>({});
-  const [substituteProfile, setSubstituteProfile] = useState<{ userId: string; userName: string } | null>(() => {
-    if (typeof window === "undefined") return null;
-    try {
-      const raw = sessionStorage.getItem("blueprint:substituteProfile");
-      const parsed = raw ? JSON.parse(raw) : null;
-      // 🔍 WORLD-TRACE
-      console.log("[WORLD-TRACE] substituteProfile init from sessionStorage:", parsed);
-      return parsed;
-    } catch { return null; }
-  });
+  // Homepage always starts with no substitute profile.
+  // A stale blueprint:substituteProfile in sessionStorage from a previous Friends
+  // World visit must never redirect the homepage away from the authenticated user's
+  // own personal world.  The profile is picked up again only if the user explicitly
+  // selects one via SubstituteSelector (which fires blueprint:substituteChange),
+  // or when they navigate to Friends World via the Venn button.
+  const [substituteProfile, setSubstituteProfile] = useState<{ userId: string; userName: string } | null>(null);
   const [unheardMode,   setUnheardMode]  = useState(false);
   const [friendsGenres, setFriendsGenres] = useState<Record<string, number> | null>(null);
   const [friendsSubgenres, setFriendsSubgenres] = useState<Record<string, string[]>>({});
@@ -864,7 +864,10 @@ export default function LandingPage() {
           keys: d ? Object.keys(d) : [],
           totalTracks: d ? Object.values(d as Record<string,number>).reduce((s:number,c:number)=>s+c,0) : 0,
         });
-        if (d && Object.keys(d).length > 0) setWorlds(d);
+        if (d && Object.keys(d).length > 0) {
+          setWorlds(d);
+          worldsHydratedRef.current = true; // personal world data is now canonical
+        }
       })
       .catch(() => {});
   }, []);
@@ -884,15 +887,26 @@ export default function LandingPage() {
   }, [worlds]);
 
   // ── Venn back-restore: re-apply state when returning from Friends World ────
-  // Reads blueprint:pendingRestore on mount.  If the stored route matches this
-  // page's pathname ("/"), immediately writes camera refs and schedules restore.
+  // Fires only AFTER personal world data has hydrated (worlds non-empty).
+  // This guarantees that the authenticated user's world is canonical before any
+  // Friends-World-derived camera/genre/toggle state can be applied.
+  //
+  // A one-shot ref prevents the restore from re-running on subsequent worlds
+  // changes (e.g. auto-sync).
+  const pendingRestoreAppliedRef = useRef(false);
   useEffect(() => {
+    // Gate: personal world must resolve before any Friends-world state is restored.
+    if (!worldsHydratedRef.current) return;
+    if (pendingRestoreAppliedRef.current) return;
+    pendingRestoreAppliedRef.current = true;
+
     try {
       const raw = sessionStorage.getItem("blueprint:pendingRestore");
       // 🔍 WORLD-TRACE
-      console.log("[WORLD-TRACE] pendingRestore effect —", {
+      console.log("[WORLD-TRACE] pendingRestore effect (post-hydration) —", {
         isMobile: isMobileRef.current,
         raw,
+        worldKeys: Object.keys(worlds),
       });
       if (!raw) return;
       const state = JSON.parse(raw) as {
@@ -904,8 +918,6 @@ export default function LandingPage() {
       // older stored states may still carry.
       const myRoute = typeof window !== "undefined" ? window.location.pathname : "/";
       const routeMatches = state.route === myRoute || state.route === "/world";
-      // 🔍 WORLD-TRACE
-      console.log("[WORLD-TRACE] pendingRestore — routeMatches:", routeMatches, "state.route:", state.route, "myRoute:", myRoute, "genre:", state.genre);
       if (!routeMatches) return;
       sessionStorage.removeItem("blueprint:pendingRestore");
 
@@ -924,7 +936,8 @@ export default function LandingPage() {
       setLiveMode  (state.liveMode    ?? false);
 
       // Restore genre — triggers track/subgenre fetch.
-      if (state.genre) {
+      // Only restore genres that actually exist in the personal world.
+      if (state.genre && state.genre in worlds) {
         if (state.subgenre) {
           pendingSubgenreRef.current = state.subgenre;
           zoomTargetRef.current      = Math.max(state.zoom ?? 2.5, 3.2);
@@ -934,7 +947,7 @@ export default function LandingPage() {
         setSheetSnap(1); // ensure mobile sheet is open
       }
     } catch { /* malformed storage or unavailable — skip */ }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [worlds]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Apply pending subgenre once subgenre list loads (Venn back-restore) ──
   useEffect(() => {
@@ -1048,10 +1061,18 @@ export default function LandingPage() {
       .catch(() => setSubgenres([]));
   }, [selected]);
 
-  // ── Friends genres fetch (always once on mount) ───────────────────────────
+  // ── Friends genres fetch — deferred until personal world has hydrated ────────
+  // friendsGenres is only used by the VennButton enabled/disabled check.
+  // Fetching it eagerly on mount raced with the personal world fetch and could
+  // arrive first, producing a window where friends-world data existed in state
+  // before the personal world was canonical.  By gating on worlds being non-empty
+  // we guarantee the personal world is the first data the sphere ever sees.
+  const friendsGenresFetchedRef = useRef(false);
   useEffect(() => {
+    if (!worldsHydratedRef.current || friendsGenresFetchedRef.current) return;
+    friendsGenresFetchedRef.current = true;
     // 🔍 WORLD-TRACE
-    console.log("[WORLD-TRACE] friends genres fetch START — isMobile at call time:", isMobileRef.current);
+    console.log("[WORLD-TRACE] friends genres fetch START (post-hydration) — isMobile:", isMobileRef.current, "worldKeys:", Object.keys(worlds));
     fetch("/api/world/friends")
       .then(r => r.json())
       .then(d => {
@@ -1059,12 +1080,11 @@ export default function LandingPage() {
         console.log("[WORLD-TRACE] friends genres fetch RESOLVED —", {
           isMobile: isMobileRef.current,
           keys: d ? Object.keys(d) : [],
-          totalTracks: d ? Object.values(d as Record<string,number>).reduce((s:number,c:number)=>s+c,0) : 0,
         });
         setFriendsGenres(d ?? {});
       })
       .catch(() => setFriendsGenres({}));
-  }, []);
+  }, [worlds]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Friends subgenres lazy fetch ──────────────────────────────────────────
   useEffect(() => {
