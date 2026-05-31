@@ -485,7 +485,7 @@ function possessiveHeadline(name: string | undefined): string {
 // ── getDisplayTracks — canonical sort function (desktop + mobile share this) ─
 // Extracted from the useMemo so it is a named, importable, testable unit.
 // Both the desktop right-panel and the mobile bottom-sheet feed off the result
-// of this function via the sortedTracks useMemo — there is no platform-specific
+// of this function via the visibleTrackRows useMemo — there is no platform-specific
 // sort path anywhere in WorldSphere.
 //
 // Sort priority:
@@ -1945,7 +1945,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
   //   3. Social sort   — by socialCount desc (if socialSort)
   //   4. Default       — original artist/name order from API
   // Within each tier the secondary tiers still apply for further ordering.
-  const sortedTracks = useMemo(() => {
+  const visibleTrackRows = useMemo(() => {
     const result = getDisplayTracks(displayedTracks, {
       unheardMode, liveMode, socialSort, liveEventMap,
       tallyCount,
@@ -1954,7 +1954,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
     // ── Dev-only debug log ───────────────────────────────────────────────────
     if (process.env.NODE_ENV === "development" && unheardMode) {
       const platform = typeof window !== "undefined" && window.innerWidth <= 768 ? "mobile" : "desktop";
-      console.log(`[sortedTracks] platform=${platform}`, {
+      console.log(`[visibleTrackRows] platform=${platform}`, {
         genre:             selected,
         subgenre:          focusedSubgenre,
         substituteUserId:  substituteProfileRef.current?.userId,
@@ -2161,7 +2161,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
       // Build the ordered Spotify URI list from the exact array rendered in the
       // Track tab.  Tracks missing a spotifyId are filtered out here; the server
       // also guards against them in its dedup pass.
-      const orderedSpotifyIds = sortedTracks
+      const orderedSpotifyIds = visibleTrackRows
         .map(t => t.spotifyId)
         .filter((id): id is string => !!id);
 
@@ -2176,11 +2176,10 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
         genre:     selected,
         ...(userId          ? { userId }                        : {}),
         ...(focusedSubgenre ? { subgenre: focusedSubgenre }     : {}),
-        // Pass the client-side ordered IDs so the server doesn't re-sort from DB.
-        // Only include for user worlds; friends world still derives server-side.
-        ...(!friendsWorld && orderedSpotifyIds.length > 0
-          ? { trackIds: orderedSpotifyIds }
-          : {}),
+        // Always pass the client-side ordered IDs so the server uses the exact
+        // order visible in the Track tab — including friends world, where social,
+        // live, and unheard sorting must be preserved.
+        ...(orderedSpotifyIds.length > 0 ? { trackIds: orderedSpotifyIds } : {}),
       };
 
       const res  = await fetch("/api/spotify/playlist-push", {
@@ -2502,7 +2501,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                     <p className="text-zinc-700 text-xs px-7 py-8 text-center">No tracks</p>
                   ) : (
                     <div className="flex flex-col pt-1 pb-6">
-                      {sortedTracks.map((t, idx) => {
+                      {visibleTrackRows.map((t, idx) => {
                         const canPlay = !!(deezerPreviews[t.id] || t.previewUrl);
                         const isPending = pendingTrackId === t.id;
                         const isActive  = nowPlayingId === t.id || isPending;
@@ -2759,7 +2758,7 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
                 <p className="text-zinc-700 text-xs px-6 py-8 text-center">No tracks</p>
               ) : (
                 <div className="flex flex-col pt-1 pb-8">
-                  {sortedTracks.map((t, idx) => {
+                  {visibleTrackRows.map((t, idx) => {
                     const canPlay   = !!(deezerPreviews[t.id] || t.previewUrl);
                     const isPending = pendingTrackId === t.id;
                     const isActive  = nowPlayingId === t.id || isPending;

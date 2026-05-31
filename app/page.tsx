@@ -2997,8 +2997,8 @@ export default function LandingPage() {
     } catch {}
   };
 
-  // ── sortedTracks ──────────────────────────────────────────────────────────
-  const sortedTracks: TrackItem[] = (() => {
+  // ── visibleTrackRows ──────────────────────────────────────────────────────────
+  const visibleTrackRows: TrackItem[] = (() => {
     if (!unheardMode && !liveMode && !socialSort) return displayedTracks;
     const withLive = displayedTracks.map(t => {
       if (!liveMode) return t;
@@ -3048,7 +3048,7 @@ export default function LandingPage() {
       // Build the ordered Spotify URI list from the exact array rendered in the
       // Track tab — same sort/filter state the user sees.  Tracks missing a
       // spotifyId are skipped here; the server will also guard against them.
-      const orderedSpotifyIds = sortedTracks
+      const orderedSpotifyIds = visibleTrackRows
         .map(t => t.spotifyId)
         .filter((id): id is string => !!id);
 
@@ -3312,11 +3312,11 @@ export default function LandingPage() {
                 </div>
               )}
               <div className="overflow-y-auto flex-1" style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(255,255,255,0.08) transparent" }}>
-                {sortedTracks.length === 0 ? (
+                {visibleTrackRows.length === 0 ? (
                   <p className="text-zinc-700 text-xs px-7 py-8 text-center">No tracks</p>
                 ) : (
                   <div className="flex flex-col pt-1 pb-6">
-                    {sortedTracks.map((t, idx) => {
+                    {visibleTrackRows.map((t, idx) => {
                       const canPlay = !!(deezerPreviews[t.id] || t.previewUrl || (spotifyReady && !notPremium && t.spotifyId));
                       const isPending = pendingTrackId === t.id;
                       const isActive  = nowPlayingId === t.id || isPending;
@@ -3536,11 +3536,11 @@ export default function LandingPage() {
                   className="overflow-y-auto flex-1"
                   style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" } as React.CSSProperties}
                 >
-                  {sortedTracks.length === 0 ? (
+                  {visibleTrackRows.length === 0 ? (
                     <p className="text-zinc-700 text-xs px-6 py-8 text-center">No tracks</p>
                   ) : (
                     <div className="flex flex-col pt-1 pb-8">
-                      {sortedTracks.map((t, idx) => {
+                      {visibleTrackRows.map((t, idx) => {
                         const canPlay = !!(deezerPreviews[t.id] || t.previewUrl || (spotifyReady && !notPremium && t.spotifyId));
                         const isPending = pendingTrackId === t.id;
                         const isActive  = nowPlayingId === t.id || isPending;
