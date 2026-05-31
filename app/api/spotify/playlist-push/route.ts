@@ -5,9 +5,12 @@
 //
 // Body:
 //   worldType : "user" | "friends"
-//   userId?   : string   — the DB userId whose world to pull tracks from (user worlds only)
-//   genre     : string   — blueprintWorld value
-//   subgenre? : string   — blueprintSubgenre value (optional filter)
+//   userId?   : string     — the DB userId whose world to pull tracks from (user worlds only)
+//   genre     : string     — blueprintWorld value
+//   subgenre? : string     — blueprintSubgenre value (optional filter)
+//   trackIds? : string[]   — ordered Spotify track IDs from the client UI.
+//                            When provided, the server uses this order exactly
+//                            (matching the Track tab) instead of re-sorting from DB.
 //
 // The playlist is ALWAYS created in the account of whoever is logged in —
 // not necessarily the owner of the world being viewed.
@@ -102,6 +105,10 @@ export async function POST(req: NextRequest) {
     userId?: string;
     genre: string;
     subgenre?: string;
+    /** Ordered Spotify track IDs from the client-side UI.  When present (and
+     *  non-empty) the server uses this list as-is — preserving the exact sort
+     *  order the user sees in the Track tab — instead of re-sorting from DB. */
+    trackIds?: string[];
   };
 
   try {
@@ -110,56 +117,72 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const { worldType, userId, genre, subgenre } = body;
+  const { worldType, userId, genre, subgenre, trackIds } = body;
 
   if (!genre) {
     return NextResponse.json({ error: "genre is required" }, { status: 400 });
   }
 
-  // ── Fetch tracks from DB ─────────────────────────────────────────────────────
+  // ── Resolve ordered Spotify IDs ──────────────────────────────────────────────
+  // Priority: client-supplied trackIds (UI order) > DB fallback (alphabetical).
+  // The client always sends trackIds for user worlds so the fallback path exists
+  // for friends worlds and any future callers that omit the field.
 
   let spotifyIds: string[] = [];
 
-  if (worldType === "user") {
-    // Resolve which userId's tracks to pull.
-    // If userId is provided it refers to the world owner; if not, use the
-    // currently logged-in user's own world.
-    const targetUserId = userId ?? user.id;
-
-    const rows = await prisma.track.findMany({
-      where: {
-        userId: targetUserId,
-        blueprintWorld: genre,
-        ...(subgenre ? { blueprintSubgenre: subgenre } : {}),
-      },
-      select: { spotifyId: true },
-      orderBy: [{ artist: "asc" }, { name: "asc" }],
-    });
-
-    // Deduplicate by spotifyId, skip missing
+  if (Array.isArray(trackIds) && trackIds.length > 0) {
+    // Client sent the pre-ordered list.  Dedup and drop any empty strings that
+    // may have slipped through (tracks missing a Spotify URI).
     const seen = new Set<string>();
-    for (const r of rows) {
-      if (r.spotifyId && !seen.has(r.spotifyId)) {
-        seen.add(r.spotifyId);
-        spotifyIds.push(r.spotifyId);
+    for (const id of trackIds) {
+      if (id && !seen.has(id)) {
+        seen.add(id);
+        spotifyIds.push(id);
       }
     }
   } else {
-    // Friends world: aggregate across ALL users, dedupe, filter by subgenre
-    const rows = await prisma.track.findMany({
-      where: {
-        blueprintWorld: genre,
-        ...(subgenre ? { blueprintSubgenre: subgenre } : {}),
-      },
-      select: { spotifyId: true },
-      orderBy: [{ artist: "asc" }, { name: "asc" }],
-    });
+    // Fallback: re-derive from DB (friends world, or legacy callers).
+    if (worldType === "user") {
+      // Resolve which userId's tracks to pull.
+      // If userId is provided it refers to the world owner; if not, use the
+      // currently logged-in user's own world.
+      const targetUserId = userId ?? user.id;
 
-    const seen = new Set<string>();
-    for (const r of rows) {
-      if (r.spotifyId && !seen.has(r.spotifyId)) {
-        seen.add(r.spotifyId);
-        spotifyIds.push(r.spotifyId);
+      const rows = await prisma.track.findMany({
+        where: {
+          userId: targetUserId,
+          blueprintWorld: genre,
+          ...(subgenre ? { blueprintSubgenre: subgenre } : {}),
+        },
+        select: { spotifyId: true },
+        orderBy: [{ artist: "asc" }, { name: "asc" }],
+      });
+
+      // Deduplicate by spotifyId, skip missing
+      const seen = new Set<string>();
+      for (const r of rows) {
+        if (r.spotifyId && !seen.has(r.spotifyId)) {
+          seen.add(r.spotifyId);
+          spotifyIds.push(r.spotifyId);
+        }
+      }
+    } else {
+      // Friends world: aggregate across ALL users, dedupe, filter by subgenre
+      const rows = await prisma.track.findMany({
+        where: {
+          blueprintWorld: genre,
+          ...(subgenre ? { blueprintSubgenre: subgenre } : {}),
+        },
+        select: { spotifyId: true },
+        orderBy: [{ artist: "asc" }, { name: "asc" }],
+      });
+
+      const seen = new Set<string>();
+      for (const r of rows) {
+        if (r.spotifyId && !seen.has(r.spotifyId)) {
+          seen.add(r.spotifyId);
+          spotifyIds.push(r.spotifyId);
+        }
       }
     }
   }

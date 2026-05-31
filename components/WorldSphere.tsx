@@ -2158,16 +2158,29 @@ export default function WorldSphere({ userId, backHref, userName, friendsWorld =
     }
 
     try {
+      // Build the ordered Spotify URI list from the exact array rendered in the
+      // Track tab.  Tracks missing a spotifyId are filtered out here; the server
+      // also guards against them in its dedup pass.
+      const orderedSpotifyIds = sortedTracks
+        .map(t => t.spotifyId)
+        .filter((id): id is string => !!id);
+
       const body: {
         worldType: "user" | "friends";
         userId?:   string;
         genre:     string;
         subgenre?: string;
+        trackIds?: string[];
       } = {
         worldType: friendsWorld ? "friends" : "user",
         genre:     selected,
         ...(userId          ? { userId }                        : {}),
         ...(focusedSubgenre ? { subgenre: focusedSubgenre }     : {}),
+        // Pass the client-side ordered IDs so the server doesn't re-sort from DB.
+        // Only include for user worlds; friends world still derives server-side.
+        ...(!friendsWorld && orderedSpotifyIds.length > 0
+          ? { trackIds: orderedSpotifyIds }
+          : {}),
       };
 
       const res  = await fetch("/api/spotify/playlist-push", {

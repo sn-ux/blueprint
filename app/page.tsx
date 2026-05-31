@@ -633,6 +633,16 @@ export default function LandingPage() {
   // ── Auth session ──────────────────────────────────────────────────────────────
   const { data: session, status: sessionStatus } = useSession();
 
+  // ── Canonical world-owner identity ───────────────────────────────────────────
+  // Mirrors the `userId` prop that WorldSphere receives from its server page.
+  // Used to build explicit ?userId= params on all world API calls so that mobile
+  // (where the session cookie may not yet be resolved at fetch time) gets the
+  // same deterministic result as desktop — never the DB fallback user.
+  // Null while the session is still loading; set once authenticated/unauthenticated.
+  const worldOwnerId: string | null = sessionStatus !== "loading"
+    ? (session?.user?.id ?? null)
+    : null;
+
   // ── Audio playback ────────────────────────────────────────────────────────────
   // Preview: plain HTML5 Audio. Full: Spotify Web Playback SDK.
   const [nowPlayingId, setNowPlayingId] = useState<string | null>(null);
@@ -850,18 +860,39 @@ export default function LandingPage() {
   const cinematicCanvasRef      = useRef<HTMLCanvasElement | null>(null);
   const [isRecording, setIsRecording] = useState(false);
 
-  // ── Fetch worlds on mount ────────────────────────────────────────────────
+  // ── Fetch world counts — mirrors WorldSphere's explicit-userId approach ───────
+  // Gate on session resolution so we always have the authenticated userId before
+  // hitting the API.  Without this gate, on mobile the session cookie may not be
+  // attached to the very first request, causing the server to fall through to the
+  // DB's first-user fallback — returning a different user's genre counts.
+  //
+  // Passing ?userId=<id> makes the request behave identically to the
+  // /midvale/[userId] WorldSphere path: the server uses the explicit userId, not
+  // the cookie, so the correct user is resolved on every platform/browser.
+  //
+  // deps: [worldOwnerId] — fires once worldOwnerId transitions from null (loading)
+  // to a real value (or empty string for unauthenticated visitors).
+  const worldFetchInitiatedRef = useRef(false);
   useEffect(() => {
+    if (worldOwnerId === null) return; // session still loading — wait
+    if (worldFetchInitiatedRef.current) return; // fire only once per mount
+    worldFetchInitiatedRef.current = true;
+
+    // Build the same URL pattern WorldSphere uses: explicit ?userId when known.
+    const worldUrl = worldOwnerId
+      ? `/api/world?userId=${encodeURIComponent(worldOwnerId)}`
+      : "/api/world";
+
     // 🔍 WORLD-TRACE
-    const worldUrl = "/api/world";
-    console.log("[WORLD-TRACE] personal world fetch START — url:", worldUrl, "isMobile:", isMobileRef.current);
+    console.log("[WORLD-TRACE] personal world fetch START — url:", worldUrl, "isMobile:", isMobileRef.current, "worldOwnerId:", worldOwnerId);
     fetch(worldUrl)
       .then(r => r.json())
       .then((d: Record<string, number>) => {
         const worldKey = Object.keys(d).find(k => k.toLowerCase().includes("world"));
-        // 🔍 WORLD-TRACE — log the raw API response for the "World" genre specifically
+        // 🔍 WORLD-TRACE
         console.log("[WORLD-TRACE] personal world fetch RESOLVED —", {
           isMobile: isMobileRef.current,
+          url: worldUrl,
           hasData: !!(d && Object.keys(d).length > 0),
           allGenreCounts: d,
           "World/Folk/Regional count": worldKey ? d[worldKey] : "genre not present",
@@ -873,7 +904,7 @@ export default function LandingPage() {
         }
       })
       .catch(() => {});
-  }, []);
+  }, [worldOwnerId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Fetch all genre tracks once worlds loads (for stats derivation) ──────
   useEffect(() => {
@@ -881,9 +912,10 @@ export default function LandingPage() {
     if (genres.length === 0) return;
     // 🔍 WORLD-TRACE
     console.log("[WORLD-TRACE] allTracksData fetch START — genres:", genres, "isMobile:", isMobileRef.current);
+    const userParam = worldOwnerId ? `?userId=${encodeURIComponent(worldOwnerId)}` : "";
     Promise.all(
       genres.map(g => {
-        const url = `/api/world/${encodeURIComponent(g)}`;
+        const url = `/api/world/${encodeURIComponent(g)}${userParam}`;
         return fetch(url)
           .then(r => r.json())
           .then(d => {
@@ -1044,7 +1076,8 @@ export default function LandingPage() {
     setDeezerPreviews({});
 
     const enc = encodeURIComponent(selected);
-    const trackFetchUrl = `/api/world/${enc}`;
+    const _userParam = worldOwnerId ? `?userId=${encodeURIComponent(worldOwnerId)}` : "";
+    const trackFetchUrl = `/api/world/${enc}${_userParam}`;
     // 🔍 WORLD-TRACE
     if (selected.toLowerCase().includes("world")) {
       console.log("[WORLD-TRACE] selected-genre track fetch —", {
@@ -1092,7 +1125,8 @@ export default function LandingPage() {
       })
       .catch(() => setTracks([]));
 
-    fetch(`/api/world/${enc}/subgenres`)
+    const _subUserParam = worldOwnerId ? `?userId=${encodeURIComponent(worldOwnerId)}` : "";
+    fetch(`/api/world/${enc}/subgenres${_subUserParam}`)
       .then(r => r.json())
       .then(d => setSubgenres(d?.subgenres ?? []))
       .catch(() => setSubgenres([]));
@@ -1162,9 +1196,9 @@ export default function LandingPage() {
     if (!selected) return;
     const enc = encodeURIComponent(selected);
     const subId = substituteProfileRef.current?.userId;
-    const url = subId
-      ? `/api/world/${enc}?unheardForUserId=${encodeURIComponent(subId)}`
-      : `/api/world/${enc}`;
+    const _ownerParam = worldOwnerId ? `?userId=${encodeURIComponent(worldOwnerId)}` : "";
+    const _subParam   = subId ? `${_ownerParam ? "&" : "?"}unheardForUserId=${encodeURIComponent(subId)}` : "";
+    const url = `/api/world/${enc}${_ownerParam}${_subParam}`;
     // 🔍 WORLD-TRACE
     if (selected.toLowerCase().includes("world")) {
       console.log("[WORLD-TRACE] substituteProfile-change track refetch —", {
@@ -3011,10 +3045,19 @@ export default function LandingPage() {
       return;
     }
     try {
+      // Build the ordered Spotify URI list from the exact array rendered in the
+      // Track tab — same sort/filter state the user sees.  Tracks missing a
+      // spotifyId are skipped here; the server will also guard against them.
+      const orderedSpotifyIds = sortedTracks
+        .map(t => t.spotifyId)
+        .filter((id): id is string => !!id);
+
       const body = {
-        worldType: "user" as const,
-        genre:     selected,
+        worldType:        "user" as const,
+        genre:            selected,
         ...(focusedSubgenre ? { subgenre: focusedSubgenre } : {}),
+        // Pass the client-side ordered IDs so the server doesn't re-sort from DB.
+        trackIds:         orderedSpotifyIds,
       };
       const res  = await fetch("/api/spotify/playlist-push", {
         method:      "POST",
