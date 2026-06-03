@@ -861,30 +861,31 @@ export default function LandingPage() {
   const [isRecording, setIsRecording] = useState(false);
 
   // ── Fetch world counts — mirrors WorldSphere's explicit-userId approach ───────
-  // Gate on session resolution so we always have the authenticated userId before
-  // hitting the API.  Without this gate, on mobile the session cookie may not be
-  // attached to the very first request, causing the server to fall through to the
-  // DB's first-user fallback — returning a different user's genre counts.
+  // Gate on session FULLY RESOLVED (not "loading") before hitting the API.
+  // When authenticated, pass ?userId=<id> so the server uses the explicit userId —
+  // identical to how /midvale/[userId] WorldSphere avoids the mobile session-cookie
+  // race that would return the wrong DB fallback user.
+  // When unauthenticated, fall through to /api/world (session/fallback path) so
+  // the world still renders for logged-out visitors and expired sessions.
   //
-  // Passing ?userId=<id> makes the request behave identically to the
-  // /midvale/[userId] WorldSphere path: the server uses the explicit userId, not
-  // the cookie, so the correct user is resolved on every platform/browser.
-  //
-  // deps: [worldOwnerId] — fires once worldOwnerId transitions from null (loading)
-  // to a real value (or empty string for unauthenticated visitors).
+  // NOTE: worldOwnerId is null for BOTH "loading" AND "unauthenticated" states.
+  // Gate on sessionStatus directly so unauthenticated visitors aren't permanently
+  // blocked — previously gating on (worldOwnerId === null) caused the world to
+  // never fetch for any unauthenticated visit, leaving a black canvas.
   const worldFetchInitiatedRef = useRef(false);
   useEffect(() => {
-    if (worldOwnerId === null) return; // session still loading — wait
+    if (sessionStatus === "loading") return; // session not yet resolved — wait
     if (worldFetchInitiatedRef.current) return; // fire only once per mount
     worldFetchInitiatedRef.current = true;
 
-    // Build the same URL pattern WorldSphere uses: explicit ?userId when known.
+    // Authenticated: explicit userId (correct user, immune to mobile cookie race).
+    // Unauthenticated: /api/world with no param (server session/DB fallback).
     const worldUrl = worldOwnerId
       ? `/api/world?userId=${encodeURIComponent(worldOwnerId)}`
       : "/api/world";
 
     // 🔍 WORLD-TRACE
-    console.log("[WORLD-TRACE] personal world fetch START — url:", worldUrl, "isMobile:", isMobileRef.current, "worldOwnerId:", worldOwnerId);
+    console.log("[WORLD-TRACE] personal world fetch START — url:", worldUrl, "isMobile:", isMobileRef.current, "worldOwnerId:", worldOwnerId, "sessionStatus:", sessionStatus);
     fetch(worldUrl)
       .then(r => r.json())
       .then((d: Record<string, number>) => {
@@ -904,7 +905,7 @@ export default function LandingPage() {
         }
       })
       .catch(() => {});
-  }, [worldOwnerId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sessionStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Fetch all genre tracks once worlds loads (for stats derivation) ──────
   useEffect(() => {
