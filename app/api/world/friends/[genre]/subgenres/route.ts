@@ -13,9 +13,10 @@ export async function GET(
   const { genre } = await context.params;
   const blueprintWorld = decodeURIComponent(genre);
 
-  // Only need spotifyId + subgenre — minimal query.
+  // Only need spotifyId + subgenre — minimal query. Excludes users whose
+  // Spotify access is no longer valid (midvaleHidden — see lib/spotify-import.ts).
   const allTracks = await prisma.track.findMany({
-    where:  { blueprintWorld },
+    where:  { blueprintWorld, user: { midvaleHidden: false } },
     select: { spotifyId: true, blueprintSubgenre: true },
   });
 

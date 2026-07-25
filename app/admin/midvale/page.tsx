@@ -18,6 +18,7 @@ type User = {
   hasRefreshToken:  boolean;
   spotifyScope:     string | null;
   tokenExpiresAt:   number | null;
+  midvaleHidden:    boolean;
 };
 
 type RefreshOutcome = {
@@ -207,6 +208,11 @@ export default function AdminMidvalePage() {
                 </span>
                 {!u.spotifyConnected && (
                   <span style={{ color: "#a16207" }}>⚠ no Spotify account</span>
+                )}
+                {u.midvaleHidden && (
+                  <span style={{ color: "#f87171", marginRight: 10 }}>
+                    ⊘ hidden from Friends (Spotify access invalid)
+                  </span>
                 )}
                 {u.spotifyConnected && needsReconn && (
                   <span style={{ color: "#f97316" }}>

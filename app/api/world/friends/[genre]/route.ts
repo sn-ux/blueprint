@@ -32,9 +32,10 @@ export async function GET(
   const { genre } = await context.params;
   const blueprintWorld = decodeURIComponent(genre);
 
-  // All tracks for this world across every user.
+  // All tracks for this world across every user. Excludes users whose
+  // Spotify access is no longer valid (midvaleHidden — see lib/spotify-import.ts).
   const allTracks: RawTrack[] = await prisma.track.findMany({
-    where:   { blueprintWorld },
+    where:   { blueprintWorld, user: { midvaleHidden: false } },
     select:  {
       id:                true,
       name:              true,

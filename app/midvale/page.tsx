@@ -15,7 +15,11 @@ const SLOT_NAMES = ["Surya", "Roommate 1", "Roommate 2", "Roommate 3", "Roommate
 
 export default async function MidvalePage() {
   // Fetch users ordered by id (CUIDs are time-sortable).
+  // Excludes users flagged midvaleHidden — set automatically when their
+  // Spotify access is no longer valid (e.g. removed from the Developer
+  // Dashboard allowlist, or app access revoked) — see lib/spotify-import.ts.
   const users = await prisma.user.findMany({
+    where:   { midvaleHidden: false },
     orderBy: { id: "asc" },
     select:  { id: true, name: true },
   });

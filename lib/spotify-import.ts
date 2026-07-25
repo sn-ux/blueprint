@@ -360,6 +360,14 @@ export async function runLikedSongsImport(userId: string): Promise<ImportResult>
     `  dbTrackCountAfter              = ${dbTrackCountAfter}`
   );
 
+  // A successful sync proves Spotify access is currently valid — clear any
+  // previous auto-hide from a past 401/403 (e.g. user was re-added to the
+  // Developer Dashboard allowlist).
+  await prisma.user.update({
+    where: { id: userId },
+    data:  { midvaleHidden: false },
+  }).catch(() => {});
+
   return {
     success:    true,
     userId,
@@ -405,6 +413,9 @@ export async function runLikedSongsImport(userId: string): Promise<ImportResult>
 
     if (status === 401) {
       console.error(`[import] 401 for userId=${userId} — token refresh failed or invalid`);
+      // Refresh token is dead — Spotify access is no longer valid (e.g. the
+      // user revoked app access). Hide from Friends until access is restored.
+      await prisma.user.update({ where: { id: userId }, data: { midvaleHidden: true } }).catch(() => {});
       return failResult(
         userId,
         "Spotify returned 401 — access token invalid or refresh failed. User needs to reconnect Spotify.",
@@ -414,6 +425,10 @@ export async function runLikedSongsImport(userId: string): Promise<ImportResult>
 
     if (status === 403) {
       console.error(`[import] 403 for userId=${userId} — scope or permission issue`);
+      // Spotify apps in Development Mode return 403 for users removed from the
+      // Developer Dashboard allowlist. Their Blueprint record still exists,
+      // but they no longer have valid Spotify access — hide from Friends.
+      await prisma.user.update({ where: { id: userId }, data: { midvaleHidden: true } }).catch(() => {});
       return failResult(
         userId,
         "Spotify returned 403 — permission denied. User may need to reconnect Spotify with the correct scopes.",

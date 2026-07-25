@@ -12,8 +12,10 @@ export async function GET() {
 
   // Fetch spotifyId + blueprintWorld for every track across all users.
   // Dedup by spotifyId — one entry per unique track regardless of how many
-  // users have saved it.
+  // users have saved it. Excludes users whose Spotify access is no longer
+  // valid (midvaleHidden — see lib/spotify-import.ts).
   const allTracks = await prisma.track.findMany({
+    where:  { user: { midvaleHidden: false } },
     select: { spotifyId: true, blueprintWorld: true },
   });
 

@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 export async function GET() {
   const users = await prisma.user.findMany({
     orderBy: { id: "asc" },
-    select:  { id: true, name: true, email: true, image: true },
+    select:  { id: true, name: true, email: true, image: true, midvaleHidden: true },
   });
 
   const [trackGroups, accounts] = await Promise.all([
@@ -42,6 +42,7 @@ export async function GET() {
       hasRefreshToken:   !!acc?.refresh_token,
       spotifyScope:      acc?.scope ?? null,
       tokenExpiresAt:    acc?.expires_at ?? null,
+      midvaleHidden:     u.midvaleHidden,
     };
   });
 
