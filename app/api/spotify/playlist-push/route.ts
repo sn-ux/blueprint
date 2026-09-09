@@ -130,7 +130,7 @@ export async function POST(req: NextRequest) {
   // The client always sends trackIds for user worlds so the fallback path exists
   // for friends worlds and any future callers that omit the field.
 
-  let spotifyIds: string[] = [];
+  const spotifyIds: string[] = [];
 
   if (Array.isArray(trackIds) && trackIds.length > 0) {
     // Client sent the pre-ordered list.  Dedup and drop any empty strings that
