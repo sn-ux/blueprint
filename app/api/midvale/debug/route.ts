@@ -10,26 +10,32 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/current-user";
+import { isAdmin, missingRequiredScopes } from "@/lib/admin";
 
 const MAX_SLOTS = 5;
 
 export async function GET() {
+  const me = await getCurrentUser();
+  if (!isAdmin(me?.id)) {
+    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  }
+
   // All users, ordered the same way as /midvale
   const users = await prisma.user.findMany({
     orderBy: { id: "asc" },
-    select:  { id: true, name: true, email: true },
+    select:  { id: true, name: true },
   });
 
   // All OAuth accounts
   const accounts = await prisma.account.findMany({
+    // Only what the diagnosis needs: whether a usable Spotify grant exists.
+    // No token values or prefixes, no expiry, no Spotify account identifier.
     select: {
-      userId:            true,
-      provider:          true,
-      providerAccountId: true,
-      scope:             true,
-      expires_at:        true,
-      access_token:      true,   // just first 8 chars for confirmation
-      refresh_token:     true,   // just "present" / "missing"
+      userId:        true,
+      provider:      true,
+      scope:         true,
+      refresh_token: true,
     },
   });
 
@@ -54,19 +60,14 @@ export async function GET() {
           ? "trackCount = 0 → shows as placeholder, not FullWorldCard"
           : null,
       user: {
-        id:    u.id,
-        name:  u.name,
-        email: u.email,
+        id:   u.id,
+        name: u.name,
       },
       trackCount,
       accounts: userAccounts.map(a => ({
-        provider:          a.provider,
-        providerAccountId: a.providerAccountId,
-        scope:             a.scope,
-        expires_at:        a.expires_at,
-        // Show only first 8 chars of token so it's identifiable but not leaked
-        accessTokenPrefix: a.access_token ? a.access_token.slice(0, 8) + "…" : null,
-        hasRefreshToken:   !!a.refresh_token,
+        provider:        a.provider,
+        hasRefreshToken: !!a.refresh_token,
+        missingScopes:   missingRequiredScopes(a.scope),
       })),
     };
   });

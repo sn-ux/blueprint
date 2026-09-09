@@ -12,3 +12,12 @@ export function isAdmin(userId: string | null | undefined): boolean {
   if (!userId) return false;
   return ADMIN_USER_IDS.includes(userId);
 }
+
+// Scopes the Spotify importer requires. Routes derive *missing* scopes from a
+// stored grant rather than returning the raw scope string to any client.
+export const REQUIRED_SPOTIFY_SCOPES = ["user-library-read", "playlist-read-private"];
+
+export function missingRequiredScopes(scope: string | null | undefined): string[] {
+  const granted = (scope ?? "").split(/\s+/).filter(Boolean);
+  return REQUIRED_SPOTIFY_SCOPES.filter(s => !granted.includes(s));
+}

@@ -4,16 +4,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/current-user";
-import { isAdmin } from "@/lib/admin";
-
-// Scopes the importer needs. Missing ones are derived here rather than
-// returning the raw granted-scope string to the client.
-const REQUIRED_SCOPES = ["user-library-read", "playlist-read-private"];
-
-function missingRequiredScopes(scope: string | null | undefined): string[] {
-  const granted = (scope ?? "").split(/\s+/).filter(Boolean);
-  return REQUIRED_SCOPES.filter(s => !granted.includes(s));
-}
+import { isAdmin, missingRequiredScopes, REQUIRED_SPOTIFY_SCOPES } from "@/lib/admin";
 
 export async function GET() {
   const me = await getCurrentUser();
@@ -58,7 +49,7 @@ export async function GET() {
       // no expiry timestamp leave the server.
       spotifyConnected: !!acc,
       hasRefreshToken:  !!acc?.refresh_token,
-      missingScopes:    acc ? missingRequiredScopes(acc.scope) : REQUIRED_SCOPES,
+      missingScopes:    acc ? missingRequiredScopes(acc.scope) : REQUIRED_SPOTIFY_SCOPES,
       midvaleHidden:    u.midvaleHidden,
     };
   });

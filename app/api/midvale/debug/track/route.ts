@@ -13,8 +13,17 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/current-user";
+import { isAdmin } from "@/lib/admin";
 
 export async function GET(req: NextRequest) {
+  // Reads any user's library by id, so it is admin-only like the rest of the
+  // Midvale diagnostics.
+  const me = await getCurrentUser();
+  if (!isAdmin(me?.id)) {
+    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  }
+
   const { searchParams } = new URL(req.url);
   const userId = searchParams.get("userId");
   const q      = searchParams.get("q")?.trim();
