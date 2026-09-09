@@ -87,6 +87,24 @@ export const ATTENTION_MODIFIERS = {
 
 // ── Generator thresholds ────────────────────────────────────────────────────
 
+/** A track needs this many independent holders to count as corroborated. */
+export const MIN_SOURCES_PER_TRACK = 2;
+
+/** Independent sources a card needs across its whole deliverable set. */
+export const MIN_SOURCES_PER_CARD = 2;
+
+/** Upper bound on tracks a single recommendation delivers. */
+export const DELIVERABLE_MAX = 15;
+
+export const ARTIST_GAP = {
+  minOwned: 3,
+  minMissing: 2,
+  ownedSaturation: 20,
+  missingSaturation: 15,
+};
+
+export const CONSENSUS_SET = { minSourcesPerTrack: 2 };
+
 export const ALBUM_OBSERVED = {
   minObserved: 6,
   soleMinOwnership: 0.85,
@@ -111,22 +129,25 @@ export const ALBUM_AUTHORITATIVE = {
 };
 
 export const ALBUM_AS_UNIT = {
-  minObserved: 6,
-  minHolders: 2,
-  minTracksPerHolder: 3,
-  depthSaturation: 6,
+  minOwnedByArtist: 3,
+  minDeliverable: 4,
 };
 
 export const ARTIST_ABSENT = {
-  minCatalog: 5,
-  minHolders: 2,
-  catalogSaturation: 60,
+  minCatalog: 3,
+  minOwnedInLane: 5,
+  catalogSaturation: 40,
 };
 
 export const LANE = {
-  minGap: 15,
-  minDeepHolder: 10,
-  magnitudeSaturation: 300,
+  /** Tracks the viewer must already hold for a lane to count as occupied. */
+  minOwnedForPresent: 3,
+  /** Tracks the viewer must hold in the parent for a child void to anchor. */
+  minOwnedInParent: 20,
+  /** Corroborated tracks a lane card must be able to deliver. */
+  minDeliverable: 6,
+  ownedSaturation: 60,
+  magnitudeSaturation: 40,
 };
 
 export const SOURCE_LANE_DEPTH = {

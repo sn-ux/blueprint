@@ -18,6 +18,8 @@ export interface TrackRow {
   artist: string;
   album: string | null;
   imageUrl?: string | null;
+  artistId?: string | null;
+  artistImageUrl?: string | null;
   blueprintWorld: string;
   blueprintSubgenre: string;
   /** Album structure. Null on rows imported before it was captured. */
@@ -91,24 +93,19 @@ export type Evidence =
 
 // ── Claims ──────────────────────────────────────────────────────────────────
 
+/**
+ * Every proposition carries both sides: what the viewer already holds, and
+ * what is missing from it. A claim that only says "your friends have this"
+ * cannot be expressed, because no proposition has that shape.
+ */
 export type StructuredProposition =
-  | { type: "ALL_SOURCES_HAVE"; friendCount: number; names: string[] }
-  | { type: "ALL_SOURCES_HAVE_SET"; friendCount: number; size: number }
-  | { type: "K_OF_N_HAVE"; k: number; n: number; names: string[] }
-  | { type: "NAMED_PAIR_HAVE"; names: [string, string] }
-  | { type: "K_SHARE_SET"; k: number; size: number; names: string[] }
-  /** Observed-set phrasing only. Never asserts a real tracklist length. */
-  | { type: "SOLE_GAP_OBSERVED"; unit: "album" | "artist"; label: string; artist?: string }
-  | { type: "RESIDUE_OBSERVED"; unit: "album" | "artist"; label: string; residue: number }
-  /** Authoritative. Only ever built from a verified album tracklist length. */
-  | { type: "SOLE_GAP_TRUE"; label: string; artist: string; totalTracks: number }
-  | { type: "RESIDUE_TRUE"; label: string; artist: string; totalTracks: number; residue: number }
-  | { type: "ALBUM_AS_UNIT"; label: string; artist: string; holders: number; depth: number }
-  | { type: "ARTIST_ABSENT"; artist: string; lane: string; catalogSize: number; holders: number }
-  | { type: "LANE_VOID"; lane: string; gapSize: number }
-  | { type: "CHILD_VOID"; parent: string; child: string; gapSize: number }
-  | { type: "LANE_GAP"; lane: string; gapSize: number }
-  | { type: "SOURCE_LANE_DEPTH"; name: string; lane: string; count: number };
+  | { type: "ALBUM_COMPLETION"; album: string; artist: string; owned: number; total: number; residue: number }
+  | { type: "ALBUM_VIA_ARTIST"; album: string; artist: string; ownedByArtist: number; deliverable: number; names: string[] }
+  | { type: "ARTIST_MORE"; artist: string; owned: number; deliverable: number; names: string[] }
+  | { type: "ARTIST_VIA_LANE"; artist: string; lane: string; ownedInLane: number; deliverable: number; names: string[] }
+  | { type: "LANE_MORE"; lane: string; owned: number; deliverable: number; names: string[] }
+  | { type: "LANE_VIA_PARENT"; parent: string; lane: string; ownedInParent: number; deliverable: number }
+  | { type: "LANE_CONSENSUS"; lane: string; owned: number; deliverable: number; names: string[] };
 
 export type ClaimType = StructuredProposition["type"];
 
@@ -129,6 +126,44 @@ export interface CaptionClaim {
   templateId: string;
 }
 
+/**
+ * Why this missed material belongs in front of this particular viewer.
+ *
+ * Every anchor is an explicit set relationship against the viewer's own
+ * library — tracks by this artist, tracks on this album, membership in this
+ * lane. None of it infers a preference, and there is deliberately no field for
+ * one. A recommendation carries three things: what was missed, why it connects
+ * to what the viewer already holds, and what vouches for it.
+ */
+export type RecipientAnchorType =
+  | "ARTIST_PRESENT"
+  | "ALBUM_PARTIAL"
+  | "SUBGENRE_PRESENT"
+  | "PARENT_GENRE_PRESENT";
+
+export interface RecipientAnchor {
+  type: RecipientAnchorType;
+  entityId: string;
+  entityName: string;
+  /** How many tracks the viewer already holds in that set. */
+  ownedCount: number;
+  /** The size of the relevant set, where one exists — an album's tracklist. */
+  relevantSetSize?: number;
+  /**
+   * How tightly the anchor ties to the recommendation. Structural, not
+   * psychological: an album is a narrower connection than an artist, an artist
+   * than a lane, a lane than a whole genre.
+   */
+  specificity: number;
+}
+
+export const ANCHOR_SPECIFICITY: Record<RecipientAnchorType, number> = {
+  ALBUM_PARTIAL: 1.0,
+  ARTIST_PRESENT: 0.85,
+  SUBGENRE_PRESENT: 0.6,
+  PARENT_GENRE_PRESENT: 0.35,
+};
+
 // ── Candidates ──────────────────────────────────────────────────────────────
 
 /**
@@ -141,7 +176,6 @@ export interface CaptionClaim {
  * card; they can never be its subject.
  */
 export type CardSubjectType =
-  | "SONG"
   | "SONG_SET"
   | "ALBUM"
   | "ARTIST"
@@ -151,13 +185,23 @@ export type CardSubjectType =
 export type SubjectType = "Song" | "Songs" | "Album" | "Artist" | "Subgenre" | "Genre";
 
 /** The internal subject shape maps one-to-one onto an allowed card type. */
-export const CARD_TYPE_OF: Record<SubjectType, CardSubjectType> = {
-  Song: "SONG", Songs: "SONG_SET", Album: "ALBUM",
+export const CARD_TYPE_OF: Partial<Record<SubjectType, CardSubjectType>> = {
+  Songs: "SONG_SET", Album: "ALBUM",
   Artist: "ARTIST", Subgenre: "SUBGENRE", Genre: "GENRE",
+  // Song is deliberately absent. A single track is never a card: a track
+  // appears inside a set, an album, an artist or a lane, never as the
+  // recommendation itself.
 };
 
-/** Bounds for the one card type allowed to hold multiple independent items. */
-export const SONG_SET_MIN = 8;
+/**
+ * Bounds for the one card type allowed to hold multiple independent items.
+ *
+ * A dozen is the floor for a multi-song recommendation to be worth opening.
+ * Below it the set is not a discovery unit, and padding one to reach twelve
+ * would be manufacturing the thing the bound exists to guarantee.
+ */
+export const SONG_SET_MIN = 12;
+export const SONG_SET_TARGET = 12;
 export const SONG_SET_MAX = 15;
 
 export type Subject =
@@ -169,23 +213,13 @@ export type Subject =
   | { type: "Genre"; genre: string };
 
 export type GeneratorId =
-  | "UNANIMOUS_MISS"
-  | "UNANIMOUS_SET"
-  | "SUPERMAJORITY_MISS"
-  | "MAJORITY_MISS"
-  | "MULTI_INTERSECTION_SET"
-  | "ALBUM_SOLE_GAP_TRUE"
-  | "ALBUM_NEAR_COMPLETE_TRUE"
-  | "ALBUM_SOLE_GAP_OBSERVED"
-  | "ALBUM_RESIDUE_OBSERVED"
+  | "ALBUM_GAP_TRUE"
   | "ALBUM_AS_UNIT"
-  | "ARTIST_SOLE_GAP_OBSERVED"
-  | "ARTIST_RESIDUE_OBSERVED"
+  | "ARTIST_GAP"
   | "ARTIST_ABSENT_IN_LANE"
-  | "SUBGENRE_VOID"
+  | "SUBGENRE_GAP"
   | "MISSING_CHILD"
-  | "SOURCE_LANE_DEPTH"
-  | "GENRE_GAP";
+  | "CONSENSUS_IN_LANE";
 
 export interface Candidate {
   id: string;
@@ -226,6 +260,8 @@ export interface Candidate {
   subgenre: string | null;
   artist: string | null;
   album: string | null;
+  /** Authoritative album identity for ALBUM cards. Never a title. */
+  albumId?: string | null;
 
   claims?: CaptionClaim[];
   winningClaim?: CaptionClaim;
@@ -238,6 +274,11 @@ export interface Candidate {
   corroborationBonus?: number;
   /** base + tieBreak + corroboration. May exceed 1 — deliberately. */
   rankingScore?: number;
+  /**
+   * The recipient side of the recommendation. Required for a card to ship —
+   * "your friends have this" on its own is not a reason to look.
+   */
+  anchor?: RecipientAnchor;
   /** Card-level quality. Requires strong evidence AND a reason to look. */
   qualityBand?: "EXCEPTIONAL" | "STRONG" | "SOLID";
 

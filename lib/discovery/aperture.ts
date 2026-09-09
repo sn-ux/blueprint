@@ -57,14 +57,27 @@ function dominant<T>(ids: string[], keyOf: (id: string) => T | null | undefined)
  * rather than by being cut to a target size.
  */
 export function resolveAperture(index: DiscoveryIndex, c: Candidate): ApertureResult {
-  const declared = CARD_TYPE_OF[c.subject.type];
+  // A single track is not a card. Nothing generates one any more, and this is
+  // the boundary that keeps it that way.
+  if (c.subject.type === "Song") {
+    return { cardType: null, note: "a single track is not a card" };
+  }
 
+  const declared = CARD_TYPE_OF[c.subject.type];
   if (c.subject.type !== "Songs") {
-    return { cardType: declared, note: "single-entity subject" };
+    return { cardType: declared ?? null, note: "single-entity subject" };
   }
 
   const members = c.deliverableIds ?? [];
   const size = members.length;
+
+  // A bounded set is a set. Checked before the lane rule below, because a
+  // generator that assembled exactly a dozen tracks meant them as a dozen
+  // tracks — turning that into a lane card would discard the aperture it
+  // deliberately chose.
+  if (size >= SONG_SET_MIN && size <= SONG_SET_MAX) {
+    return { cardType: "SONG_SET", note: `${size} tracks, held together by the source relationship` };
+  }
 
   // A lane's worth of tracks is a lane, not a pile of songs. Where the
   // generator built the set from a single lane it says so, and that is the
@@ -103,8 +116,9 @@ export function resolveAperture(index: DiscoveryIndex, c: Candidate): ApertureRe
     };
   }
 
-  // No single entity carries it. A bounded set held together by the source
-  // relationship itself is still one discovery unit; an unbounded one is not.
+  // A bounded set held together by the source relationship is one discovery
+  // unit. A dozen is the floor for that to be worth opening, and padding a
+  // smaller set to reach it would manufacture the thing the floor guarantees.
   if (size >= SONG_SET_MIN && size <= SONG_SET_MAX) {
     return { cardType: "SONG_SET", note: `${size} tracks, held together by the source relationship` };
   }

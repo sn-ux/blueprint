@@ -31,6 +31,30 @@ export interface EngineResult {
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
 
 /**
+ * A card's subject must own every track its page shows.
+ *
+ * An artist card whose page carries other people's records, or an album card
+ * assembled from a title string that two releases share, is a different card
+ * from the one its caption describes. Checked here rather than trusted from
+ * each generator.
+ */
+function subjectMismatch(index: DiscoveryIndex, c: Candidate): string | null {
+  const ids = c.deliverableIds ?? [];
+  if (c.subject.type === "Artist") {
+    const artist = c.subject.artist;
+    const wrong = ids.filter((id) => index.meta.get(id)?.artist !== artist);
+    if (wrong.length) return `${wrong.length} track(s) not by ${artist}`;
+  }
+  if (c.subject.type === "Album") {
+    const albumId = c.albumId;
+    if (!albumId) return "album card without an authoritative albumId";
+    const wrong = ids.filter((id) => index.albumIdOf.get(id) !== albumId);
+    if (wrong.length) return `${wrong.length} track(s) not on albumId ${albumId}`;
+  }
+  return null;
+}
+
+/**
  * Recommendation quality — the card-level band, not the evidence band.
  *
  * evidenceStrength measures how strong the evidence is; it says nothing about
@@ -64,26 +88,9 @@ export function runEngine(input: EngineInput, opts: EngineOptions = {}): EngineR
     raw.push(...produced);
   }
 
-  // ── Aperture · item or set, never both for one fact ───────────────────────
-  //
-  // A set and its members are the same discovery fact at two zoom levels, and
-  // showing both puts it in the feed twice. Small sets read better as their
-  // individual items; large ones read better as the aggregate. Applied to the
-  // unanimous pair, which is the only place today where one fact has both.
-  const unanimousItems = raw.filter((c) => c.generator === "UNANIMOUS_MISS");
-  const APERTURE_ITEM_MAX = 5;
-  const dropSet = unanimousItems.length > 0 && unanimousItems.length <= APERTURE_ITEM_MAX;
-  const aperture = raw.filter((c) => {
-    if (c.generator === "UNANIMOUS_SET" && dropSet) {
-      rejected.push({ stage: "aperture", reasonCode: "APERTURE_ITEM_PREFERRED", generator: c.generator, subjectKey: c.subjectKey, detail: `${unanimousItems.length} members` });
-      return false;
-    }
-    if (c.generator === "UNANIMOUS_MISS" && !dropSet) {
-      rejected.push({ stage: "aperture", reasonCode: "APERTURE_SET_PREFERRED", generator: c.generator, subjectKey: c.subjectKey });
-      return false;
-    }
-    return true;
-  });
+  // Aperture no longer has to choose between an item and a set: a single
+  // track is never a card, so one fact has one zoom level by construction.
+  const aperture = raw;
 
   // ── Gates 1–6 · hard exclusion, cheapest first ────────────────────────────
   const eligible: Candidate[] = [];
@@ -103,11 +110,43 @@ export function runEngine(input: EngineInput, opts: EngineOptions = {}): EngineR
       rejected.push({ stage: "eligibility", reasonCode: "BELOW_FLOOR", generator: c.generator, subjectKey: c.subjectKey, detail: `ES=${c.evidenceStrength.toFixed(2)}` });
       continue;
     }
-    // Gate 5 — no named source. Nothing surfaces without a vouch, except
-    // genre-level magnitude which names no one by construction and is gated
-    // out on attention instead.
-    if (c.sourceFriendIds.length === 0 && c.generator !== "GENRE_GAP") {
+    // Gate 5 — nothing surfaces without a named vouch.
+    if (c.sourceFriendIds.length === 0) {
       rejected.push({ stage: "eligibility", reasonCode: "NO_VOUCH", generator: c.generator, subjectKey: c.subjectKey });
+      continue;
+    }
+    // Gate 5b — nothing surfaces without a reason it belongs to this viewer.
+    // "Your friends have this" is a fact about other people, not a
+    // recommendation, and a card that can only say that does not ship.
+    if (!c.anchor) {
+      rejected.push({ stage: "eligibility", reasonCode: "NO_RECIPIENT_ANCHOR", generator: c.generator, subjectKey: c.subjectKey });
+      continue;
+    }
+    // Gate 5c — one source owning something is not evidence anyone missed it.
+    if (c.sourceFriendIds.length < CFG.MIN_SOURCES_PER_CARD) {
+      rejected.push({
+        stage: "eligibility", reasonCode: "SINGLE_SOURCE",
+        generator: c.generator, subjectKey: c.subjectKey,
+        detail: `${c.sourceFriendIds.length} source`,
+      });
+      continue;
+    }
+    // Gate 5d — the invariant, over every track the page will show.
+    const leaked = (c.deliverableIds ?? []).filter((id) => index.U.has(id));
+    if (leaked.length > 0) {
+      rejected.push({
+        stage: "eligibility", reasonCode: "DELIVERABLE_IN_LIBRARY",
+        generator: c.generator, subjectKey: c.subjectKey, detail: `${leaked.length} track(s)`,
+      });
+      continue;
+    }
+    // Gate 5e — the subject must own its own deliverables.
+    const mismatch = subjectMismatch(index, c);
+    if (mismatch) {
+      rejected.push({
+        stage: "eligibility", reasonCode: "SUBJECT_DELIVERABLE_MISMATCH",
+        generator: c.generator, subjectKey: c.subjectKey, detail: mismatch,
+      });
       continue;
     }
     eligible.push(c);
@@ -317,8 +356,9 @@ function compose(pool: Candidate[], size: number, lambda: number): Candidate[] {
     const first = chosen.length === 0;
 
     const passes = (c: Candidate, caps: Caps | null, strict: boolean): boolean => {
-      // Slot one opens on a specific song, never an aggregate. Never relaxed.
-      if (first && c.subject.type !== "Song") return false;
+      // Slot one opens on the tightest connection available — an album or an
+      // artist the viewer already holds — rather than a whole lane.
+      if (first && c.cardType === "SUBGENRE") return false;
       if (strict && last) {
         // Two identical sentence shapes in a row is the most visible tell that
         // a feed was generated, so this relaxes only after the caps have.

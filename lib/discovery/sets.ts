@@ -13,6 +13,31 @@ import type { EngineInput, PersonRow, SetRef, TrackRow } from "./types";
 /** Subgenre bucket the classifier uses when it could not decide. Not a lane. */
 export const UNKNOWN_LANE = "unknown";
 
+/**
+ * Identity of a recording, independent of which release it came from.
+ *
+ * A Spotify id identifies a pressing, not a song. "Doo Wop (That Thing)" and
+ * "Doo Wop" are two ids for one recording, and the engine told the viewer his
+ * friends had a Lauryn Hill track he was missing when he had been holding it
+ * all along. 364 of 16,323 candidates — 2.2% — were the same thing.
+ *
+ * Stripping a trailing parenthetical or dash suffix collapses remasters, mono
+ * and stereo versions, live takes, deluxe rereleases and remixes onto one key.
+ * It errs toward treating a variant as already owned, which is the right way
+ * to be wrong: presenting something the viewer already has as a discovery
+ * costs more than withholding a version of it.
+ */
+export function workKeyOf(name: string, artist: string): string {
+  const base = name
+    .toLowerCase()
+    .replace(/\s*[([].*$/, "")
+    .replace(/\s+-\s+.*$/, "")
+    .replace(/[^a-z0-9 ]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return `${base}␟${artist.toLowerCase().trim()}`;
+}
+
 export interface TrackMeta {
   spotifyId: string;
   name: string;
@@ -20,6 +45,8 @@ export interface TrackMeta {
   album: string | null;
   /** Album artwork, carried through for card rendering. */
   imageUrl: string | null;
+  /** The artist's own picture, hydrated separately from track payloads. */
+  artistImageUrl: string | null;
   world: string;
   subgenre: string;
 }
@@ -136,6 +163,22 @@ export interface DiscoveryIndex {
   sourcesInLane: Map<string, Set<string>>;
   /** The whole source universe — the denominator for track-level consensus. */
   eligibleSourceUniverse: number;
+
+  /**
+   * What the viewer's own library contains, for recipient anchors.
+   *
+   * These are membership counts over explicit sets — how many tracks by this
+   * artist, on this album, in this lane. They are not a profile: nothing here
+   * infers a preference, and nothing outside anchor construction reads them.
+   */
+  viewerByArtist: Map<string, number>;
+  viewerByAlbumId: Map<string, number>;
+  viewerByLane: Map<string, number>;
+  viewerByWorld: Map<string, number>;
+  /** Recordings the viewer holds, by work rather than by pressing. */
+  viewerWorks: Set<string>;
+  /** Authoritative album identity per track, for the subject/deliverable gate. */
+  albumIdOf: Map<string, string>;
 }
 
 const albumKey = (artist: string, album: string) => `${artist}␟${album}`;
@@ -159,6 +202,9 @@ export function buildIndex(input: EngineInput): DiscoveryIndex {
   const anchorFriends = friends.filter((f) => (byFriend.get(f.id)?.size ?? 0) >= MIN_ANCHOR_LIBRARY);
 
   // ── Metadata, first writer wins ───────────────────────────────────────────
+  const albumIdOf = new Map<string, string>();
+  for (const t of tracks) if (t.albumId && !albumIdOf.has(t.spotifyId)) albumIdOf.set(t.spotifyId, t.albumId);
+
   const meta = new Map<string, TrackMeta>();
   for (const t of tracks) {
     if (meta.has(t.spotifyId)) continue;
@@ -168,9 +214,27 @@ export function buildIndex(input: EngineInput): DiscoveryIndex {
       artist: t.artist,
       album: t.album,
       imageUrl: t.imageUrl ?? null,
+      artistImageUrl: t.artistImageUrl ?? null,
       world: t.blueprintWorld,
       subgenre: (t.blueprintSubgenre ?? "").trim(),
     });
+  }
+
+  // ── What the viewer holds, for anchors and for work-level exclusion ───────
+  const viewerByArtist = new Map<string, number>();
+  const viewerByAlbumId = new Map<string, number>();
+  const viewerByLane = new Map<string, number>();
+  const viewerByWorld = new Map<string, number>();
+  const viewerWorks = new Set<string>();
+  const bump = <K,>(m: Map<K, number>, k: K) => m.set(k, (m.get(k) ?? 0) + 1);
+  for (const t of tracks) {
+    if (t.userId !== viewerId) continue;
+    bump(viewerByArtist, t.artist);
+    if (t.albumId) bump(viewerByAlbumId, t.albumId);
+    bump(viewerByWorld, t.blueprintWorld);
+    const sub = (t.blueprintSubgenre ?? "").trim();
+    if (sub && sub !== UNKNOWN_LANE) bump(viewerByLane, sub);
+    viewerWorks.add(workKeyOf(t.name, t.artist));
   }
 
   // ── D = F_all − U, and who holds each member ──────────────────────────────
@@ -178,6 +242,8 @@ export function buildIndex(input: EngineInput): DiscoveryIndex {
   for (const t of tracks) {
     if (t.userId === viewerId) continue;
     if (U.has(t.spotifyId)) continue;          // ← the invariant, enforced once
+    // …and again at the level of the recording, not the pressing.
+    if (viewerWorks.has(workKeyOf(t.name, t.artist))) continue;
     const list = holders.get(t.spotifyId);
     if (list) { if (!list.includes(t.userId)) list.push(t.userId); }
     else holders.set(t.spotifyId, [t.userId]);
@@ -290,6 +356,7 @@ export function buildIndex(input: EngineInput): DiscoveryIndex {
     for (const id of u.observed) {
       if (U.has(id)) owned++;
       else if (DSet.has(id)) missing.push(id);
+      else owned++;   // held under another pressing — owned, not missing
     }
     u.ownedCount = owned;
     u.missing = missing;
@@ -375,6 +442,7 @@ export function buildIndex(input: EngineInput): DiscoveryIndex {
     meta, lanes, worlds, albums, artists,
     authAlbums, authCoveredTitleKeys,
     sourcesInWorld, sourcesInLane, eligibleSourceUniverse: friends.length,
+    viewerByArtist, viewerByAlbumId, viewerByLane, viewerByWorld, viewerWorks, albumIdOf,
   };
 }
 

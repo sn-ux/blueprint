@@ -83,6 +83,11 @@ model Track {
   discNumber           Int?
   /** "album" | "single" | "compilation". Only "album" supports completion. */
   albumType            String?
+  // Artist identity and image. Spotify's track payload carries the artist id
+  // but no picture, so the image is hydrated separately and stored here rather
+  // than fetched per card.
+  artistId             String?
+  artistImageUrl       String?
   rawGenre          String
   blueprintWorld    String
   blueprintSubgenre String
@@ -91,4 +96,5 @@ model Track {
 
   @@unique([userId, spotifyId])
   @@index([albumId])
+  @@index([artistId])
 }

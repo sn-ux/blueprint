@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { label } from "./display";
 import { runEngine } from "./engine";
 import type { DiscoveryIndex } from "./sets";
 import type { Candidate, CardSubjectType } from "./types";
@@ -51,10 +52,10 @@ export interface FeedCard {
   subgenre: string | null;
   artist: string | null;
   album: string | null;
-  imageUrl: string | null;
-  /** Present only on a SONG card — the track the card is about. */
-  spotifyId: string | null;
-  spotifyUrl: string | null;
+  /** Artwork for the card's subject: the artist's picture, the album's cover. */
+  subjectImageUrl: string | null;
+  /** Why this belongs in front of this viewer. */
+  anchor: { type: string; entityName: string; ownedCount: number } | null;
 
   /** Named sources behind the recommendation. Never a count. */
   sources: FeedPerson[];
@@ -89,21 +90,20 @@ export function trackOf(index: DiscoveryIndex, spotifyId: string): FeedTrack | n
 
 /** Every track a card's detail page must be able to show. */
 export function deliverablesOf(index: DiscoveryIndex, c: Candidate): FeedTrack[] {
-  const ids = c.subject.type === "Song"
-    ? [c.subject.spotifyId]
-    : (c.deliverableIds ?? []);
+  const ids = c.deliverableIds ?? [];
   return ids.map((id) => trackOf(index, id)).filter((t): t is FeedTrack => t !== null);
 }
 
 function titleOf(c: Candidate): { title: string; byline: string } {
   const s = c.subject;
   switch (s.type) {
-    case "Song": return { title: s.name, byline: s.artist };
     case "Album": return { title: s.album, byline: s.artist };
     case "Artist": return { title: s.artist, byline: "" };
-    case "Subgenre": return { title: s.subgenre, byline: "" };
-    case "Genre": return { title: s.genre, byline: "" };
-    default: return { title: s.label, byline: "" };
+    // Taxonomy keys are identity; this is the one place they become readable.
+    case "Subgenre": return { title: label(s.subgenre), byline: "" };
+    case "Genre": return { title: label(s.genre), byline: "" };
+    case "Songs": return { title: label(s.label), byline: "" };
+    default: return { title: "", byline: "" };
   }
 }
 
@@ -115,7 +115,15 @@ function titleOf(c: Candidate): { title: string; byline: string } {
  * is generated.
  */
 function imageOf(index: DiscoveryIndex, c: Candidate, tracks: FeedTrack[]): string | null {
-  if (c.subject.type === "Song") return index.meta.get(c.subject.spotifyId)?.imageUrl ?? null;
+  // An artist card shows the artist, not one of their sleeves. Everything else
+  // shows the cover of what it is about; a lane borrows the first record in it,
+  // which is the only real image such a card has.
+  if (c.subject.type === "Artist") {
+    for (const t of tracks) {
+      const img = index.meta.get(t.spotifyId ?? "")?.artistImageUrl;
+      if (img) return img;
+    }
+  }
   return tracks.find((t) => t.imageUrl)?.imageUrl ?? null;
 }
 
@@ -135,13 +143,17 @@ export function toFeedCard(index: DiscoveryIndex, c: Candidate, previewLimit = 4
     evidenceStrength: c.evidenceStrength,
     attentionValue: c.attentionValue,
     score: c.feedScore ?? c.rankingScore ?? 0,
-    genre: c.genre,
-    subgenre: c.subgenre,
+    genre: label(c.genre),
+    subgenre: label(c.subgenre),
     artist: c.artist,
     album: c.album,
-    imageUrl: imageOf(index, c, all),
-    spotifyId: c.subject.type === "Song" ? c.subject.spotifyId : null,
-    spotifyUrl: c.subject.type === "Song" ? spotifyUrl(c.subject.spotifyId) : null,
+    subjectImageUrl: imageOf(index, c, all),
+    anchor: c.anchor ? {
+      type: c.anchor.type,
+      entityName: c.anchor.type === "SUBGENRE_PRESENT" || c.anchor.type === "PARENT_GENRE_PRESENT"
+        ? label(c.anchor.entityName) : c.anchor.entityName,
+      ownedCount: c.anchor.ownedCount,
+    } : null,
     sources: c.sourceFriendIds.map((id) => personOf(index, id)),
     deliverableCount: all.length,
     previewTracks: all.slice(0, previewLimit),
@@ -160,7 +172,8 @@ export async function buildFeed(viewerId: string, limit = 100) {
     where: { user: { midvaleHidden: false } },
     select: {
       userId: true, spotifyId: true, name: true, artist: true, album: true,
-      imageUrl: true, blueprintWorld: true, blueprintSubgenre: true,
+      imageUrl: true, artistId: true, artistImageUrl: true,
+      blueprintWorld: true, blueprintSubgenre: true,
       albumId: true, albumTotalTracks: true, trackNumber: true, discNumber: true, albumType: true,
     },
   });
