@@ -109,8 +109,6 @@ export async function POST(req: NextRequest) {
      *  non-empty) the server uses this list as-is — preserving the exact sort
      *  order the user sees in the Track tab — instead of re-sorting from DB. */
     trackIds?: string[];
-    /** What to call it. Falls back to the subgenre, then the genre. */
-    name?: string;
   };
 
   try {
@@ -119,7 +117,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const { worldType, userId, genre, subgenre, trackIds, name } = body;
+  const { worldType, userId, genre, subgenre, trackIds } = body;
 
   if (!genre) {
     return NextResponse.json({ error: "genre is required" }, { status: 400 });
@@ -238,11 +236,10 @@ export async function POST(req: NextRequest) {
   // Individual genre:    Blueprint · [User Name] · [Genre]
   // Individual subgenre: Blueprint · [User Name] · [Subgenre]
   // Friends subgenre:    Blueprint · Friends · [Subgenre]
-  // A caller that knows what the list is may say so; otherwise the subgenre,
-  // otherwise the genre. The subgenre used to be asserted non-null and is not
-  // sent by the app at all, so every playlist it made was called
-  // "Blueprint · Friends · undefined".
-  const label = (name?.trim() || subgenre || genre);
+  // The subgenre when the selection has one, otherwise the genre. It used to
+  // be asserted non-null, and the app was not sending it at all, so every
+  // playlist the app made was called "Blueprint · Friends · undefined".
+  const label = (subgenre || genre);
   const playlistName = worldType === "friends"
     ? `Blueprint · Friends · ${label}`
     : `Blueprint · ${user.name?.split(" ")[0] ?? "Me"} · ${label}`;
