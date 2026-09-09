@@ -204,6 +204,24 @@ export const SONG_SET_MIN = 12;
 export const SONG_SET_TARGET = 12;
 export const SONG_SET_MAX = 15;
 
+/**
+ * Why a set of tracks is one set.
+ *
+ * This is the question a SONG_SET card has to answer before it may exist. If
+ * the answer is "they are all on one album", "all by one artist", "all in one
+ * lane" or "all in one genre", then the singular entity is the clearer
+ * aperture and the card is that entity — a set of fifteen Hip Hop tracks is a
+ * Hip Hop card, not a card called "Hip Hop songs" sitting beside one.
+ *
+ * STRUCTURAL is reserved for relationships that no single entity can express:
+ * the same combination of independent sources holding the same material, a
+ * miss that spans artists and lanes. It must be factual and derivable from
+ * structured data — never a mood, a theme or a cluster.
+ */
+export type GroupingReason =
+  | { kind: "TAXONOMIC"; entity: "ALBUM" | "ARTIST" | "SUBGENRE" | "GENRE"; key: string }
+  | { kind: "STRUCTURAL"; relation: "SOURCE_COMBINATION"; key: string; description: string };
+
 export type Subject =
   | { type: "Song"; spotifyId: string; name: string; artist: string; album: string | null }
   | { type: "Songs"; label: string; discoverySetId: string }
@@ -249,9 +267,16 @@ export interface Candidate {
   deliverableCount: number;
   /** The exact tracks the detail page would contain. */
   deliverableIds?: string[];
+  /**
+   * What makes these tracks one set. Declared by the generator, never
+   * inferred: a SONG_SET may only exist over a STRUCTURAL reason.
+   */
+  groupingReason: GroupingReason;
   /** Set by the aperture stage; validated before feed composition. */
   cardType?: CardSubjectType;
   apertureNote?: string;
+  /** Concentration of the set by each singular entity, for the report. */
+  concentration?: Record<"album" | "artist" | "subgenre" | "genre", number>;
 
   /** Context the harness and diversifier read. */
   sourceFriendIds: string[];
@@ -281,6 +306,18 @@ export interface Candidate {
   anchor?: RecipientAnchor;
   /** Card-level quality. Requires strong evidence AND a reason to look. */
   qualityBand?: "EXCEPTIONAL" | "STRONG" | "SOLID";
+
+  /**
+   * Stable semantic identity of the proposition, and a hash of the facts
+   * behind it. Feed rank is never identity: the same missed material stays
+   * the same recommendation across runs, and only a change to what it
+   * delivers makes it new again.
+   */
+  recommendationKey?: string;
+  underlyingVersion?: string;
+  /** Lifecycle placement, kept strictly apart from recommendation quality. */
+  lifecycleScore?: number;
+  lifecycleParts?: Record<string, number>;
 
   secondaryRationales?: { generator: GeneratorId; evidenceStrength: number; caption?: string }[];
   feedScore?: number;

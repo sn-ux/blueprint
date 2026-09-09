@@ -8,15 +8,17 @@ datasource db {
 }
 
 model User {
-  id              String    @id @default(cuid())
-  name            String?
-  email           String?   @unique
-  emailVerified   DateTime?
-  image           String?
-  midvaleHidden   Boolean   @default(false)
-  accounts        Account[]
-  sessions        Session[]
-  tracks          Track[]
+  id            String                      @id @default(cuid())
+  name          String?
+  email         String?                     @unique
+  emailVerified DateTime?
+  image         String?
+  midvaleHidden Boolean                     @default(false)
+  accounts      Account[]
+  sessions      Session[]
+  tracks        Track[]
+  exposures     RecommendationExposure[]
+  feedSessions  RecommendationFeedSession[]
 }
 
 model Account {
@@ -56,17 +58,17 @@ model VerificationToken {
 }
 
 model Track {
-  id                String  @id @default(cuid())
-  userId            String
-  spotifyId         String
-  name              String
-  artist            String
-  album             String?
-  imageUrl          String?
-  previewUrl        String?
+  id                   String  @id @default(cuid())
+  userId               String
+  spotifyId            String
+  name                 String
+  artist               String
+  album                String?
+  imageUrl             String?
+  previewUrl           String?
   // Written by the Spotify import. Existing rows stay null until they are
   // re-imported; nothing backfills or infers these.
-  durationMs        Int?
+  durationMs           Int?
   // Spotify's album release date, kept verbatim as a string because its
   // precision varies ("2019", "2019-04", "2019-04-12"). releaseDatePrecision
   // records which, so no consumer invents a month or day that was never given.
@@ -81,20 +83,95 @@ model Track {
   albumTotalTracks     Int?
   trackNumber          Int?
   discNumber           Int?
-  /** "album" | "single" | "compilation". Only "album" supports completion. */
+  /**
+   * "album" | "single" | "compilation". Only "album" supports completion.
+   */
   albumType            String?
   // Artist identity and image. Spotify's track payload carries the artist id
   // but no picture, so the image is hydrated separately and stored here rather
   // than fetched per card.
   artistId             String?
   artistImageUrl       String?
-  rawGenre          String
-  blueprintWorld    String
-  blueprintSubgenre String
+  rawGenre             String
+  blueprintWorld       String
+  blueprintSubgenre    String
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, spotifyId])
   @@index([albumId])
   @@index([artistId])
+}
+
+/**
+ * What has passed between one viewer and one recommendation.
+ * Blueprint's feed is a stream, not a ranked list served fresh each launch, so
+ * it has to remember which propositions this person has already been shown,
+ * which they went and opened, and which they told it to stop showing. The row
+ * is keyed on the proposition's stable identity — see
+ * lib/discovery/identity.ts — never on feed position, so it survives the
+ * engine re-running, the caption being reworded and the card moving.
+ * `lastUnderlyingVersion` is what makes a familiar recommendation new again:
+ * when the material behind it genuinely changes, the card can return early
+ * instead of waiting out a cooldown earned by an older version of itself.
+ */
+model RecommendationExposure {
+  id                String @id @default(cuid())
+  userId            String
+  recommendationKey String
+
+  firstShownAt    DateTime?
+  lastShownAt     DateTime?
+  impressionCount Int       @default(0)
+
+  firstOpenedAt DateTime?
+  lastOpenedAt  DateTime?
+  openCount     Int       @default(0)
+
+  /**
+   * An explicit "stop showing me this". Stands until the proposition changes.
+   */
+  dismissedAt DateTime?
+  /**
+   * The viewer acted on it. Resolution itself comes from the engine's exclusion.
+   */
+  actedOnAt   DateTime?
+
+  cooldownUntil         DateTime?
+  lastUnderlyingVersion String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, recommendationKey])
+  @@index([userId, cooldownUntil])
+  @@index([userId, dismissedAt])
+}
+
+/**
+ * One reading session's fixed order.
+ * Infinite scroll must not reorder underneath the reader: card twelve cannot
+ * become card three because an impression was written while they were looking
+ * at it. So ranking and lifecycle are evaluated once, when a session starts,
+ * and the resulting sequence is frozen. Later pages slice it, which also means
+ * a page fetch costs a row read rather than a full engine run.
+ * The snapshot doubles as the detail payload's source, so the card on the
+ * detail page is byte-for-byte the card in the feed — the same artwork, the
+ * same caption, the same numbers — and opening one makes no external call.
+ */
+model RecommendationFeedSession {
+  id        String   @id @default(cuid())
+  userId    String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  /**
+   * Ordered FeedCard snapshots plus each card's deliverable track ids.
+   */
+  cards     Json
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }

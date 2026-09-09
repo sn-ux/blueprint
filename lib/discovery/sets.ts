@@ -47,6 +47,8 @@ export interface TrackMeta {
   imageUrl: string | null;
   /** The artist's own picture, hydrated separately from track payloads. */
   artistImageUrl: string | null;
+  /** Spotify artist identity, where the backfill reached it. */
+  artistId: string | null;
   world: string;
   subgenre: string;
 }
@@ -207,7 +209,16 @@ export function buildIndex(input: EngineInput): DiscoveryIndex {
 
   const meta = new Map<string, TrackMeta>();
   for (const t of tracks) {
-    if (meta.has(t.spotifyId)) continue;
+    const seen = meta.get(t.spotifyId);
+    if (seen) {
+      // Identity and artwork are properties of the recording, not of whose
+      // row was read first. A later row carrying an image the first one
+      // lacked fills it in; nothing else is overwritten.
+      if (!seen.artistId && t.artistId) seen.artistId = t.artistId;
+      if (!seen.artistImageUrl && t.artistImageUrl) seen.artistImageUrl = t.artistImageUrl;
+      if (!seen.imageUrl && t.imageUrl) seen.imageUrl = t.imageUrl;
+      continue;
+    }
     meta.set(t.spotifyId, {
       spotifyId: t.spotifyId,
       name: t.name,
@@ -215,6 +226,7 @@ export function buildIndex(input: EngineInput): DiscoveryIndex {
       album: t.album,
       imageUrl: t.imageUrl ?? null,
       artistImageUrl: t.artistImageUrl ?? null,
+      artistId: t.artistId ?? null,
       world: t.blueprintWorld,
       subgenre: (t.blueprintSubgenre ?? "").trim(),
     });

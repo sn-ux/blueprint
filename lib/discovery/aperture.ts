@@ -10,23 +10,45 @@ import {
  *
  * The engine may reason over intersections, catalogue residue and thousands of
  * tracks. The reader may not. This stage asks one question of every candidate:
- * what is the clearest single thing to look at? The answer is one of six
- * things, or nothing.
+ * what is the clearest single thing to look at?
  *
- * A DiscoverySet is not a card. Three friends sharing 41 tracks the viewer
- * lacks is a real and useful fact internally, but "these 41 tracks" is not
- * something anyone can look at. If that set has no dominant album, artist or
- * lane inside it — and measured against real data it has none, its strongest
- * concentration being 24% — then it resolves to no card at all. Producing
- * nothing is a correct outcome here; truncating it to a tidy twelve would be
- * inventing a discovery unit that the evidence does not describe.
+ * The rule is that the singular entity always wins. If the reason a group of
+ * tracks belongs together is that they share an album, an artist, a subgenre
+ * or a genre, then that entity is the card — a set of fifteen Hip Hop tracks
+ * is a Hip Hop card, not a "Hip Hop songs" card sitting next to one. Two cards
+ * at slightly different zoom levels over the same fact is one fact presented
+ * twice, and it reads as a bug because it is one.
+ *
+ * SONG_SET is therefore the residual aperture, not a default. It survives only
+ * when two things hold at once: the generator declared a STRUCTURAL grouping
+ * reason — a relationship no single entity can express — and no singular
+ * entity concentrates the set enough to explain it anyway.
  */
 
-/** A dominant entity has to actually dominate, not merely lead. */
-const DOMINANT_SHARE = APERTURE.dominantShare;
-const DOMINANT_MIN_ALBUM = APERTURE.minAlbumTracks;
-const DOMINANT_MIN_ARTIST = APERTURE.minArtistTracks;
-const DOMINANT_MIN_LANE = APERTURE.minLaneTracks;
+/**
+ * How concentrated a set has to be before one entity explains it.
+ *
+ * Measured rather than guessed. Over the current corpus every taxonomy-defined
+ * set is 100% one subgenre and 100% one genre, while the only non-taxonomic
+ * grouping available — tracks held by the same combination of sources — lands
+ * at 7–29% by album, 7–33% by artist and 7–67% by subgenre. Nothing in the
+ * corpus falls between 0.40 and 0.60, so the album/artist/subgenre line is
+ * robust anywhere in that band.
+ *
+ * Genre gets a distinctly higher bar because it is a coarse partition: with
+ * eight worlds and a library that leans on a few of them, a fifteen-track set
+ * drawn at random already lands 40–67% in one genre. Only near-total
+ * concentration means the set is genuinely about that genre.
+ */
+const SHARE = APERTURE.dominantShare;
+const GENRE_SHARE = APERTURE.dominantGenreShare;
+
+export interface Concentration {
+  album: number;
+  artist: number;
+  subgenre: number;
+  genre: number;
+}
 
 export interface ApertureResult {
   cardType: CardSubjectType | null;
@@ -34,9 +56,13 @@ export interface ApertureResult {
   /** Replacement subject, when the aperture differs from what the generator emitted. */
   subject?: Candidate["subject"];
   deliverableIds?: string[];
+  concentration?: Concentration;
 }
 
-function dominant<T>(ids: string[], keyOf: (id: string) => T | null | undefined) {
+interface Dominant<T> { key: T; count: number; share: number; distinct: number }
+
+function dominant<T>(ids: string[], keyOf: (id: string) => T | null | undefined): Dominant<T> | null {
+  if (ids.length === 0) return null;
   const counts = new Map<T, number>();
   for (const id of ids) {
     const k = keyOf(id);
@@ -45,7 +71,22 @@ function dominant<T>(ids: string[], keyOf: (id: string) => T | null | undefined)
   }
   const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
   if (!top) return null;
-  return { key: top[0], count: top[1], share: top[1] / ids.length };
+  return { key: top[0], count: top[1], share: top[1] / ids.length, distinct: counts.size };
+}
+
+const laneOf = (index: DiscoveryIndex, id: string) => {
+  const s = index.meta.get(id)?.subgenre;
+  return s && s !== UNKNOWN_LANE ? s : null;
+};
+
+/** Concentration of a set by each singular entity that could explain it. */
+export function concentrationOf(index: DiscoveryIndex, ids: string[]): Concentration {
+  return {
+    album: dominant(ids, (id) => index.albumIdOf.get(id) ?? null)?.share ?? 0,
+    artist: dominant(ids, (id) => index.meta.get(id)?.artist ?? null)?.share ?? 0,
+    subgenre: dominant(ids, (id) => laneOf(index, id))?.share ?? 0,
+    genre: dominant(ids, (id) => index.meta.get(id)?.world ?? null)?.share ?? 0,
+  };
 }
 
 /**
@@ -53,8 +94,7 @@ function dominant<T>(ids: string[], keyOf: (id: string) => T | null | undefined)
  *
  * Single-entity subjects already are what they claim to be and pass straight
  * through — an album gap is an album card, an artist gap an artist card. Only
- * multi-track subjects need resolving, and they resolve by their own structure
- * rather than by being cut to a target size.
+ * multi-track subjects need resolving.
  */
 export function resolveAperture(index: DiscoveryIndex, c: Candidate): ApertureResult {
   // A single track is not a card. Nothing generates one any more, and this is
@@ -70,73 +110,101 @@ export function resolveAperture(index: DiscoveryIndex, c: Candidate): ApertureRe
 
   const members = c.deliverableIds ?? [];
   const size = members.length;
+  const concentration = concentrationOf(index, members);
 
-  // A bounded set is a set. Checked before the lane rule below, because a
-  // generator that assembled exactly a dozen tracks meant them as a dozen
-  // tracks — turning that into a lane card would discard the aperture it
-  // deliberately chose.
-  if (size >= SONG_SET_MIN && size <= SONG_SET_MAX) {
-    return { cardType: "SONG_SET", note: `${size} tracks, held together by the source relationship` };
+  // ── Aperture dominance ──────────────────────────────────────────────────
+  //
+  // Most specific first, so an album beats the artist that made it and an
+  // artist beats the lane they sit in. A generator that declared its set
+  // taxonomic names the entity itself; that declaration is authoritative,
+  // because the same recording can be classified differently in different
+  // libraries and re-deriving the lane per track would disagree with the
+  // generator about its own set.
+  const reason = c.groupingReason;
+  if (reason.kind === "TAXONOMIC") {
+    switch (reason.entity) {
+      case "SUBGENRE":
+        return {
+          cardType: "SUBGENRE", concentration,
+          note: `defined by one subgenre (${reason.key}); the lane is the clearer aperture`,
+          subject: { type: "Subgenre", subgenre: reason.key },
+          deliverableIds: members,
+        };
+      case "GENRE":
+        return {
+          cardType: "GENRE", concentration,
+          note: `defined by one genre (${reason.key}); the genre is the clearer aperture`,
+          subject: { type: "Genre", genre: reason.key },
+          deliverableIds: members,
+        };
+      // An album- or artist-defined set arrives as that subject already; a
+      // "Songs" subject carrying one is a generator bug, not a card.
+      default:
+        return {
+          cardType: null, concentration,
+          note: `declared ${reason.entity}-defined but emitted as a set`,
+        };
+    }
   }
 
-  // A lane's worth of tracks is a lane, not a pile of songs. Where the
-  // generator built the set from a single lane it says so, and that is the
-  // authority — re-deriving the lane per track would disagree with it, because
-  // the same recording can be classified differently in different libraries
-  // and the metadata index keeps whichever row it saw first.
-  if (c.subgenre && size >= DOMINANT_MIN_LANE) {
+  // A structural set still loses to a singular entity that happens to explain
+  // it anyway. Measured against the set the page will actually show.
+  const album = dominant(members, (id) => index.albumIdOf.get(id) ?? null);
+  if (album && album.share >= SHARE && album.count >= APERTURE.minAlbumTracks) {
     return {
-      cardType: "SUBGENRE",
-      note: `all ${size} tracks are ${c.subgenre}`,
-      subject: { type: "Subgenre", subgenre: c.subgenre },
-      deliverableIds: members,
+      cardType: null, concentration,
+      note: `${Math.round(album.share * 100)}% of the set is one album — an album card, which this generator cannot justify`,
     };
   }
-
-  const lane = dominant(members, (id) => {
-    const s = index.meta.get(id)?.subgenre;
-    return s && s !== UNKNOWN_LANE ? s : null;
-  });
-
-  // Otherwise: is one entity carrying the set?
-  const album = dominant(members, (id) => index.meta.get(id)?.album ?? null);
   const artist = dominant(members, (id) => index.meta.get(id)?.artist ?? null);
-  if (album && album.share >= DOMINANT_SHARE && album.count >= DOMINANT_MIN_ALBUM) {
-    return { cardType: null, note: `dominated by album "${album.key}" (${Math.round(album.share * 100)}%) — needs an album-shaped rationale this generator does not supply` };
-  }
-  if (artist && artist.share >= DOMINANT_SHARE && artist.count >= DOMINANT_MIN_ARTIST) {
-    return { cardType: null, note: `dominated by artist "${artist.key}" (${Math.round(artist.share * 100)}%) — needs an artist-shaped rationale this generator does not supply` };
-  }
-  if (lane && lane.share >= DOMINANT_SHARE && lane.count >= DOMINANT_MIN_LANE) {
+  if (artist && artist.share >= SHARE && artist.count >= APERTURE.minArtistTracks) {
     return {
-      cardType: "SUBGENRE",
-      note: `${Math.round(lane.share * 100)}% of the set is ${lane.key}`,
+      cardType: null, concentration,
+      note: `${Math.round(artist.share * 100)}% of the set is ${String(artist.key)} — an artist card, which this generator cannot justify`,
+    };
+  }
+  const lane = dominant(members, (id) => laneOf(index, id));
+  if (lane && lane.share >= SHARE && lane.count >= APERTURE.minLaneTracks) {
+    return {
+      cardType: "SUBGENRE", concentration,
+      note: `${Math.round(lane.share * 100)}% of the set is ${String(lane.key)}`,
       subject: { type: "Subgenre", subgenre: lane.key as string },
-      deliverableIds: members.filter((id) => index.meta.get(id)?.subgenre === lane.key),
+      deliverableIds: members.filter((id) => laneOf(index, id) === lane.key),
+    };
+  }
+  const world = dominant(members, (id) => index.meta.get(id)?.world ?? null);
+  if (world && world.share >= GENRE_SHARE && world.count >= APERTURE.minGenreTracks) {
+    return {
+      cardType: "GENRE", concentration,
+      note: `${Math.round(world.share * 100)}% of the set is ${String(world.key)}`,
+      subject: { type: "Genre", genre: world.key as string },
+      deliverableIds: members.filter((id) => index.meta.get(id)?.world === world.key),
     };
   }
 
-  // A bounded set held together by the source relationship is one discovery
-  // unit. A dozen is the floor for that to be worth opening, and padding a
-  // smaller set to reach it would manufacture the thing the floor guarantees.
+  // ── SONG_SET, the residual aperture ─────────────────────────────────────
+  //
+  // Nothing singular explains the set and the relationship holding it together
+  // is structural. A dozen is the floor for that to be worth opening, and
+  // padding a smaller set to reach it would manufacture the thing the floor
+  // guarantees.
   if (size >= SONG_SET_MIN && size <= SONG_SET_MAX) {
-    return { cardType: "SONG_SET", note: `${size} tracks, held together by the source relationship` };
+    return {
+      cardType: "SONG_SET", concentration,
+      note: `${size} tracks, ${reason.description}`,
+    };
   }
 
-  const best = [album, artist, lane]
-    .filter(Boolean)
-    .map((d) => `${Math.round((d as { share: number }).share * 100)}%`)
-    .join("/");
   return {
-    cardType: null,
+    cardType: null, concentration,
     note: size < SONG_SET_MIN
-      ? `${size} tracks — below the ${SONG_SET_MIN}-track minimum, and no dominant entity (${best || "none"})`
-      : `${size} tracks — above the ${SONG_SET_MAX}-track maximum, and no dominant entity (${best || "none"})`,
+      ? `${size} tracks — below the ${SONG_SET_MIN}-track minimum`
+      : `${size} tracks — above the ${SONG_SET_MAX}-track maximum`,
   };
 }
 
-/** The hard gate. A card that is not one of the six does not ship. */
+/** The hard gate. A card that is not one of the five does not ship. */
 export function isAllowedCardType(t: unknown): t is CardSubjectType {
-  return t === "SONG" || t === "SONG_SET" || t === "ALBUM"
+  return t === "SONG_SET" || t === "ALBUM"
     || t === "ARTIST" || t === "SUBGENRE" || t === "GENRE";
 }

@@ -1,4 +1,6 @@
 import { isAllowedCardType, resolveAperture } from "./aperture";
+import { stampIdentity } from "./identity";
+import { resolveRedundancy, type RedundancyPair } from "./redundancy";
 import * as CFG from "./config";
 import { attentionValue, ATTENTION_FLOOR, buildClaims, CLAIM_FLOOR, promisedCount } from "./claims";
 import { ES_FLOOR, GENERATORS } from "./generators";
@@ -22,10 +24,21 @@ export interface EngineOptions {
 
 export interface EngineResult {
   index: DiscoveryIndex;
-  all: Candidate[];         // survived eligibility, collapsed, ranked
-  feed: Candidate[];        // after diversification
+  /**
+   * The whole eligible recommendation universe, ranked and de-duplicated.
+   *
+   * There is no product boundary at any particular number here. The feed
+   * paginates over this; if it holds a hundred and eight cards the viewer can
+   * reach a hundred and eight, and if it holds a hundred thousand the same
+   * code serves those without changing what any of them mean.
+   */
+  all: Candidate[];
+  /** A composed prefix, for callers that want one run's worth in order. */
+  feed: Candidate[];
   rejected: Rejection[];
   byGenerator: Map<GeneratorId, number>;
+  /** Cross-card collisions and how each was resolved. */
+  redundancy: RedundancyPair[];
 }
 
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
@@ -165,6 +178,7 @@ export function runEngine(input: EngineInput, opts: EngineOptions = {}): EngineR
     }
     c.cardType = ap.cardType;
     c.apertureNote = ap.note;
+    c.concentration = ap.concentration;
     if (ap.subject) {
       c.subject = ap.subject;
       c.subjectKey = ap.subject.type === "Subgenre" ? `Subgenre:${ap.subject.subgenre}`
@@ -284,19 +298,36 @@ export function runEngine(input: EngineInput, opts: EngineOptions = {}): EngineR
     all.push(c);
   }
 
+  // ── Cross-card redundancy · one fact, one card ────────────────────────────
+  //
+  // Two candidates can survive everything above and still hand the reader the
+  // same tracks at different zoom levels. Measured on deliverable overlap, and
+  // resolved toward the aperture that explains the material most precisely.
+  const { kept, dropped, pairs } = resolveRedundancy(all);
+  for (const d of dropped) {
+    rejected.push({
+      stage: "redundancy", reasonCode: "REDUNDANT_WITH_BETTER_APERTURE",
+      generator: d.candidate.generator, subjectKey: d.candidate.subjectKey,
+      detail: `${d.shared} of its tracks (${Math.round(d.containment * 100)}%) already on ${d.against.cardType} "${d.against.subjectKey}"`,
+    });
+  }
+
   // The hard gate, re-asserted at the boundary: no candidate reaches the feed
-  // without one of the six allowed card subjects.
-  for (const c of all) {
+  // without one of the five allowed card subjects.
+  for (const c of kept) {
     if (!isAllowedCardType(c.cardType)) {
       throw new Error(`card subject invariant violated: ${c.generator} produced ${String(c.cardType)}`);
     }
   }
 
+  // Stable identity, so the feed can remember this proposition tomorrow.
+  stampIdentity(index, kept);
+
   // ── G · feed composition ──────────────────────────────────────────────────
-  const feed = compose(all, feedSize, lambda);
+  const feed = compose(kept, feedSize, lambda);
   feed.forEach((c, i) => { c.feedRank = i + 1; });
 
-  return { index, all, feed, rejected, byGenerator };
+  return { index, all: kept, feed, rejected, byGenerator, redundancy: pairs };
 }
 
 // ── Diversification ─────────────────────────────────────────────────────────
@@ -332,9 +363,27 @@ const relaxed = (c: Caps, by: number): Caps => ({
   genre: c.genre + by, subgenre: c.subgenre + by, set: c.set + by,
 });
 
-function compose(pool: Candidate[], size: number, lambda: number): Candidate[] {
+/**
+ * Composes an ordered sequence out of a ranked pool.
+ *
+ * Each slot is filled from a bounded window at the top of what is left rather
+ * than from the whole pool. Sorting everything best-to-worst and reading it in
+ * order would make the feed monotonically worse the longer someone scrolls;
+ * drawing from a window a few pages deep lets diversity pull strong-but-
+ * different cards forward, so a later page stays mixed instead of becoming the
+ * dregs of one sort. Every card in the window has already cleared the
+ * publishing floor, so this trades nothing away.
+ *
+ * `score` selects the quantity being composed over: the recommendation's own
+ * ranking score for a one-shot run, its lifecycle placement for a real feed.
+ */
+export function compose(
+  pool: Candidate[], size: number, lambda: number,
+  score: (c: Candidate) => number = (c) => c.rankingScore ?? 0,
+  windowSize = Infinity,
+): Candidate[] {
   const chosen: Candidate[] = [];
-  const remaining = [...pool];
+  const remaining = [...pool].sort((a, b) => score(b) - score(a));
 
   while (chosen.length < size && remaining.length > 0) {
     const recent = chosen.slice(-CFG.FEED.window);
@@ -357,8 +406,10 @@ function compose(pool: Candidate[], size: number, lambda: number): Candidate[] {
 
     const passes = (c: Candidate, caps: Caps | null, strict: boolean): boolean => {
       // Slot one opens on the tightest connection available — an album or an
-      // artist the viewer already holds — rather than a whole lane.
-      if (first && c.cardType === "SUBGENRE") return false;
+      // artist the viewer already holds — rather than a whole lane. Relaxes
+      // with the other constraints, so a pool of nothing but lane cards still
+      // produces a feed rather than an empty one.
+      if (strict && first && (c.cardType === "SUBGENRE" || c.cardType === "GENRE")) return false;
       if (strict && last) {
         // Two identical sentence shapes in a row is the most visible tell that
         // a feed was generated, so this relaxes only after the caps have.
@@ -390,14 +441,15 @@ function compose(pool: Candidate[], size: number, lambda: number): Candidate[] {
     let pickedIdx = -1;
     let pickedScore = 0;
 
+    const horizon = Math.min(remaining.length, windowSize);
     for (const tier of tiers) {
       let bestScore = -Infinity;
-      for (let j = 0; j < remaining.length; j++) {
+      for (let j = 0; j < horizon; j++) {
         const c = remaining[j];
         if (!passes(c, tier.caps, tier.strict)) continue;
         const sim = recent.length ? Math.max(...recent.map((p2) => similarity(c, p2))) : 0;
-        const score = (c.rankingScore ?? 0) - lambda * sim - tier.penalty;
-        if (score > bestScore) { bestScore = score; picked = c; pickedIdx = j; pickedScore = score; }
+        const s2 = score(c) - lambda * sim - tier.penalty;
+        if (s2 > bestScore) { bestScore = s2; picked = c; pickedIdx = j; pickedScore = s2; }
       }
       if (picked) break;
     }

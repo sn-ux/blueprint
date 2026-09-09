@@ -169,11 +169,88 @@ export const MULTI_SOURCE_SET = {
 
 // ── Aperture ────────────────────────────────────────────────────────────────
 
+/**
+ * When one singular entity explains a set well enough to become the card.
+ *
+ * Measured over the corpus rather than guessed. Taxonomy-defined sets sit at
+ * 1.00 by album, artist, subgenre or genre; the one non-taxonomic grouping
+ * available lands at 0.07-0.33 by album and artist and 0.07-0.67 by subgenre.
+ * Nothing observed falls between 0.40 and 0.60, so the line is stable anywhere
+ * in that band. Genre is a coarse partition — eight worlds — where a random
+ * fifteen-track set already lands 0.40-0.67 in one of them, so only near-total
+ * concentration counts as explained.
+ */
 export const APERTURE = {
   dominantShare: 0.6,
+  dominantGenreShare: 0.85,
   minAlbumTracks: 4,
   minArtistTracks: 4,
   minLaneTracks: 8,
+  minGenreTracks: 12,
+};
+
+// ── Cross-card redundancy ───────────────────────────────────────────────────
+
+/**
+ * Two cards are the same recommendation when they would hand the reader
+ * substantially the same tracks.
+ *
+ * Measured by containment — the overlap as a fraction of the smaller card's
+ * deliverable set — rather than by Jaccard, because a fifteen-track set
+ * entirely contained in a three-hundred-track lane is redundant with it even
+ * though the two sets are nothing alike in size.
+ */
+export const REDUNDANCY = {
+  /** Containment at or above this makes the weaker aperture redundant. */
+  containment: 0.6,
+  /** Below this many shared tracks, overlap is coincidence rather than a fact. */
+  minShared: 4,
+};
+
+// ── Lifecycle ───────────────────────────────────────────────────────────────
+
+/**
+ * Should this valid recommendation appear now?
+ *
+ * Deliberately a separate scale from recommendation quality. evidenceStrength,
+ * attentionValue and anchor specificity say how good a recommendation is;
+ * nothing here touches them. These numbers only decide placement in time, and
+ * every card they place has already cleared the publishing floor.
+ */
+export const LIFECYCLE = {
+  /** Never shown to this viewer before. */
+  unseenBoost: 0.12,
+  /** The material behind a previously-seen proposition genuinely changed. */
+  materialChangeBoost: 0.10,
+  /** Per impression, up to the cap. Seeing is not disliking. */
+  impressionPenalty: 0.04,
+  impressionPenaltyMax: 0.20,
+  /** Opening is evidence the viewer already investigated it. */
+  openPenalty: 0.10,
+  openPenaltyMax: 0.30,
+  /** How long a card rests after being seen, and after being opened. */
+  impressionCooldownHours: 20,
+  openCooldownHours: 96,
+  /** A dismissal stands until the proposition itself changes. */
+  dismissCooldownDays: 180,
+  /** A cooled-down card comes back early only if its material changed. */
+  materialChangeClearsCooldown: true,
+  /** Feed pages. */
+  pageSize: 24,
+  maxPageSize: 40,
+  /**
+   * How far below the top of the remaining pool a page may draw.
+   *
+   * A pure best-first order makes the feed monotonically worse as it is read.
+   * Composing each page from a window several pages deep lets diversity pull
+   * strong-but-different cards forward, so later pages stay mixed instead of
+   * becoming the dregs of a single sort.
+   */
+  pageWindowMultiple: 3,
+  /** A feed session's ordering is fixed for this long. */
+  sessionTtlMinutes: 90,
+  /** Sessions kept per viewer, so a detail page opened later still resolves. */
+  sessionsRetained: 4,
 };
 
 // ── Feed composition ────────────────────────────────────────────────────────

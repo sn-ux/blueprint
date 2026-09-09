@@ -31,8 +31,16 @@ export interface FeedTrack {
 }
 
 export interface FeedCard {
-  /** Stable across runs: the hash of the discovery expression behind it. */
+  /**
+   * Stable semantic identity of the proposition.
+   *
+   * The same missed material is the same card tomorrow, which is what lets the
+   * feed remember it was already shown. Not a rank, and not regenerated per
+   * run — see lib/discovery/identity.ts.
+   */
   id: string;
+  /** A hash of the facts behind it; changes only when the material does. */
+  version: string;
   rank: number;
   cardType: CardSubjectType;
   qualityBand: "EXCEPTIONAL" | "STRONG" | "SOLID";
@@ -55,7 +63,7 @@ export interface FeedCard {
   /** Artwork for the card's subject: the artist's picture, the album's cover. */
   subjectImageUrl: string | null;
   /** Why this belongs in front of this viewer. */
-  anchor: { type: string; entityName: string; ownedCount: number } | null;
+  anchor: { type: string; entityName: string; ownedCount: number; specificity: number } | null;
 
   /** Named sources behind the recommendation. Never a count. */
   sources: FeedPerson[];
@@ -131,7 +139,8 @@ export function toFeedCard(index: DiscoveryIndex, c: Candidate, previewLimit = 4
   const all = deliverablesOf(index, c);
   const { title, byline } = titleOf(c);
   return {
-    id: c.discoverySetId,
+    id: c.recommendationKey ?? c.discoverySetId,
+    version: c.underlyingVersion ?? "",
     rank: c.feedRank ?? 0,
     cardType: c.cardType as CardSubjectType,
     qualityBand: c.qualityBand ?? "SOLID",
@@ -153,6 +162,7 @@ export function toFeedCard(index: DiscoveryIndex, c: Candidate, previewLimit = 4
       entityName: c.anchor.type === "SUBGENRE_PRESENT" || c.anchor.type === "PARENT_GENRE_PRESENT"
         ? label(c.anchor.entityName) : c.anchor.entityName,
       ownedCount: c.anchor.ownedCount,
+      specificity: c.anchor.specificity,
     } : null,
     sources: c.sourceFriendIds.map((id) => personOf(index, id)),
     deliverableCount: all.length,
@@ -160,8 +170,14 @@ export function toFeedCard(index: DiscoveryIndex, c: Candidate, previewLimit = 4
   };
 }
 
-/** Loads the viewer's world and runs the frozen engine over it. */
-export async function buildFeed(viewerId: string, limit = 100) {
+/**
+ * Loads the viewer's world and runs the engine over it.
+ *
+ * `limit` bounds only the composed convenience prefix. `all` is always the
+ * complete eligible universe, because the feed paginates over that and there
+ * is no product boundary at any particular number.
+ */
+export async function buildFeed(viewerId: string, limit = Infinity) {
   const people = await prisma.user.findMany({
     where: { midvaleHidden: false, tracks: { some: {} } },
     select: { id: true, name: true, image: true },

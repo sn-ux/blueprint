@@ -6,7 +6,7 @@ import {
 import {
   ANCHOR_SPECIFICITY, SONG_SET_MAX, SONG_SET_MIN,
   type Candidate, type DiscoverySet, type Evidence, type GeneratorId,
-  type RecipientAnchor, type Subject,
+  type GroupingReason, type RecipientAnchor, type Subject,
 } from "./types";
 
 /**
@@ -83,6 +83,8 @@ interface Built {
   generator: GeneratorId;
   subject: Subject;
   subjectKey: string;
+  /** What makes these tracks one set. Declared, never inferred downstream. */
+  groupingReason: GroupingReason;
   setType: DiscoverySet["type"];
   setKey: string;
   expression: string;
@@ -112,6 +114,7 @@ function build(index: DiscoveryIndex, b: Built): Candidate {
     id: nextId(b.generator),
     subject: b.subject,
     subjectKey: b.subjectKey,
+    groupingReason: b.groupingReason,
     generator: b.generator,
     discoverySetId: set.id,
     discoveryExpression: b.expression,
@@ -153,6 +156,7 @@ const artistGap: GeneratorSpec = {
         generator: "ARTIST_GAP",
         subject: { type: "Artist", artist: u.artist },
         subjectKey: `Artist:${u.artist}`,
+        groupingReason: { kind: "TAXONOMIC", entity: "ARTIST", key: u.artist },
         setType: "artistGap", setKey: u.artist,
         expression: `(A_${u.artist} ∩ F_all) − U, |A ∩ U| = ${owned}`,
         members: bounded,
@@ -202,6 +206,7 @@ const artistAbsentInLane: GeneratorSpec = {
         generator: "ARTIST_ABSENT_IN_LANE",
         subject: { type: "Artist", artist: u.artist },
         subjectKey: `Artist:${u.artist}`,
+        groupingReason: { kind: "TAXONOMIC", entity: "ARTIST", key: u.artist },
         setType: "artistAbsent", setKey: u.artist,
         expression: `A_${u.artist} ∩ F_all, A ∩ U = ∅, |S_${dominant[0]} ∩ U| = ${ownedInLane}`,
         members: bounded,
@@ -250,6 +255,7 @@ const albumGapTrue: GeneratorSpec = {
         generator: "ALBUM_GAP_TRUE",
         subject: { type: "Album", artist: a.artist, album: a.title },
         subjectKey: `Album:${a.albumId}`,
+        groupingReason: { kind: "TAXONOMIC", entity: "ALBUM", key: a.albumId },
         setType: "albumGapTrue", setKey: a.albumId,
         expression: `AL_${a.albumId} − U   (${a.ownedPositions}/${a.totalTracks} held)`,
         members: a.missing,
@@ -284,6 +290,7 @@ const albumAsUnit: GeneratorSpec = {
         generator: "ALBUM_AS_UNIT",
         subject: { type: "Album", artist: a.artist, album: a.title },
         subjectKey: `Album:${a.albumId}`,
+        groupingReason: { kind: "TAXONOMIC", entity: "ALBUM", key: a.albumId },
         setType: "albumUnit", setKey: a.albumId,
         expression: `AL_${a.albumId} ∩ F_all, AL ∩ U = ∅, |A_${a.artist} ∩ U| = ${ownedByArtist}`,
         members: members.slice(0, CFG.DELIVERABLE_MAX),
@@ -322,6 +329,7 @@ const subgenreGap: GeneratorSpec = {
         generator: "SUBGENRE_GAP",
         subject: { type: "Subgenre", subgenre: lane.subgenre },
         subjectKey: `Subgenre:${lane.subgenre}`,
+        groupingReason: { kind: "TAXONOMIC", entity: "SUBGENRE", key: lane.subgenre },
         setType: "laneVoid", setKey: `gap:${lane.subgenre}`,
         expression: `(F_all ∩ S_${lane.subgenre}) − U, |S ∩ U| = ${owned}`,
         members: bounded,
@@ -362,6 +370,7 @@ const missingChild: GeneratorSpec = {
         generator: "MISSING_CHILD",
         subject: { type: "Subgenre", subgenre: lane.subgenre },
         subjectKey: `Subgenre:${lane.subgenre}`,
+        groupingReason: { kind: "TAXONOMIC", entity: "SUBGENRE", key: lane.subgenre },
         setType: "childVoid", setKey: `child:${lane.subgenre}`,
         expression: `(F_all ∩ S_${lane.subgenre}) − U, S ∩ U = ∅, |G_${lane.world} ∩ U| = ${ownedInParent}`,
         members: bounded,
@@ -411,6 +420,10 @@ const consensusInLane: GeneratorSpec = {
         generator: "CONSENSUS_IN_LANE",
         subject: { type: "Songs", label: lane.subgenre, discoverySetId: "" },
         subjectKey: `Songs:consensus:${lane.subgenre}`,
+        // Every track here shares one lane. That is a taxonomic reason, so the
+        // aperture stage turns this into the lane's own card rather than a
+        // second card called "<lane> songs" standing beside it.
+        groupingReason: { kind: "TAXONOMIC", entity: "SUBGENRE", key: lane.subgenre },
         setType: "kOfN", setKey: `consensus:${lane.subgenre}`,
         expression: `{ t ∈ (F_all ∩ S_${lane.subgenre}) − U : |holders(t)| ≥ ${CFG.CONSENSUS_SET.minSourcesPerTrack} }`,
         members,
