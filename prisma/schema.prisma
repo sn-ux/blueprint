@@ -19,6 +19,7 @@ model User {
   tracks        Track[]
   exposures     RecommendationExposure[]
   feedSessions  RecommendationFeedSession[]
+  notes         Note[]
 }
 
 model Account {
@@ -58,7 +59,7 @@ model VerificationToken {
 }
 
 model Track {
-  id                   String  @id @default(cuid())
+  id                   String   @id @default(cuid())
   userId               String
   spotifyId            String
   name                 String
@@ -175,12 +176,13 @@ model RecommendationFeedSession {
   expiresAt DateTime
   /**
    * How far generation has been pushed for this reading.
-   *
    * A session is a position in a widening search rather than a list: bands are
    * generated when the reader arrives at them, not up front.
    */
   depth     Int      @default(0)
-  /** How many times the reading has fallen back to resurfacing. */
+  /**
+   * How many times the reading has fallen back to resurfacing.
+   */
   laps      Int      @default(0)
   /**
    * Ordered FeedCard snapshots plus each card's deliverable track ids.
@@ -190,4 +192,39 @@ model RecommendationFeedSession {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+}
+
+/**
+ * A note one person wrote about something, readable by everyone who can see
+ * that thing.
+ * The target is an entity, not a card: `subjectIdentity()` in
+ * lib/discovery/identity.ts already produces a key that is the same string for
+ * every viewer — "artist:<spotify id>", "album:<spotify id>",
+ * "subgenre:<canonical>", "genre:<canonical>", "set:<grouping key>". A
+ * recommendation key would have been wrong here: it hashes the generator that
+ * produced the card as well as its subject, so two people reaching the same
+ * artist by different routes would not have found each other's notes.
+ * Nothing about a feed position or a reading session is in this. A note
+ * outlives the card that led to it.
+ */
+model Note {
+  id         String   @id @default(cuid())
+  authorId   String
+  /**
+   * "artist" | "album" | "subgenre" | "genre" | "set" — the target's kind.
+   */
+  targetType String
+  /**
+   * The whole stable key, kind included, exactly as subjectIdentity builds it.
+   */
+  targetKey  String
+  body       String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  // The read is always "every note on this target, newest first".
+  @@index([targetKey, createdAt])
+  @@index([authorId])
 }

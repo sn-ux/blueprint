@@ -3,6 +3,7 @@ import { label } from "./display";
 import { runEngine } from "./engine";
 import type { DiscoveryIndex } from "./sets";
 import type { Candidate, CardSubjectType, RecipientContext } from "./types";
+import { subjectIdentity } from "@/lib/discovery/identity";
 
 /**
  * The recommendation feed as the app consumes it.
@@ -82,6 +83,16 @@ export interface FeedCard {
   detailExplanation: string;
   /** How far this sits from what the viewer already holds. */
   distanceBand: "NEAR" | "MID" | "FAR";
+  /**
+   * What this card is about, as a key that is the same for every viewer.
+   *
+   * "artist:<spotify id>", "album:<spotify id>", "subgenre:<canonical>",
+   * "genre:<canonical>", "set:<grouping key>". Deliberately not the
+   * recommendation key, which also hashes the generator that produced the
+   * card — two people reaching the same artist by different routes must
+   * arrive at the same subject.
+   */
+  subjectKey: string;
 
   /** Named sources behind the recommendation. Never a count. */
   sources: FeedPerson[];
@@ -256,6 +267,7 @@ export function toFeedCard(index: DiscoveryIndex, c: Candidate, previewLimit = 4
     recipientContext: contextOf(c),
     detailExplanation: c.winningClaim?.detailText ?? c.caption ?? "",
     distanceBand: c.distanceBand ?? "NEAR",
+    subjectKey: subjectIdentity(index, c),
     sources: c.sourceFriendIds.map((id) => personOf(index, id)),
     deliverableCount: all.length,
     previewTracks: all.slice(0, previewLimit),
