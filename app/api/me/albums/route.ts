@@ -16,7 +16,9 @@ export async function GET() {
   }
 
   const rows = await prisma.track.findMany({
-    where: { userId: viewer.id, album: { not: null } },
+    // An empty title is not an album; two rows carry one, and they would
+    // render as nameless tiles.
+    where: { userId: viewer.id, album: { not: null, notIn: [""] } },
     select: { album: true, albumId: true, artist: true, imageUrl: true },
   });
 
