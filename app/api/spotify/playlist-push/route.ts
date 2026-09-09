@@ -209,6 +209,31 @@ export async function POST(req: NextRequest) {
   const me = await meRes.json() as { id: string; display_name?: string };
   const spotifyUserId = me.id;
 
+  /**
+   * Only ids Spotify can actually take.
+   *
+   * Twenty-two characters of base62 is what a Spotify id is; anything else —
+   * a Blueprint row id, an empty string, something half-mapped — makes the
+   * add call fail for every track in its batch, not just for itself.
+   */
+  const validIds = spotifyIds.filter(id => /^[A-Za-z0-9]{22}$/.test(id));
+  const dropped = spotifyIds.length - validIds.length;
+  console.log(
+    `[playlist-push] ${worldType} "${genre}" — ${spotifyIds.length} ids in,`
+    + ` ${validIds.length} valid${dropped ? `, ${dropped} dropped` : ""}`
+    + ` — first: ${validIds.slice(0, 5).join(", ")}`,
+  );
+
+  // Nothing to make a playlist out of. Said before one is created, so there is
+  // never an empty playlist sitting in somebody's Spotify.
+  if (validIds.length === 0) {
+    console.error("[playlist-push] no usable Spotify ids", spotifyIds.slice(0, 5));
+    return NextResponse.json(
+      { error: "no_tracks", message: "None of these tracks have a usable Spotify id." },
+      { status: 400 },
+    );
+  }
+
   // ── Build playlist name ──────────────────────────────────────────────────────
   // Individual genre:    Blueprint · [User Name] · [Genre]
   // Individual subgenre: Blueprint · [User Name] · [Subgenre]
@@ -258,8 +283,15 @@ export async function POST(req: NextRequest) {
   const playlistId  = playlist.id;
   const playlistUrl = playlist.external_urls.spotify;
 
-  // ── Add tracks in batches of 100 ─────────────────────────────────────────────
-  const uris = spotifyIds.map(id => `spotify:track:${id}`);
+  /**
+   * Add the tracks, in batches of a hundred.
+   *
+   * Spotify rejects a whole batch for one bad id — "Invalid base62 id", 400,
+   * nothing added — so a single unusable row among a hundred good ones used to
+   * empty the entire playlist. The ids are filtered to the shape Spotify
+   * accepts before any of them is sent, so one bad row costs one track.
+   */
+  const uris = validIds.map(id => `spotify:track:${id}`);
   const BATCH = 100;
   let addedCount = 0;
 
@@ -268,28 +300,42 @@ export async function POST(req: NextRequest) {
     const addRes = await spotifyFetch(
       `/playlists/${playlistId}/tracks`,
       accessToken,
-      {
-        method: "POST",
-        body: JSON.stringify({ uris: batch }),
-      },
+      { method: "POST", body: JSON.stringify({ uris: batch }) },
     );
     if (!addRes.ok) {
       const err = await addRes.text().catch(() => "");
-      console.error("[playlist-push] add tracks failed (batch", i / BATCH, "):", addRes.status, err);
-      // Continue — partial playlist is better than aborting
-      break;
+      console.error(
+        `[playlist-push] add failed, batch ${i / BATCH}: ${addRes.status} ${err}`,
+      );
+      /**
+       * A failure is a failure.
+       *
+       * This used to break out of the loop and answer 200 with the playlist's
+       * address and a count of zero — so the app opened an empty playlist and
+       * called it done. Nothing is reported as created unless every batch
+       * went in.
+       */
+      return NextResponse.json(
+        {
+          error: "add_failed",
+          message: "Spotify created the playlist but would not accept the tracks.",
+          status: addRes.status,
+          detail: err.slice(0, 400),
+          playlistId,
+          playlistUrl,
+          added: addedCount,
+          expected: uris.length,
+        },
+        { status: 502 },
+      );
     }
     addedCount += batch.length;
   }
 
   console.log(
-    `[playlist-push] created "${playlistName}" (${playlistId}) for Spotify user ${spotifyUserId}` +
-    ` — ${addedCount}/${spotifyIds.length} tracks added`,
+    `[playlist-push] created "${playlistName}" (${playlistId}) for Spotify user ${spotifyUserId}`
+    + ` — ${addedCount}/${validIds.length} tracks added`,
   );
 
-  return NextResponse.json({
-    playlistId,
-    playlistUrl,
-    trackCount: addedCount,
-  });
+  return NextResponse.json({ playlistId, playlistUrl, trackCount: addedCount });
 }
