@@ -421,6 +421,21 @@ export const LIFECYCLE = {
    * particular library.
    */
   minEligiblePages: 2,
+  /**
+   * Resurfacing.
+   *
+   * A card the reader scrolled past is not spent. Once genuinely new material
+   * thins, cards from earlier in the same reading can return — but only from
+   * far enough back that the feed cannot read as a loop, and ranked by how
+   * long it has been rather than by score alone.
+   */
+  resurfaceMinGap: 60,
+  /** Safety valve on one request's extension loop; never reached in practice. */
+  maxExtensions: 4,
+  resurfaceAgeBonus: 0.25,
+  resurfaceAgeSaturation: 200,
+  /** What each previous return costs, so the whole body takes its turn. */
+  resurfaceRepeatPenalty: 0.35,
   /** A feed session's ordering is fixed for this long. */
   sessionTtlMinutes: 90,
   /** Sessions kept per viewer, so a detail page opened later still resolves. */

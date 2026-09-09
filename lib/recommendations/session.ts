@@ -3,6 +3,7 @@ import * as CFG from "@/lib/discovery/config";
 import { compose } from "@/lib/discovery/engine";
 import { buildFeed, toFeedCard, type FeedCard, type FeedPerson, type FeedTrack } from "@/lib/discovery/feed";
 import { evaluate, type ExposureState, type LifecycleStatus } from "@/lib/discovery/lifecycle";
+import { MAX_DEPTH } from "@/lib/discovery/tiers";
 import type { Candidate } from "@/lib/discovery/types";
 
 /**
@@ -33,6 +34,10 @@ export interface StoredCard {
   card: FeedCard;
   deliverableIds: string[];
   lifecycle: { status: LifecycleStatus; score: number };
+  /** Which generation band produced it. Higher is nicher. */
+  depth?: number;
+  /** True when this is a card from earlier in the reading, brought back. */
+  resurfaced?: boolean;
 }
 
 export interface FeedPage {
@@ -90,7 +95,7 @@ export interface SessionBuild {
  * touching it.
  */
 export async function startSession(viewerId: string, persist = true): Promise<SessionBuild | null> {
-  const result = await buildFeed(viewerId, 0);
+  const result = await buildFeed(viewerId, 0, 0);
   if (!result) return null;
 
   const now = new Date();
@@ -161,6 +166,7 @@ export async function startSession(viewerId: string, persist = true): Promise<Se
     card: toFeedCard(result.index, c),
     deliverableIds: c.deliverableIds ?? [],
     lifecycle: { status: statusOf.get(c) ?? "READY", score: c.lifecycleScore ?? 0 },
+    depth: c.tier ?? 0,
   }));
 
   if (!persist) return { sessionId: "", stored, suppressed };
@@ -169,6 +175,7 @@ export async function startSession(viewerId: string, persist = true): Promise<Se
     data: {
       userId: viewerId,
       expiresAt: new Date(now.getTime() + CFG.LIFECYCLE.sessionTtlMinutes * 60_000),
+      depth: 0,
       cards: stored as unknown as object,
     },
     select: { id: true },
@@ -189,12 +196,137 @@ export async function startSession(viewerId: string, persist = true): Promise<Se
   return { sessionId: session.id, stored, suppressed };
 }
 
-async function loadSession(viewerId: string, sessionId: string): Promise<StoredCard[] | null> {
+async function loadSession(viewerId: string, sessionId: string) {
   const row = await prisma.recommendationFeedSession.findFirst({
     where: { id: sessionId, userId: viewerId },
-    select: { cards: true },
+    select: { cards: true, depth: true, laps: true },
   });
-  return row ? (row.cards as unknown as StoredCard[]) : null;
+  return row
+    ? { stored: row.cards as unknown as StoredCard[], depth: row.depth, laps: row.laps }
+    : null;
+}
+
+/**
+ * The next stretch of feed, generated when the reader arrives at it.
+ *
+ * Discovery does not have a length, so a session is not a list — it is a
+ * position in a search that keeps widening. Building every band up front would
+ * spend the effort whether or not anyone scrolled that far, and would still
+ * end; generating a band when it is reached costs nothing until it is needed
+ * and has somewhere to go afterwards.
+ *
+ * Two things can extend it, in that order. Deeper generation first: the same
+ * generators asked for smaller, nicher, still entirely factual misses. When
+ * that is spent, cards from far enough back in this same reading return —
+ * ranked by how long it has been rather than by score, so what comes back is
+ * what has been out of sight longest rather than the same handful each time.
+ */
+async function extendSession(
+  viewerId: string, sessionId: string,
+  stored: StoredCard[], depth: number, laps: number,
+): Promise<{ stored: StoredCard[]; depth: number; laps: number; grew: boolean }> {
+  const held = new Set(stored.map((s) => s.card.id));
+  const now = new Date();
+
+  // ── Deeper generation ────────────────────────────────────────────────────
+  if (depth < MAX_DEPTH) {
+    const nextDepth = depth + 1;
+    const result = await buildFeed(viewerId, 0, nextDepth);
+    if (result) {
+      const exposures = await exposuresOf(viewerId);
+      const fresh = [];
+      for (const c of result.all) {
+        if (held.has(c.recommendationKey ?? "")) continue;
+        const v = evaluate(c, exposures.get(c.recommendationKey ?? ""), now);
+        c.lifecycleScore = v.score;
+        if (!v.eligible) continue;
+        fresh.push(c);
+      }
+      if (fresh.length > 0) {
+        const ordered = compose(
+          fresh, Infinity, CFG.FEED.lambda,
+          (c) => c.lifecycleScore ?? c.rankingScore ?? 0,
+          CFG.LIFECYCLE.pageSize * CFG.LIFECYCLE.pageWindowMultiple,
+          sessionId, stored.length,
+        );
+        const added: StoredCard[] = ordered.map((c) => ({
+          card: toFeedCard(result.index, c),
+          deliverableIds: c.deliverableIds ?? [],
+          lifecycle: { status: "READY" as LifecycleStatus, score: c.lifecycleScore ?? 0 },
+          depth: c.tier ?? nextDepth,
+        }));
+        const next = [...stored, ...added];
+        await persist(sessionId, next, nextDepth, laps);
+        console.log(`[feed] session ${sessionId} → depth ${nextDepth}, +${added.length} new (${next.length} total)`);
+        return { stored: next, depth: nextDepth, laps, grew: true };
+      }
+      // Nothing new at this band; record the depth so it is not retried.
+      await persist(sessionId, stored, nextDepth, laps);
+      depth = nextDepth;
+    }
+  }
+
+  // ── Resurfacing ──────────────────────────────────────────────────────────
+  //
+  // Only from far enough back that the reader could not experience it as a
+  // loop, and preferring what has been out of sight longest.
+  const gap = CFG.LIFECYCLE.resurfaceMinGap;
+
+  /**
+   * A card is eligible to come back only from its most recent appearance.
+   *
+   * Keying on the first one lets the strongest cards return on every lap while
+   * everything else waits, which reads as a loop and — because resurfacing
+   * prefers quality — makes the deep feed better than the middle of it, which
+   * is plainly wrong. So the gap is measured from wherever a card was last
+   * seen, and each return costs it, so the whole body of material takes its
+   * turn before anything comes round twice.
+   */
+  const lastSeen = new Map<string, number>();
+  const returns = new Map<string, number>();
+  stored.forEach((s2, i) => {
+    const key = s2.card.id;
+    if (lastSeen.has(key)) returns.set(key, (returns.get(key) ?? 0) + 1);
+    lastSeen.set(key, i);
+  });
+
+  const byKey = new Map<string, StoredCard>();
+  for (const s2 of stored) if (!byKey.has(s2.card.id)) byKey.set(s2.card.id, s2);
+
+  const age = (i: number) =>
+    Math.min(1, (stored.length - i) / CFG.LIFECYCLE.resurfaceAgeSaturation);
+
+  const pool = [...lastSeen.entries()]
+    .filter(([, i]) => stored.length - i >= gap)
+    .map(([key, i]) => ({
+      key,
+      card: byKey.get(key) as StoredCard,
+      // Longest out of sight first, quality still counted, and every previous
+      // return held against it.
+      rank: (byKey.get(key)?.lifecycle.score ?? 0)
+        + CFG.LIFECYCLE.resurfaceAgeBonus * age(i)
+        - CFG.LIFECYCLE.resurfaceRepeatPenalty * (returns.get(key) ?? 0),
+    }))
+    .sort((a, b) => b.rank - a.rank);
+
+  if (pool.length === 0) return { stored, depth, laps, grew: false };
+
+  const added = pool.slice(0, CFG.LIFECYCLE.pageSize).map(({ card }) => ({
+    ...card,
+    resurfaced: true,
+    lifecycle: { ...card.lifecycle, status: "REVIVED" as LifecycleStatus },
+  }));
+  const next = [...stored, ...added];
+  await persist(sessionId, next, depth, laps + 1);
+  console.log(`[feed] session ${sessionId} lap ${laps + 1}, +${added.length} resurfaced (${next.length} total)`);
+  return { stored: next, depth, laps: laps + 1, grew: true };
+}
+
+async function persist(sessionId: string, stored: StoredCard[], depth: number, laps: number) {
+  await prisma.recommendationFeedSession.update({
+    where: { id: sessionId },
+    data: { cards: stored as unknown as object, depth, laps },
+  });
 }
 
 /**
@@ -213,12 +345,20 @@ export async function feedPage(
   let sessionId: string | null = null;
   let offset = 0;
   let stored: StoredCard[] | null = null;
+  let depth = 0;
+  let laps = 0;
 
   if (cursor) {
     const decoded = decodeCursor(cursor);
     if (decoded) {
-      stored = await loadSession(viewerId, decoded.sessionId);
-      if (stored) { sessionId = decoded.sessionId; offset = decoded.offset; }
+      const loaded = await loadSession(viewerId, decoded.sessionId);
+      if (loaded) {
+        sessionId = decoded.sessionId;
+        stored = loaded.stored;
+        depth = loaded.depth;
+        laps = loaded.laps;
+        offset = decoded.offset;
+      }
     }
   }
 
@@ -230,9 +370,32 @@ export async function feedPage(
     offset = 0;
   }
 
+  /**
+   * Reaching the end of what has been generated is not the end of the feed.
+   *
+   * It is the point at which the search widens: a deeper band of the same
+   * generators, and when those are spent, cards from far enough back in this
+   * reading to have left the reader's memory. Extension runs until the page
+   * can be filled or until neither source has anything left, which for a real
+   * library does not happen.
+   */
+  let guard = 0;
+  while (offset + size > stored.length && guard++ < CFG.LIFECYCLE.maxExtensions) {
+    const grown = await extendSession(viewerId, sessionId as string, stored, depth, laps);
+    stored = grown.stored;
+    depth = grown.depth;
+    laps = grown.laps;
+    if (!grown.grew) break;
+  }
+
   const slice = stored.slice(offset, offset + size);
   const end = offset + slice.length;
-  const hasMore = end < stored.length;
+
+  // More exists whenever another card has been composed, another band can
+  // still be searched, or anything is far enough back to come round again.
+  const canDeepen = depth < MAX_DEPTH;
+  const canResurface = stored.length > CFG.LIFECYCLE.resurfaceMinGap;
+  const hasMore = end < stored.length || canDeepen || canResurface;
 
   return {
     cards: slice.map((s, i) => ({ ...s.card, rank: offset + i + 1 })),

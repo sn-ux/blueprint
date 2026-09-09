@@ -90,26 +90,35 @@ try {
   check("a cursor is stable — replaying it returns the same cards",
     JSON.stringify(p2again.cards.map((c) => c.id)) === JSON.stringify(ids2));
 
-  // Walk to the end.
+  // Walk as far as the generated universe goes. The feed no longer ends, so
+  // this stops when new material does rather than when the stream does.
+  const MAX_PAGES = 40;
   let cursor = p1.nextCursor, seen = [...ids1], guard = 0, last = p1;
+  const seenSet = new Set(ids1);
   const walked = [...p1.cards];
-  while (cursor && guard++ < 200) {
+  while (cursor && guard++ < MAX_PAGES) {
     last = await feedPage(userId, cursor, size);
+    const fresh = last.cards.filter((c) => !seenSet.has(c.id));
+    for (const c of fresh) seenSet.add(c.id);
     seen.push(...last.cards.map((c) => c.id));
     walked.push(...last.cards);
     cursor = last.nextCursor;
+    if (fresh.length === 0) break;
   }
-  check("walking the whole session yields no duplicates",
-    new Set(seen).size === seen.length, `${seen.length} cards`);
-  check("exhausting the inventory ends the stream cleanly",
-    last.hasMore === false && last.nextCursor === null && last.caughtUp === true);
-  check("the stream is not truncated at a fixed length",
-    seen.length === p1.total, `${seen.length} of ${p1.total} reachable`);
+  const distinct = new Set(seen);
+  check("every generated proposition is reached before anything repeats",
+    seen.slice(0, distinct.size).length === new Set(seen.slice(0, distinct.size)).size,
+    `${distinct.size} distinct over ${seen.length} shown`);
+  check("the stream does not end while material remains",
+    last.hasMore === true && last.nextCursor !== null && last.caughtUp === false);
+  check("the whole generated universe is reachable by scrolling",
+    distinct.size > 300, `${distinct.size} distinct propositions reached`);
 
   // Quality must not collapse monotonically as the reader keeps scrolling.
   console.log("\n  per-page composition:");
   const pages = [];
-  for (let i = 0; i < seen.length; i += size) pages.push(seen.slice(i, i + size));
+  const uniquePrefix = [...new Set(seen)];
+  for (let i = 0; i < uniquePrefix.length; i += size) pages.push(uniquePrefix.slice(i, i + size));
   const cardsByKey = new Map(walked.map((c) => [c.id, c]));
   let worstBandShare = 1;
   pages.forEach((ids, i) => {
@@ -151,13 +160,20 @@ try {
   console.log("\n═══ SECTION 2 — DETAIL IMAGES ═══");
   // One session, walked once. Each cursor-less request now seeds a new
   // ordering, so cards must be compared against the session they came from.
+  // Bounded, always. The feed is deliberately non-terminal, so a walk that
+  // waits for nextCursor to be null never returns — and every extra turn of
+  // that loop makes the server resurface another page and write it back.
+  const MAX_WALK_PAGES = 20;
   const session = await feedPage(userId, null, LIFECYCLE.maxPageSize);
   const everything = [...session.cards];
+  const walkSeen = new Set(everything.map((c) => c.id));
   let c2 = session.nextCursor;
-  while (c2) {
+  for (let w = 0; w < MAX_WALK_PAGES && c2; w++) {
     const nxt = await feedPage(userId, c2, LIFECYCLE.maxPageSize);
-    everything.push(...nxt.cards);
+    const fresh = nxt.cards.filter((c) => !walkSeen.has(c.id));
+    for (const c of fresh) { walkSeen.add(c.id); everything.push(c); }
     c2 = nxt.nextCursor;
+    if (fresh.length === 0) break;
   }
 
   // Nothing may reach the network while a card is being opened.

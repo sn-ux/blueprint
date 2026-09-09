@@ -429,6 +429,8 @@ export function compose(
   score: (c: Candidate) => number = (c) => c.rankingScore ?? 0,
   windowSize = Infinity,
   seed = "",
+  /** Where this batch begins in the feed, for the penalties that read position. */
+  positionOffset = 0,
 ): Candidate[] {
   const chosen: Candidate[] = [];
   const remaining = [...pool].sort((a, b) => score(b) - score(a));
@@ -507,12 +509,12 @@ export function compose(
       const sim = recent.length ? Math.max(...recent.map((p2) => similarity(c, p2))) : 0;
       // The aperture widens with position: a far card is set back near the top
       // and not at all further down.
-      const far = distancePenalty(c.discoveryDistance ?? 0, chosen.length);
+      const far = distancePenalty(c.discoveryDistance ?? 0, positionOffset + chosen.length);
       // Weaker tiers sit behind everything above them, and the setback decays
       // with position, so the feed reaches them once the strong material is
       // spent rather than never.
       const depth = CFG.FEED.tierPenalty * (c.tier ?? 0)
-        * Math.max(0, 1 - chosen.length / CFG.FEED.tierRamp);
+        * Math.max(0, 1 - (positionOffset + chosen.length) / CFG.FEED.tierRamp);
       const s2 = score(c) - lambda * sim - far - depth - crowding(c);
       eligible.push({ c, j, s: s2 });
       if (s2 > bestScore) bestScore = s2;
@@ -523,7 +525,7 @@ export function compose(
       .filter((e) => e.s >= bestScore - CFG.FEED.selectionBand)
       .sort((a, b) => b.s - a.s
         || (a.c.recommendationKey ?? a.c.id).localeCompare(b.c.recommendationKey ?? b.c.id));
-    const draw = seed ? jitterFor(seed, `slot:${chosen.length}`) : 0;
+    const draw = seed ? jitterFor(seed, `slot:${positionOffset + chosen.length}`) : 0;
     const choice = band[Math.min(band.length - 1, Math.floor(draw * band.length))];
     picked = choice.c;
     pickedIdx = choice.j;
