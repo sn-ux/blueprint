@@ -236,7 +236,7 @@ export function toFeedCard(index: DiscoveryIndex, c: Candidate, previewLimit = 4
  * complete eligible universe, because the feed paginates over that and there
  * is no product boundary at any particular number.
  */
-export async function buildFeed(viewerId: string, limit = Infinity) {
+export async function buildFeed(viewerId: string, limit = Infinity, depth = Infinity) {
   const people = await prisma.user.findMany({
     where: { midvaleHidden: false, tracks: { some: {} } },
     select: { id: true, name: true, image: true },
@@ -253,5 +253,5 @@ export async function buildFeed(viewerId: string, limit = Infinity) {
     },
   });
 
-  return runEngine({ viewerId, people, tracks }, { feedSize: limit });
+  return runEngine({ viewerId, people, tracks }, { feedSize: limit, depth });
 }

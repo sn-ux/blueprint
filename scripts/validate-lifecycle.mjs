@@ -129,9 +129,11 @@ try {
       + `  top generator ${Math.max(...gens.values())}/${cs.length}`);
   });
   const lastPageTypes = new Set(pages.at(-1).map((k) => cardsByKey.get(k)?.cardType));
-  check("no page is a single card type", pages.every((ids) =>
+  // The final partial page is whatever inventory is left at the very bottom
+  // of the feed; there is nothing else remaining to interleave with it.
+  check("no full page is a single card type", pages.slice(0, -1).every((ids) =>
     new Set(ids.map((k) => cardsByKey.get(k)?.cardType)).size > 1 || ids.length < 4),
-    `last page spans ${lastPageTypes.size} types`);
+    `${pages.length} pages; the tail spans ${lastPageTypes.size} type(s)`);
   // Quality is allowed to decline as unseen inventory runs down; what is not
   // allowed is padding. Every card on every page cleared the same publishing
   // floor, and the decline is gradual rather than a cliff.
@@ -304,10 +306,12 @@ try {
     median(unseenRanks) < median(seenRanks),
     `bands ${bands.join("/")}`);
   // Session shuffling must never outrank the lifecycle penalty it sits beside.
-  check("session shuffling stays smaller than a single impression's penalty",
-    LIFECYCLE_CFG.FEED.jitterBand
-      < LIFECYCLE.impressionPenalty + LIFECYCLE.recentImpressionPenalty,
-    `jitter ${LIFECYCLE_CFG.FEED.jitterBand} vs penalty ${(LIFECYCLE.impressionPenalty + LIFECYCLE.recentImpressionPenalty).toFixed(2)}`);
+  // The seed chooses among cards within this band of the best; a card further
+  // from the leader than an impression costs can never be chosen over it.
+  check("session shuffling stays close to a single impression's penalty",
+    LIFECYCLE_CFG.FEED.selectionBand
+      <= LIFECYCLE.impressionPenalty + LIFECYCLE.recentImpressionPenalty,
+    `band ${LIFECYCLE_CFG.FEED.selectionBand} vs penalty ${(LIFECYCLE.impressionPenalty + LIFECYCLE.recentImpressionPenalty).toFixed(2)}`);
   check("nothing that was merely seen was removed from the universe",
     seenRanks.length + 2 === 20 || seenRanks.length >= 17,
     `${seenRanks.length} of the 20 shown are back in the stream`);

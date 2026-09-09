@@ -448,7 +448,15 @@ export const FEED = {
    * pull genuinely reshuffles, while a card better than the band is wide still
    * wins. Quality dominates; this only decides between near-equals.
    */
-  jitterBand: 0.06,
+  /**
+   * How close to the best a card must be to be in the running for a slot.
+   *
+   * The seed picks among everything inside this band once every composition
+   * adjustment has been applied. Wide enough that a slot is never reserved for
+   * one card; narrow enough that a materially better recommendation cannot
+   * lose to a weaker one.
+   */
+  selectionBand: 0.11,
   /**
    * How far behind a weaker tier starts, and over how many cards that setback
    * fades. The feed should reach tier two once tier one is spent, not never.
@@ -458,8 +466,21 @@ export const FEED = {
   lambda: 0.35,
   window: 10,
   caps: { generator: 2, primarySource: 4, artist: 2, genre: 3, subgenre: 2, set: 2 },
-  relaxBy: 2,
-  penalties: [0, 0.05, 0.15, 0.3],
+  /**
+   * What exceeding a cap costs, per card over it. Preferences, not rules:
+   * a fourth artist card in ten still has to be better than the alternatives,
+   * but nothing is ever the only thing allowed to fill a position.
+   */
+  crowding: {
+    generator: 0.10,
+    source: 0.04,
+    artist: 0.16,
+    genre: 0.06,
+    subgenre: 0.12,
+    set: 0.10,
+    repeatClaim: 0.09,
+    opener: 0.18,
+  },
   /**
    * How the aperture widens as the reader goes down the feed.
    *

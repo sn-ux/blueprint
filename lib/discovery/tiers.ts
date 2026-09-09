@@ -93,7 +93,6 @@ export const TIERS: Thresholds[] = [
   {
     ...base,
     artistGapMinOwned: 1,
-    artistGapMinMissing: 2,
     artistAbsentMinCatalog: 2,
     artistAbsentMinOwnedInLane: 1,
     laneMinDeliverable: 3,
@@ -110,7 +109,35 @@ export const TIERS: Thresholds[] = [
     bridgeSetMinArtists: 2,
     bridgeSetMinOwnedByThem: 2,
   },
+  // Beyond here the recipient side is as small as it can be while still being
+  // a relationship at all: one track held by the artist, one in the lane. The
+  // miss shrinks with it. Everything that makes a card true is untouched, so
+  // what these produce is small, real and honestly weaker.
+  {
+    ...base,
+    artistGapMinOwned: 1,
+    artistGapMinMissing: 2,
+    artistAbsentMinCatalog: 2,
+    artistAbsentMinOwnedInLane: 1,
+    laneMinDeliverable: 2,
+    laneMinOwnedForPresent: 1,
+    laneMinOwnedInParent: 2,
+    albumAsUnitMinOwnedByArtist: 1,
+    albumAsUnitMinDeliverable: 2,
+    albumCatalogMinAlbumsHeld: 1,
+    albumCatalogMinDeliverable: 2,
+    genreGapMinDeliverable: 3,
+    genreGapMinLanes: 1,
+    bridgeMinOwned: 1,
+    bridgeMinDeliverable: 2,
+    bridgeSetMinArtists: 2,
+    bridgeSetMinOwnedByThem: 1,
+    newTerritoryMinSources: 2,
+  },
 ];
+
+/** How deep generation can go. Past this, only resurfacing remains. */
+export const MAX_DEPTH = TIERS.length - 1;
 
 /** The profile the generators are currently running under. */
 export let T: Thresholds = TIERS[0];

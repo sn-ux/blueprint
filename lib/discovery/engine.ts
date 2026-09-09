@@ -24,6 +24,11 @@ export interface EngineOptions {
   lambda?: number;
   /** Per-session seed for tie-breaking between near-equal cards. */
   seed?: string;
+  /**
+   * How deep to search. Each band relaxes what counts as a strong enough
+   * recipient relationship or a large enough miss, and nothing else.
+   */
+  depth?: number;
 }
 
 export interface EngineResult {
@@ -107,7 +112,8 @@ export function runEngine(input: EngineInput, opts: EngineOptions = {}): EngineR
   // card. A candidate found at full strength is never re-emitted weaker, so
   // each tier only contributes what the ones above it could not reach.
   const seenSubject = new Set<string>();
-  for (let tier = 0; tier < TIERS.length; tier++) {
+  const maxTier = Math.min(TIERS.length - 1, opts.depth ?? TIERS.length - 1);
+  for (let tier = 0; tier <= maxTier; tier++) {
     withTier(tier, () => {
       for (const g of GENERATORS) {
         for (const c of g.run(index)) {
@@ -376,20 +382,17 @@ function similarity(a: Candidate, b: Candidate): number {
 interface Caps { generator: number; primarySource: number; artist: number; genre: number; subgenre: number; set: number }
 
 /**
- * Caps apply over a rolling ten-card window.
+ * Comfortable counts over a rolling ten-card window.
  *
- * The source cap is deliberately loose and keyed on the primary source only.
- * With four friends, two of them appear in over ninety per cent of all
- * candidates, so a tight per-friend cap does not diversify the feed — it
- * starves it, and every slot falls through to a relaxation tier. The caps that
- * actually shape how the feed reads are generator, artist and lane.
+ * Exceeding one is a cost, not a prohibition — see the crowding penalties in
+ * compose. The source cap is deliberately loose and keyed on the primary
+ * source only: with four friends, two of them appear in over ninety per cent
+ * of all candidates, so a tight per-friend cap does not diversify the feed, it
+ * starves it. The counts that actually shape how the feed reads are generator,
+ * artist and lane.
  */
 const CAPS: Caps = CFG.FEED.caps;
 
-const relaxed = (c: Caps, by: number): Caps => ({
-  generator: c.generator + by, primarySource: c.primarySource + by, artist: c.artist + by,
-  genre: c.genre + by, subgenre: c.subgenre + by, set: c.set + by,
-});
 
 /**
  * Composes an ordered sequence out of a ranked pool.
@@ -428,14 +431,7 @@ export function compose(
   seed = "",
 ): Candidate[] {
   const chosen: Candidate[] = [];
-  // Cards within a band of each other are ordered by the session seed rather
-  // than by a fixed tie-break, so refreshing reshuffles near-equals without
-  // ever lifting a materially weaker card over a stronger one.
-  const jitter = (c: Candidate) => (seed
-    ? CFG.FEED.jitterBand * jitterFor(seed, c.recommendationKey ?? c.id)
-    : 0);
-  const withJitter = (c: Candidate) => score(c) + jitter(c);
-  const remaining = [...pool].sort((a, b) => withJitter(b) - withJitter(a));
+  const remaining = [...pool].sort((a, b) => score(b) - score(a));
 
   while (chosen.length < size && remaining.length > 0) {
     const recent = chosen.slice(-CFG.FEED.window);
@@ -456,64 +452,83 @@ export function compose(
     const last = chosen[chosen.length - 1];
     const first = chosen.length === 0;
 
-    const passes = (c: Candidate, caps: Caps | null, strict: boolean): boolean => {
-      // Slot one opens on the tightest connection available — an album or an
-      // artist the viewer already holds — rather than a whole lane. Relaxes
-      // with the other constraints, so a pool of nothing but lane cards still
-      // produces a feed rather than an empty one.
-      if (strict && first && (c.cardType === "SUBGENRE" || c.cardType === "GENRE")) return false;
-      if (strict && last) {
-        // Two identical sentence shapes in a row is the most visible tell that
-        // a feed was generated, so this relaxes only after the caps have.
-        if (c.winningClaim?.claimType === last.winningClaim?.claimType) return false;
-        if (c.cardType === "SONG_SET" && last.cardType === "SONG_SET") return false;
-      }
-      if (!caps) return true;
-      if ((counts.generator.get(c.generator) ?? 0) >= caps.generator) return false;
+    /**
+     * Diversity, as a preference rather than a rule.
+     *
+     * These were hard filters applied in tiers, which made each slot a
+     * reservation: once the caps had excluded everything else, whichever card
+     * led the two or three survivors won that position in every session. Over
+     * twenty sessions with identical state one card held slot nine every time,
+     * and slot four had two occupants between them.
+     *
+     * As penalties they shape the feed just as firmly in aggregate — a fourth
+     * artist card in ten still has to be materially better than the
+     * alternatives to appear — but nothing is ever the only thing allowed to
+     * fill a position.
+     */
+    const over = (count: number, cap: number) => Math.max(0, count - cap + 1);
+    const crowding = (c: Candidate): number => {
+      const P = CFG.FEED.crowding;
+      let p = 0;
+      p += P.generator * over(counts.generator.get(c.generator) ?? 0, CAPS.generator);
       const primary = c.sourceFriendIds[0];
-      if (primary && (counts.source.get(primary) ?? 0) >= caps.primarySource) return false;
-      if (c.artist && (counts.artist.get(c.artist) ?? 0) >= caps.artist) return false;
-      if (c.genre && (counts.genre.get(c.genre) ?? 0) >= caps.genre) return false;
-      if (c.subgenre && (counts.subgenre.get(c.subgenre) ?? 0) >= caps.subgenre) return false;
-      if (c.cardType === "SONG_SET" && counts.set >= caps.set) return false;
-      return true;
+      if (primary) p += P.source * over(counts.source.get(primary) ?? 0, CAPS.primarySource);
+      if (c.artist) p += P.artist * over(counts.artist.get(c.artist) ?? 0, CAPS.artist);
+      if (c.genre) p += P.genre * over(counts.genre.get(c.genre) ?? 0, CAPS.genre);
+      if (c.subgenre) p += P.subgenre * over(counts.subgenre.get(c.subgenre) ?? 0, CAPS.subgenre);
+      if (c.cardType === "SONG_SET") p += P.set * over(counts.set, CAPS.set);
+      // Two identical sentence shapes in a row is the most visible tell that a
+      // feed was generated.
+      if (last && c.winningClaim?.claimType === last.winningClaim?.claimType) p += P.repeatClaim;
+      // The feed opens on the tightest connection available rather than on a
+      // whole region.
+      if (first && (c.cardType === "SUBGENRE" || c.cardType === "GENRE")) p += P.opener;
+      return p;
     };
-
-    // Constraints are given up one tier at a time rather than all at once. A
-    // blanket fallback silently discards every cap, which is how a single
-    // generator can take half the feed.
-    const tiers: { caps: Caps | null; strict: boolean; penalty: number }[] = [
-      { caps: CAPS, strict: true, penalty: CFG.FEED.penalties[0] },
-      { caps: CAPS, strict: false, penalty: CFG.FEED.penalties[1] },
-      { caps: relaxed(CAPS, CFG.FEED.relaxBy), strict: false, penalty: CFG.FEED.penalties[2] },
-      { caps: null, strict: false, penalty: CFG.FEED.penalties[3] },
-    ];
 
     let picked: Candidate | null = null;
     let pickedIdx = -1;
     let pickedScore = 0;
 
     const horizon = Math.min(remaining.length, windowSize);
-    for (const tier of tiers) {
-      let bestScore = -Infinity;
-      for (let j = 0; j < horizon; j++) {
-        const c = remaining[j];
-        if (!passes(c, tier.caps, tier.strict)) continue;
-        const sim = recent.length ? Math.max(...recent.map((p2) => similarity(c, p2))) : 0;
-        // The aperture widens with position: a far card is set back near the
-        // top and not at all further down. Bounded, so an exceptional one
-        // still wins an early slot on merit.
-        const far = distancePenalty(c.discoveryDistance ?? 0, chosen.length);
-        // Weaker tiers sit behind everything above them. The setback decays
-        // with position, so the feed reaches them once the stronger material
-        // is spent rather than never.
-        const depth = CFG.FEED.tierPenalty * (c.tier ?? 0)
-          * Math.max(0, 1 - chosen.length / CFG.FEED.tierRamp);
-        const s2 = withJitter(c) - lambda * sim - tier.penalty - far - depth;
-        if (s2 > bestScore) { bestScore = s2; picked = c; pickedIdx = j; pickedScore = s2; }
-      }
-      if (picked) break;
+    /**
+     * The seed decides the slot, after every adjustment.
+     *
+     * Jitter added to a score before selection cannot change an outcome the
+     * caps have already narrowed to one candidate. So diversity, distance,
+     * tier depth and crowding are all applied first, and the seed then chooses
+     * among everything within a band of the best. Quality still dominates
+     * absolutely: nothing further than the band from the leader is eligible.
+     */
+    const eligible: { c: Candidate; j: number; s: number }[] = [];
+    let bestScore = -Infinity;
+    for (let j = 0; j < horizon; j++) {
+      const c = remaining[j];
+      const sim = recent.length ? Math.max(...recent.map((p2) => similarity(c, p2))) : 0;
+      // The aperture widens with position: a far card is set back near the top
+      // and not at all further down.
+      const far = distancePenalty(c.discoveryDistance ?? 0, chosen.length);
+      // Weaker tiers sit behind everything above them, and the setback decays
+      // with position, so the feed reaches them once the strong material is
+      // spent rather than never.
+      const depth = CFG.FEED.tierPenalty * (c.tier ?? 0)
+        * Math.max(0, 1 - chosen.length / CFG.FEED.tierRamp);
+      const s2 = score(c) - lambda * sim - far - depth - crowding(c);
+      eligible.push({ c, j, s: s2 });
+      if (s2 > bestScore) bestScore = s2;
     }
+    if (eligible.length === 0) break;
+
+    const band = eligible
+      .filter((e) => e.s >= bestScore - CFG.FEED.selectionBand)
+      .sort((a, b) => b.s - a.s
+        || (a.c.recommendationKey ?? a.c.id).localeCompare(b.c.recommendationKey ?? b.c.id));
+    const draw = seed ? jitterFor(seed, `slot:${chosen.length}`) : 0;
+    const choice = band[Math.min(band.length - 1, Math.floor(draw * band.length))];
+    picked = choice.c;
+    pickedIdx = choice.j;
+    pickedScore = choice.s;
+
     if (!picked) break;
 
     picked.feedScore = pickedScore;
