@@ -402,6 +402,24 @@ export const FEED = {
   caps: { generator: 2, primarySource: 4, artist: 2, genre: 3, subgenre: 2, set: 2 },
   relaxBy: 2,
   penalties: [0, 0.05, 0.15, 0.3],
+  /**
+   * How the aperture widens as the reader goes down the feed.
+   *
+   * `ramp` is how many cards it takes to reach full tolerance for anything;
+   * `weight` is how much an over-distant card is set back at the very top.
+   * Together they mean a far card needs to be roughly `weight` better than a
+   * near one to open the feed, and needs no advantage at all by the ramp's
+   * end. Neither number bans anything from anywhere.
+   */
+  distance: {
+    weight: 0.35,
+    ramp: 60,
+    nearBelow: 0.35,
+    farAtOrAbove: 0.7,
+    /** Tracks by bridging artists at which the bridge is as firm as it gets. */
+    bridgeSaturation: 40,
+    bridgeCredit: 0.3,
+  },
   similarity: {
     generator: 0.30,
     template: 0.25,

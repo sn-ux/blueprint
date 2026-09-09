@@ -27,7 +27,7 @@ for (const t of await prisma.track.findMany({ select: { spotifyId: true, albumId
 await prisma.$disconnect();
 
 const t0 = Date.now();
-const result = await buildFeed(userId, 30);
+const result = await buildFeed(userId, Infinity);
 const { index, feed, all, rejected, redundancy, coexisting } = result;
 const ms = Date.now() - t0;
 
@@ -131,6 +131,8 @@ for (const [k, v] of tally(all, (c) => c.genre ?? "—")) {
   const types = tally(all.filter((c) => (c.genre ?? "—") === k), (c) => c.cardType);
   console.log(`    ${String(k).padEnd(32)} ${String(v).padStart(3)}   ${types.map(([t, n]) => `${t}:${n}`).join(" ")}`);
 }
+console.log("  discovery distance:");
+for (const [k, v] of tally(all, (c) => c.distanceBand)) console.log(`    ${String(k).padEnd(30)} ${v}`);
 console.log("  stacked vs standalone:");
 const stacked = all.filter((c) => c.reasonCodes.includes("STACKED")).length;
 console.log(`    stacked (2+ facts)             ${stacked}`);
@@ -289,12 +291,29 @@ console.log(`  artist cards with an image: ${artistImages.have}/${artistImages.h
 console.log(`  album cards with artwork:   ${albumImages.have}/${albumImages.have + albumImages.missing}`);
 
 // ── SECTION 7 · what a fresh viewer sees ───────────────────────────────────
+// How the aperture widens down the feed.
+{
+  const composed = result.feed;
+  const bands = (from, to) => {
+    const slice = composed.slice(from, to);
+    const n = { NEAR: 0, MID: 0, FAR: 0 };
+    for (const c of slice) n[c.distanceBand]++;
+    const pct = (x) => `${Math.round((x / Math.max(1, slice.length)) * 100)}%`;
+    return `${String(from + 1).padStart(3)}-${String(Math.min(to, composed.length)).padStart(3)}  NEAR ${pct(n.NEAR).padStart(4)}  MID ${pct(n.MID).padStart(4)}  FAR ${pct(n.FAR).padStart(4)}   (${slice.length} cards)`;
+  };
+  console.log("\n── aperture widening ──");
+  console.log("  " + bands(0, 25));
+  console.log("  " + bands(25, 50));
+  console.log("  " + bands(50, 100));
+  console.log("  " + bands(100, composed.length));
+}
+
 console.log("\n═══ SECTION 7 — TOP OF THE FEED (composed, fresh state) ═══");
-for (const c of feed) {
+for (const c of feed.slice(0, 25)) {
   const a = c.anchor;
   console.log(`${String(c.feedRank).padStart(3)}. [${(c.cardType ?? "?").padEnd(9)}] ${c.caption}`);
   console.log(`      ${(c.recommendationKey ?? "").slice(0, 10)}  anchor ${a.type} "${a.entityName}" owned=${a.ownedCount} spec=${a.specificity}`);
-  console.log(`      evidence ${c.evidenceStrength.toFixed(2)}  attention ${c.attentionValue.toFixed(2)}  base ${(c.baseRankingScore ?? 0).toFixed(3)}  sources ${c.sourceFriendNames.join(", ")}  delivers ${c.deliverableCount}`);
+  console.log(`      ${c.distanceBand}  evidence ${c.evidenceStrength.toFixed(2)}  attention ${c.attentionValue.toFixed(2)}  base ${(c.baseRankingScore ?? 0).toFixed(3)}  sources ${c.sourceFriendNames.join(", ")}  delivers ${c.deliverableCount}`);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

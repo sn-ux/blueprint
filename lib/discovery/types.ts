@@ -421,6 +421,10 @@ export interface Candidate {
    */
   recommendationKey?: string;
   underlyingVersion?: string;
+  /** How far this sits from what the viewer already holds, and its band. */
+  discoveryDistance?: number;
+  distanceBand?: "NEAR" | "MID" | "FAR";
+
   /** Lifecycle placement, kept strictly apart from recommendation quality. */
   lifecycleScore?: number;
   lifecycleParts?: Record<string, number>;

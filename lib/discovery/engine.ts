@@ -1,4 +1,5 @@
 import { isAllowedCardType, resolveAperture } from "./aperture";
+import { bandOf, distanceOf, distancePenalty } from "./distance";
 import { stampIdentity } from "./identity";
 import { resolveRedundancy, type CoexistingPair, type RedundancyPair } from "./redundancy";
 import * as CFG from "./config";
@@ -325,6 +326,13 @@ export function runEngine(input: EngineInput, opts: EngineOptions = {}): EngineR
   // Stable identity, so the feed can remember this proposition tomorrow.
   stampIdentity(index, kept);
 
+  // How far each card sits from what the viewer already holds. Read by the
+  // composer to widen the aperture gradually; never a gate.
+  for (const c of kept) {
+    c.discoveryDistance = distanceOf(index, c);
+    c.distanceBand = bandOf(c.discoveryDistance);
+  }
+
   // ── G · feed composition ──────────────────────────────────────────────────
   const feed = compose(kept, feedSize, lambda);
   feed.forEach((c, i) => { c.feedRank = i + 1; });
@@ -450,7 +458,11 @@ export function compose(
         const c = remaining[j];
         if (!passes(c, tier.caps, tier.strict)) continue;
         const sim = recent.length ? Math.max(...recent.map((p2) => similarity(c, p2))) : 0;
-        const s2 = score(c) - lambda * sim - tier.penalty;
+        // The aperture widens with position: a far card is set back near the
+        // top and not at all further down. Bounded, so an exceptional one
+        // still wins an early slot on merit.
+        const far = distancePenalty(c.discoveryDistance ?? 0, chosen.length);
+        const s2 = score(c) - lambda * sim - tier.penalty - far;
         if (s2 > bestScore) { bestScore = s2; picked = c; pickedIdx = j; pickedScore = s2; }
       }
       if (picked) break;
