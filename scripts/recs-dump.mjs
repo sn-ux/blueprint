@@ -10,7 +10,7 @@
  * Writes:
  *   candidates.jsonl   every field, every component score, every rejected rationale
  *   grade.csv          the grading sheet — open it, fill the last three columns
- *   exceptional.csv    every candidate with evidenceStrength >= 0.70, feed or not
+ *   exceptional.csv    every EXCEPTIONAL-band candidate, in the feed or not
  *   rejected.jsonl     everything dropped, with reason codes
  *   inventory.txt      the breakdown by generator, band, subject, source, lane
  */
@@ -58,6 +58,7 @@ mkdirSync(outDir, { recursive: true });
 // ── candidates.jsonl ────────────────────────────────────────────────────────
 const detail = (c) => ({
   feedRank: c.feedRank ?? null,
+  qualityBand: c.qualityBand,
   subject: c.subject,
   subjectType: c.subject.type,
   generator: c.generator,
@@ -116,14 +117,14 @@ const subjectLabel = (c) => {
   }
 };
 const GRADE_COLS = [
-  "rank", "subject", "subjectType", "generator", "setRelationship", "caption",
+  "rank", "qualityBand", "subject", "subjectType", "generator", "setRelationship", "caption",
   "winningClaim", "evidenceStrength", "attentionValue", "baseRankingScore",
   "rankingScore", "feedScore", "friends", "genre", "subgenre", "artist", "album",
   "whyItSurvived", "alternativesThatLost",
   "recommendationQuality", "captionQuality", "notes",
 ];
 const gradeRow = (c, rank) => [
-  rank, subjectLabel(c), c.subject.type, c.generator, c.discoveryExpression, c.caption,
+  rank, c.qualityBand, subjectLabel(c), c.subject.type, c.generator, c.discoveryExpression, c.caption,
   c.winningClaim?.claimType, round(c.evidenceStrength), round(c.attentionValue),
   round(c.baseRankingScore), round(c.rankingScore), round(c.feedScore),
   c.sourceFriendNames.join(" + "), c.genre, c.subgenre, c.artist, c.album,
@@ -137,7 +138,7 @@ writeFileSync(join(outDir, "grade.csv"),
 
 // ── exceptional.csv — nothing strong may be hidden by diversification ───────
 const inFeed = new Set(feed.map((c) => c.id));
-const exceptional = all.filter((c) => c.evidenceStrength >= 0.70);
+const exceptional = all.filter((c) => c.qualityBand === "EXCEPTIONAL");
 writeFileSync(join(outDir, "exceptional.csv"),
   ["inFeed", ...GRADE_COLS].join(",") + "\n" +
   exceptional
@@ -176,11 +177,14 @@ const lines = [
   `|D| = F_all − U   ${index.D.length.toLocaleString()}`,
   `candidates        ${all.length.toLocaleString()} after eligibility + collapse`,
   `feed              ${feed.length}`,
-  `exceptional       ${exceptional.length} at evidenceStrength ≥ 0.70`,
+  `EXCEPTIONAL       ${exceptional.length} (strong evidence AND high attention)`,
   `engine time       ${ms} ms`,
   section("raw production by generator", [...byGenerator.entries()].sort((a, b) => b[1] - a[1])),
   section("surviving candidates by generator", tally(all, (c) => c.generator)),
   section("feed by generator", tally(feed, (c) => c.generator)),
+  section("candidates by recommendation-quality band", tally(all, (c) => c.qualityBand)),
+  section("feed by recommendation-quality band", tally(feed, (c) => c.qualityBand)),
+  section("per-generator quality bands", tally(all, (c) => `${c.generator} · ${c.qualityBand}`), 52),
   section("candidates by evidenceStrength band", tally(all, (c) => band(c.evidenceStrength))),
   section("candidates by attentionValue band", tally(all, (c) => band(c.attentionValue))),
   section("candidates by subject type", tally(all, (c) => c.subject.type)),

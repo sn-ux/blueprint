@@ -183,6 +183,8 @@ export interface Candidate {
   corroborationBonus?: number;
   /** base + tieBreak + corroboration. May exceed 1 — deliberately. */
   rankingScore?: number;
+  /** Card-level quality. Requires strong evidence AND a reason to look. */
+  qualityBand?: "EXCEPTIONAL" | "STRONG" | "SOLID";
 
   secondaryRationales?: { generator: GeneratorId; evidenceStrength: number; caption?: string }[];
   feedScore?: number;

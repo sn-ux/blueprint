@@ -28,6 +28,23 @@ export interface EngineResult {
 
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
 
+/**
+ * Recommendation quality — the card-level band, not the evidence band.
+ *
+ * evidenceStrength measures how strong the evidence is; it says nothing about
+ * whether anyone would care. A lane void can carry solid evidence about 300
+ * tracks and still be inventory. So a card only reaches EXCEPTIONAL when the
+ * evidence is strong AND the fact gives a human reason to look, and the word
+ * is reserved for cards that could plausibly be graded 3.
+ */
+export type QualityBand = "EXCEPTIONAL" | "STRONG" | "SOLID";
+
+export function qualityBand(es: number, av: number): QualityBand {
+  if (es >= 0.80 && av >= 0.90) return "EXCEPTIONAL";
+  if ((es >= 0.68 && av >= 0.80) || (es >= 0.55 && av >= 0.95)) return "STRONG";
+  return "SOLID";
+}
+
 export function runEngine(input: EngineInput, opts: EngineOptions = {}): EngineResult {
   const feedSize = opts.feedSize ?? 100;
   const lambda = opts.lambda ?? 0.35;
@@ -140,6 +157,7 @@ export function runEngine(input: EngineInput, opts: EngineOptions = {}): EngineR
     c.baseRankingScore = clamp01(0.65 * c.evidenceStrength + 0.35 * c.attentionValue);
     c.corroborationBonus = 0;
     c.rankingScore = c.baseRankingScore + (c.tieBreak ?? 0);
+    c.qualityBand = qualityBand(c.evidenceStrength, c.attentionValue);
   }
 
   // ── F · collapse duplicate subjects, keeping the strongest rationale ──────

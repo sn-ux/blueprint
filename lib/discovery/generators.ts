@@ -469,8 +469,14 @@ const artistAbsentInLane: GeneratorSpec = {
           ...holderEvidence(index, holderIds),
         ],
         reasonCodes: ["VIEWER_ABSENT", `CATALOG=${inFriends.length}`, `HOLDERS=${holderIds.length}`, "LANE_PRESENT"],
-        // Anchor: solid to strong on observed catalogue size alone.
-        evidenceStrength: clamp01(0.45 + 0.3 * Math.min(1, inFriends.length / 15)),
+        // Same shape as a lane void: broad inventory. Catalogue size alone
+        // saturated the old term at 0.75 for a third of these, so breadth of
+        // independent sources leads and size saturates well below the ceiling.
+        evidenceStrength: clamp01(
+          0.35
+          + 0.20 * (holderIds.length / Math.max(1, index.friends.length))
+          + 0.15 * Math.min(1, log2(inFriends.length) / log2(60)),
+        ),                                                            // ceiling 0.70
         attentionValue: 0,
         componentScores: { catalogSize: inFriends.length, holders: holderIds.length },
         sourceFriendIds: holderIds,
@@ -491,7 +497,7 @@ const artistAbsentInLane: GeneratorSpec = {
 
 function laneCandidate(
   index: DiscoveryIndex, generator: GeneratorId, lane: { subgenre: string; world: string; gap: string[]; byFriend: Map<string, Set<string>> },
-  es: number, parent: string | null,
+  es: number, parent: string | null, sources: number,
 ): Candidate {
   const holderIds = [...lane.byFriend.keys()];
   const expression = `(F_all ∩ S_${lane.subgenre}) − U, S ∩ U = ∅`;
@@ -515,7 +521,7 @@ function laneCandidate(
     reasonCodes: ["VIEWER_ABSENT", `GAP=${lane.gap.length}`, ...(parent ? [`PARENT_PRESENT=${parent}`] : [])],
     evidenceStrength: es,
     attentionValue: 0,
-    componentScores: { gapSize: lane.gap.length },
+    componentScores: { gapSize: lane.gap.length, sources },
     sourceFriendIds: holderIds,
     sourceFriendNames: holderIds.map((h) => index.nameOf.get(h) ?? "Someone"),
     genre: lane.world, subgenre: lane.subgenre, artist: null, album: null,
@@ -538,12 +544,20 @@ function voidLanes(index: DiscoveryIndex, wantParentPresent: boolean): Candidate
     const parentPresent = index.worlds.get(lane.world)?.viewerPresent ?? false;
     if (parentPresent !== wantParentPresent) continue;
 
-    const magnitude = Math.min(1, log2(lane.gap.length) / 9);
+    // A lane void is broad inventory, not a sharp exception around one
+    // actionable subject, so it is anchored in solid-to-strong territory and
+    // cannot reach near-categorical however large it grows. What separates an
+    // ordinary void from an unusual one is how many independent sources hold
+    // material there — one person's shelf is one person's shelf at any size —
+    // so breadth carries more weight than magnitude, and magnitude saturates.
+    const sources = [...lane.byFriend.values()].filter((s2) => s2.size >= 1).length;
+    const breadth = sources / Math.max(1, index.friends.length);
+    const magnitude = Math.min(1, log2(lane.gap.length) / log2(300));
+    const es = clamp01(0.35 + 0.22 * breadth + 0.13 * magnitude);   // ceiling 0.70
     if (wantParentPresent) {
-      // Anchor: strong. A named hole beside material the viewer already holds.
-      out.push(laneCandidate(index, "MISSING_CHILD", lane, clamp01(0.6 + 0.25 * magnitude), lane.world));
+      out.push(laneCandidate(index, "MISSING_CHILD", lane, es, lane.world, sources));
     } else {
-      out.push(laneCandidate(index, "SUBGENRE_VOID", lane, clamp01(0.55 + 0.3 * magnitude), null));
+      out.push(laneCandidate(index, "SUBGENRE_VOID", lane, es, null, sources));
     }
   }
   return out;
@@ -594,8 +608,11 @@ const sourceLaneDepth: GeneratorSpec = {
             ...(lane.viewerPresent ? [] : [{ kind: "absence", setRef: { kind: "subgenre", subgenre: lane.subgenre } } as Evidence]),
           ],
           reasonCodes: [`COUNT=${members.length}`, lane.viewerPresent ? "LANE_PRESENT" : "LANE_ABSENT"],
-          // Anchor: solid. One source, one body of work.
-          evidenceStrength: clamp01(0.5 + 0.25 * share),
+          // One source by construction, so this tops out below anything with
+          // independent corroboration however deep that one shelf runs.
+          evidenceStrength: clamp01(
+            0.35 + 0.20 * share + 0.10 * Math.min(1, log2(members.length) / log2(120)),
+          ),                                                          // ceiling 0.65
           attentionValue: 0,
           componentScores: { count: members.length, share },
           sourceFriendIds: [f.id],

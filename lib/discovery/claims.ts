@@ -197,7 +197,37 @@ interface Template {
   id: string;
   claimType: ClaimType;
   render: (p: StructuredProposition) => string;
+  /**
+   * Templates that assert completeness of a real catalogue. Parked until the
+   * import carries album identity and total-track structure — not deleted,
+   * because they are the right sentences once the data supports them.
+   */
+  requires?: "authoritativeCatalog";
 }
+
+/** Set once step H lands. Nothing that asserts completeness renders while off. */
+export const CAPABILITIES = { authoritativeCatalog: false };
+
+/**
+ * Phrases that imply a complete catalogue.
+ *
+ * These libraries observe thirteen tracks of an album that has twenty-three,
+ * so "nothing else is" and "the only one you don't have" are false in ordinary
+ * English even when the discovery set is accurate. The check is a backstop
+ * against a template drifting into this shape later; the real defence is that
+ * no proposition carries a catalogue total.
+ */
+const COMPLETION_LANGUAGE = [
+  /nothing else is/i,
+  /the only\b[^.]*\byou (?:don'?t|do not) have/i,
+  /\bone track is missing\b/i,
+  /you have everything except/i,
+  /you have every\b[^.]*\bbut\b/i,
+  /\bexcept this\b/i,
+  /\bis in your library except\b/i,
+];
+
+const assertsCompletion = (text: string) => COMPLETION_LANGUAGE.some((re) => re.test(text));
 
 const words = ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
 const spell = (n: number) => (n <= 10 ? words[n] : String(n));
@@ -224,20 +254,27 @@ const TEMPLATES: Template[] = [
   { id: "pair-1", claimType: "NAMED_PAIR_HAVE",
     render: (p) => { const q = p as { names: [string, string] }; return `${q.names[0]} and ${q.names[1]} both have this. You don't.`; } },
   { id: "pair-2", claimType: "NAMED_PAIR_HAVE",
-    render: (p) => { const q = p as { names: [string, string] }; return `Two people here have this — ${q.names[0]} and ${q.names[1]}. You're not one of them.`; } },
+    render: (p) => { const q = p as { names: [string, string] }; return `Two of your friends have this — ${q.names[0]} and ${q.names[1]}. You don't.`; } },
 
   { id: "kset-1", claimType: "K_SHARE_SET",
     render: (p) => { const q = p as { names: string[]; size: number }; return `${list(q.names)} all have these ${q.size} tracks. You have none of them.`; } },
 
-  // Observed-set phrasing. Never asserts a tracklist length.
-  { id: "sole-album-1", claimType: "SOLE_GAP_OBSERVED",
+  // Observed-set phrasing. Names the set the claim is made over — the
+  // friends' libraries — and never the catalogue, which we cannot see.
+  { id: "sole-obs-1", claimType: "SOLE_GAP_OBSERVED",
     render: (p) => { const q = p as { unit: string; label: string }; return q.unit === "album"
       ? `Your friends have one track from ${q.label} that you don't.`
-      : `The only ${q.label} track here you don't have.`; } },
-  { id: "sole-album-2", claimType: "SOLE_GAP_OBSERVED",
+      : `Your friends have one ${q.label} track you don't.`; } },
+  { id: "sole-obs-2", claimType: "SOLE_GAP_OBSERVED",
     render: (p) => { const q = p as { unit: string; label: string }; return q.unit === "album"
-      ? `One track from ${q.label} is missing from your library. Nothing else is.`
-      : `Everything by ${q.label} here is in your library except this.`; } },
+      ? `There's one track from ${q.label} in your friends' libraries and not yours.`
+      : `There's one ${q.label} track your friends have and you don't.`; } },
+
+  // Activated by step H, when a real tracklist length backs the assertion.
+  { id: "sole-true-1", claimType: "SOLE_GAP_OBSERVED", requires: "authoritativeCatalog",
+    render: (p) => { const q = p as { unit: string; label: string }; return q.unit === "album"
+      ? `You have every track on ${q.label} but this one.`
+      : `The only ${q.label} track you don't have.`; } },
 
   { id: "residue-1", claimType: "RESIDUE_OBSERVED",
     render: (p) => { const q = p as { unit: string; label: string; residue: number }; return q.unit === "album"
@@ -245,22 +282,22 @@ const TEMPLATES: Template[] = [
       : `Your friends have ${spell(q.residue)} ${q.label} tracks you don't.`; } },
 
   { id: "unit-1", claimType: "ALBUM_AS_UNIT",
-    render: (p) => { const q = p as { label: string; holders: number; depth: number }; return `${spell(q.holders)[0].toUpperCase()}${spell(q.holders).slice(1)} people here kept ${spell(q.depth)} or more tracks from ${q.label}. You have none of it.`; } },
+    render: (p) => { const q = p as { label: string; holders: number; depth: number }; return `${spell(q.holders)[0].toUpperCase()}${spell(q.holders).slice(1)} of your friends kept ${spell(q.depth)} or more tracks from ${q.label}. You have none of it.`; } },
 
   { id: "artistabsent-1", claimType: "ARTIST_ABSENT",
     render: (p) => { const q = p as { artist: string; lane: string; catalogSize: number }; return `You have ${q.lane} tracks and nothing by ${q.artist}. Your friends have ${q.catalogSize}.`; } },
   { id: "artistabsent-2", claimType: "ARTIST_ABSENT",
-    render: (p) => { const q = p as { artist: string; catalogSize: number }; return `${q.catalogSize} ${q.artist} tracks here. None of them yours.`; } },
+    render: (p) => { const q = p as { artist: string; catalogSize: number }; return `Your friends have ${q.catalogSize} ${q.artist} tracks. You have none.`; } },
 
   { id: "void-1", claimType: "LANE_VOID",
     render: (p) => { const q = p as { lane: string; gapSize: number }; return `Your friends have ${q.gapSize} ${q.lane} tracks. You have none.`; } },
   { id: "void-2", claimType: "LANE_VOID",
-    render: (p) => { const q = p as { lane: string; gapSize: number }; return `${q.gapSize} ${q.lane} tracks between them. Nothing on your side.`; } },
+    render: (p) => { const q = p as { lane: string; gapSize: number }; return `Between them your friends have ${q.gapSize} ${q.lane} tracks. You have none.`; } },
 
   { id: "child-1", claimType: "CHILD_VOID",
     render: (p) => { const q = p as { child: string; gapSize: number }; return `You have nothing in ${q.child}. Your friends have ${q.gapSize} tracks there.`; } },
   { id: "child-2", claimType: "CHILD_VOID",
-    render: (p) => { const q = p as { child: string; gapSize: number }; return `${q.gapSize} ${q.child} tracks here, and none of them are yours.`; } },
+    render: (p) => { const q = p as { child: string; gapSize: number }; return `Your friends have ${q.gapSize} ${q.child} tracks between them. You have none.`; } },
 
   { id: "depth-1", claimType: "SOURCE_LANE_DEPTH",
     render: (p) => { const q = p as { name: string; lane: string; count: number }; return `${q.name} has ${q.count} ${q.lane} tracks you don't.`; } },
@@ -271,7 +308,9 @@ const TEMPLATES: Template[] = [
 
 /** Deterministic per candidate, so a card always reads the same way. */
 function pickTemplate(claimType: ClaimType, seed: string): Template | null {
-  const family = TEMPLATES.filter((t) => t.claimType === claimType);
+  const family = TEMPLATES.filter((t) =>
+    t.claimType === claimType
+    && (!t.requires || CAPABILITIES[t.requires]));
   if (family.length === 0) return null;
   let h = 0;
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
@@ -287,6 +326,9 @@ export function buildClaims(index: DiscoveryIndex, c: Candidate): CaptionClaim[]
     if (!tpl) continue;
     const text = tpl.render(p);
     if (!text || /undefined|NaN|\s{2,}|^\s|""/.test(text)) continue;
+    // Backstop: a rendered sentence may never imply a complete catalogue while
+    // the catalogue is only observed.
+    if (!CAPABILITIES.authoritativeCatalog && assertsCompletion(text)) continue;
 
     const exceptionalness = exceptionalnessOf(p.type, p);
     const specificity = specificityOf(p);
