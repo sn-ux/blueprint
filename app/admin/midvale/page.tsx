@@ -6,8 +6,6 @@
 
 import { useEffect, useState } from "react";
 
-const REQUIRED_SCOPES = ["user-library-read", "playlist-read-private"];
-
 type User = {
   id:               string;
   name:             string | null;
@@ -16,8 +14,7 @@ type User = {
   trackCount:       number;
   spotifyConnected: boolean;
   hasRefreshToken:  boolean;
-  spotifyScope:     string | null;
-  tokenExpiresAt:   number | null;
+  missingScopes:    string[];
   midvaleHidden:    boolean;
 };
 
@@ -31,11 +28,6 @@ type RefreshOutcome = {
   uniqueAllowedTracks?: number;
   noLikedSongs?:        boolean;
 };
-
-function missingRequiredScopes(scope: string | null): string[] {
-  const granted = (scope ?? "").split(/\s+/).filter(Boolean);
-  return REQUIRED_SCOPES.filter(s => !granted.includes(s));
-}
 
 const S = {
   page: {
@@ -181,7 +173,7 @@ export default function AdminMidvalePage() {
       {status === "ok" && users.length === 0 && <p style={{ color: "#888" }}>No users found.</p>}
 
       {status === "ok" && users.map(u => {
-        const lacking      = missingRequiredScopes(u.spotifyScope);
+        const lacking      = u.missingScopes;
         const needsReconn  = !u.hasRefreshToken || lacking.length > 0;
         const rBusy        = !!refreshBusy[u.id];
         const dBusy        = !!removeBusy[u.id];

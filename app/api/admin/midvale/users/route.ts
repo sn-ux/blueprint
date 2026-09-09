@@ -1,10 +1,26 @@
 // GET /api/admin/midvale/users
-// Returns all users with track counts and account status.
+// Returns all users with track counts and account status. Admin-only.
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/current-user";
+import { isAdmin } from "@/lib/admin";
+
+// Scopes the importer needs. Missing ones are derived here rather than
+// returning the raw granted-scope string to the client.
+const REQUIRED_SCOPES = ["user-library-read", "playlist-read-private"];
+
+function missingRequiredScopes(scope: string | null | undefined): string[] {
+  const granted = (scope ?? "").split(/\s+/).filter(Boolean);
+  return REQUIRED_SCOPES.filter(s => !granted.includes(s));
+}
 
 export async function GET() {
+  const me = await getCurrentUser();
+  if (!isAdmin(me?.id)) {
+    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  }
+
   const users = await prisma.user.findMany({
     orderBy: { id: "asc" },
     select:  { id: true, name: true, email: true, image: true, midvaleHidden: true },
@@ -21,7 +37,7 @@ export async function GET() {
     users.length > 0
       ? prisma.account.findMany({
           where:  { userId: { in: users.map(u => u.id) }, provider: "spotify" },
-          select: { userId: true, scope: true, expires_at: true, refresh_token: true },
+          select: { userId: true, scope: true, refresh_token: true },
         })
       : Promise.resolve([]),
   ]);
@@ -38,11 +54,12 @@ export async function GET() {
       email:            u.email,
       image:            u.image,
       trackCount:       countMap.get(u.id) ?? 0,
-      spotifyConnected:  !!acc,
-      hasRefreshToken:   !!acc?.refresh_token,
-      spotifyScope:      acc?.scope ?? null,
-      tokenExpiresAt:    acc?.expires_at ?? null,
-      midvaleHidden:     u.midvaleHidden,
+      // Connection health only. No token values, no granted-scope string and
+      // no expiry timestamp leave the server.
+      spotifyConnected: !!acc,
+      hasRefreshToken:  !!acc?.refresh_token,
+      missingScopes:    acc ? missingRequiredScopes(acc.scope) : REQUIRED_SCOPES,
+      midvaleHidden:    u.midvaleHidden,
     };
   });
 

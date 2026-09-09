@@ -1,11 +1,19 @@
 // DELETE /api/admin/midvale/users/[userId]  — remove user + all their data
+// Admin-only: this cascade-deletes the user's Account, Session and every Track.
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/current-user";
+import { isAdmin } from "@/lib/admin";
 
 type Ctx = { params: Promise<{ userId: string }> };
 
 export async function DELETE(_req: NextRequest, ctx: Ctx) {
+  const me = await getCurrentUser();
+  if (!isAdmin(me?.id)) {
+    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  }
+
   const { userId } = await ctx.params;
 
   const target = await prisma.user.findUnique({
