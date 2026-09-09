@@ -41,6 +41,11 @@ export async function GET(
       previewUrl:        true,
       spotifyId:         true,
       blueprintSubgenre: true,
+      // Null on rows imported before these were captured. Consumers must read
+      // null as "unknown" rather than substituting a value.
+      durationMs:           true,
+      releaseDate:          true,
+      releaseDatePrecision: true,
     },
     orderBy: [{ artist: "asc" }, { name: "asc" }],
   });

@@ -29,7 +29,13 @@ type RawTrack = {
   type: string;
   is_local?: boolean;
   preview_url: string | null;
-  album?: { name?: string | null; images?: { url: string }[] };
+  duration_ms?: number | null;
+  album?: {
+    name?: string | null;
+    images?: { url: string }[];
+    release_date?: string | null;
+    release_date_precision?: string | null;
+  };
   artists?: { id: string; name: string }[];
 };
 
@@ -37,8 +43,12 @@ type NormalizedTrack = {
   id:            string;
   name:          string;
   previewUrl:    string | null;
+  durationMs:    number | null;
   albumName:     string | null;
   albumImageUrl: string | null;
+  // Kept exactly as Spotify gives it, with its own precision alongside.
+  releaseDate:          string | null;
+  releaseDatePrecision: string | null;
   artists:       { id: string; name: string }[];
 };
 
@@ -133,8 +143,11 @@ function normalizeTrack(t: RawTrack): NormalizedTrack {
     id:            t.id,
     name:          t.name,
     previewUrl:    t.preview_url ?? null,
+    durationMs:    typeof t.duration_ms === "number" ? t.duration_ms : null,
     albumName:     t.album?.name ?? null,
     albumImageUrl: t.album?.images?.[0]?.url ?? null,
+    releaseDate:          t.album?.release_date ?? null,
+    releaseDatePrecision: t.album?.release_date_precision ?? null,
     artists:       t.artists ?? [],
   };
 }
@@ -316,9 +329,13 @@ export async function runLikedSongsImport(userId: string): Promise<ImportResult>
           where:  { userId_spotifyId: { userId, spotifyId: t.id } },
           update: { name: t.name, artist: firstArtist.name, album: t.albumName,
             imageUrl: t.albumImageUrl, previewUrl: t.previewUrl,
+            durationMs: t.durationMs,
+            releaseDate: t.releaseDate, releaseDatePrecision: t.releaseDatePrecision,
             rawGenre, blueprintWorld, blueprintSubgenre },
           create: { userId, spotifyId: t.id, name: t.name, artist: firstArtist.name,
             album: t.albumName, imageUrl: t.albumImageUrl, previewUrl: t.previewUrl,
+            durationMs: t.durationMs,
+            releaseDate: t.releaseDate, releaseDatePrecision: t.releaseDatePrecision,
             rawGenre, blueprintWorld, blueprintSubgenre },
         });
       })

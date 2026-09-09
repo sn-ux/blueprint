@@ -64,6 +64,14 @@ model Track {
   album             String?
   imageUrl          String?
   previewUrl        String?
+  // Written by the Spotify import. Existing rows stay null until they are
+  // re-imported; nothing backfills or infers these.
+  durationMs        Int?
+  // Spotify's album release date, kept verbatim as a string because its
+  // precision varies ("2019", "2019-04", "2019-04-12"). releaseDatePrecision
+  // records which, so no consumer invents a month or day that was never given.
+  releaseDate          String?
+  releaseDatePrecision String?
   rawGenre          String
   blueprintWorld    String
   blueprintSubgenre String
