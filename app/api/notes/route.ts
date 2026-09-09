@@ -9,20 +9,48 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
+import { workKeyOf } from "@/lib/discovery/sets";
 
 export const dynamic = "force-dynamic";
 
-/** The kinds subjectIdentity() produces. Anything else is not a target. */
-const KINDS = ["artist", "album", "subgenre", "genre", "set"];
+/**
+ * The kinds subjectIdentity() produces, plus tracks.
+ *
+ * A track is named by its Spotify id on the way in and stored by its
+ * recording. A Spotify id identifies a pressing — the album, the deluxe
+ * edition and the anthology are three ids for one song — so keying comments
+ * to the id would scatter a conversation about a song across whichever
+ * pressing each person happened to have saved.
+ */
+const KINDS = ["artist", "album", "subgenre", "genre", "set", "track"];
 const MAX_BODY = 2000;
 
-function parseTarget(raw: string | null): { type: string; key: string } | null {
+/**
+ * The stored key for a target.
+ *
+ * Everything but a track is already stable and is taken as given. A track is
+ * resolved here, once, so a read and a write can never disagree about what
+ * the same song is called — which is also why the client is not asked to work
+ * it out and there is no second copy of this rule on a device.
+ */
+async function resolveTarget(raw: string | null): Promise<{ type: string; key: string } | null> {
   if (!raw) return null;
-  const key = raw.trim();
-  if (!key || key.length > 400) return null;
-  const type = key.slice(0, key.indexOf(":"));
+  const given = raw.trim();
+  if (!given || given.length > 400) return null;
+  const type = given.slice(0, given.indexOf(":"));
   if (!KINDS.includes(type)) return null;
-  return { type, key };
+  if (type !== "track") return { type, key: given };
+
+  const spotifyId = given.slice("track:".length);
+  if (!spotifyId) return null;
+  // Any row for this pressing gives its name and artist; the recording key is
+  // the same whichever row answers.
+  const row = await prisma.track.findFirst({
+    where: { spotifyId },
+    select: { name: true, artist: true },
+  });
+  if (!row) return null;
+  return { type, key: `track:${workKeyOf(row.name, row.artist)}` };
 }
 
 /** Author fields only: a name and a picture, never an email or a grant. */
@@ -34,7 +62,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const target = parseTarget(new URL(req.url).searchParams.get("target"));
+  const target = await resolveTarget(new URL(req.url).searchParams.get("target"));
   if (!target) {
     return NextResponse.json({ error: "Unknown target" }, { status: 400 });
   }
@@ -65,7 +93,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const target = parseTarget(payload.target ?? null);
+  const target = await resolveTarget(payload.target ?? null);
   if (!target) {
     return NextResponse.json({ error: "Unknown target" }, { status: 400 });
   }
