@@ -10,6 +10,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
+import { workKeyOf } from "@/lib/discovery/sets";
 
 export const dynamic = "force-dynamic";
 
@@ -21,10 +22,13 @@ export async function GET() {
 
   const rows = await prisma.track.findMany({
     where: { userId: viewer.id },
-    select: { artist: true, artistId: true, artistImageUrl: true },
+    select: { name: true, artist: true, artistId: true, artistImageUrl: true },
   });
 
-  type Entry = { id: string; spotifyId: string | null; name: string; imageUrl: string | null; trackCount: number };
+  type Entry = {
+    id: string; spotifyId: string | null; name: string;
+    imageUrl: string | null; works: Set<string>;
+  };
   const byArtist = new Map<string, Entry>();
 
   for (const t of rows) {
@@ -34,7 +38,12 @@ export async function GET() {
     const id = t.artistId ?? `name:${t.artist.trim().toLowerCase()}`;
     const hit = byArtist.get(id);
     if (hit) {
-      hit.trackCount++;
+      // Counted by recording, not by pressing. The album, its deluxe edition
+      // and the anthology it was later collected on are three Spotify ids for
+      // one song, and counting ids made "most saved" mean "most reissued":
+      // Calibro 35 led this list on 96 ids that are 48 songs, ahead of Kanye
+      // West's 91 ids that are 89.
+      hit.works.add(workKeyOf(t.name, t.artist));
       // A picture from any of their tracks; the backfill did not reach all.
       if (!hit.imageUrl && t.artistImageUrl) hit.imageUrl = t.artistImageUrl;
       continue;
@@ -44,15 +53,15 @@ export async function GET() {
       spotifyId: t.artistId,
       name: t.artist,
       imageUrl: t.artistImageUrl ?? null,
-      trackCount: 1,
+      works: new Set([workKeyOf(t.name, t.artist)]),
     });
   }
 
   // Most saved first, and the name settles ties so the order is the same
   // every time the screen opens.
-  const artists = [...byArtist.values()].sort(
-    (a, b) => b.trackCount - a.trackCount || a.name.localeCompare(b.name),
-  );
+  const artists = [...byArtist.values()]
+    .map(({ works, ...rest }) => ({ ...rest, trackCount: works.size }))
+    .sort((a, b) => b.trackCount - a.trackCount || a.name.localeCompare(b.name));
 
   return NextResponse.json({ artists }, { headers: { "Cache-Control": "no-store" } });
 }
