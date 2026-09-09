@@ -34,23 +34,61 @@ const MAX_BODY = 2000;
  * it out and there is no second copy of this rule on a device.
  */
 async function resolveTarget(raw: string | null): Promise<{ type: string; key: string } | null> {
-  if (!raw) return null;
-  const given = raw.trim();
-  if (!given || given.length > 400) return null;
-  const type = given.slice(0, given.indexOf(":"));
-  if (!KINDS.includes(type)) return null;
-  if (type !== "track") return { type, key: given };
+  const [one] = await resolveMany(raw ? [raw] : []);
+  return one ?? null;
+}
 
-  const spotifyId = given.slice("track:".length);
-  if (!spotifyId) return null;
-  // Any row for this pressing gives its name and artist; the recording key is
-  // the same whichever row answers.
-  const row = await prisma.track.findFirst({
-    where: { spotifyId },
-    select: { name: true, artist: true },
-  });
-  if (!row) return null;
-  return { type, key: `track:${workKeyOf(row.name, row.artist)}` };
+/** What a track note is about, so a list can say which song. */
+export interface Subject { kind: string; title: string; subtitle: string | null }
+
+/**
+ * Resolve a whole set of targets in one go, and say what the track ones are.
+ *
+ * The pressings are looked up together rather than one query per track — a
+ * card's tracklist is twenty of them. The names come back with the keys, so a
+ * note stored under a recording can be shown against the song it is about
+ * without the client ever having to know what a recording key is.
+ */
+async function resolveMany(
+  raws: string[],
+): Promise<{ type: string; key: string; subject?: Subject }[]> {
+  const out: { type: string; key: string; subject?: Subject }[] = [];
+  const trackIds: string[] = [];
+
+  for (const raw of raws) {
+    const given = (raw ?? "").trim();
+    if (!given || given.length > 400) continue;
+    const type = given.slice(0, given.indexOf(":"));
+    if (!KINDS.includes(type)) continue;
+    if (type === "track") {
+      const id = given.slice("track:".length);
+      if (id) trackIds.push(id);
+    } else {
+      out.push({ type, key: given });
+    }
+  }
+
+  if (trackIds.length) {
+    const rows = await prisma.track.findMany({
+      where: { spotifyId: { in: [...new Set(trackIds)] } },
+      select: { spotifyId: true, name: true, artist: true },
+      distinct: ["spotifyId"],
+    });
+    const seen = new Set<string>();
+    for (const r of rows) {
+      const key = `track:${workKeyOf(r.name, r.artist)}`;
+      // Two pressings of one recording collapse to one key, and one entry.
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({
+        type: "track",
+        key,
+        subject: { kind: "track", title: r.name, subtitle: r.artist },
+      });
+    }
+  }
+
+  return out;
 }
 
 /** Author fields only: a name and a picture, never an email or a grant. */
@@ -62,20 +100,34 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const target = await resolveTarget(new URL(req.url).searchParams.get("target"));
-  if (!target) {
+  /**
+   * One or many targets.
+   *
+   * A card's Notes tab asks for the card and for every track on its own
+   * tracklist at once, and gets one list back. The notes stay stored against
+   * whatever they were written on — this is a read, not a copy — and each one
+   * comes back saying what it is about, so a track note can be shown against
+   * its song.
+   */
+  const asked = new URL(req.url).searchParams.getAll("target").slice(0, 200);
+  const targets = await resolveMany(asked);
+  if (targets.length === 0) {
     return NextResponse.json({ error: "Unknown target" }, { status: 400 });
   }
 
+  const subjects = new Map(
+    targets.filter((t) => t.subject).map((t) => [t.key, t.subject as Subject]),
+  );
+
   const rows = await prisma.note.findMany({
-    where: { targetKey: target.key },
+    where: { targetKey: { in: targets.map((t) => t.key) } },
     orderBy: { createdAt: "desc" },
-    take: 200,
+    take: 400,
     include: { author: AUTHOR },
   });
 
   return NextResponse.json(
-    { notes: rows.map(shape) },
+    { notes: rows.map((n) => ({ ...shape(n), subject: subjects.get(n.targetKey) ?? null })) },
     { headers: { "Cache-Control": "no-store" } },
   );
 }
