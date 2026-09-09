@@ -186,6 +186,8 @@ try {
   const untouchedKey = firstTwenty[5].id;
 
   await recordEvents(userId, firstTwenty.map((c) => ({ key: c.id, type: "IMPRESSION", version: c.version })));
+  // A second pass over the same cards: now they have been passed over.
+  await recordEvents(userId, [{ key: untouchedKey, type: "IMPRESSION", version: firstTwenty[5].version }]);
   await recordEvents(userId, [{ key: openedKey, type: "OPEN", version: firstTwenty[1].version }]);
   await recordEvents(userId, [{ key: dismissedKey, type: "DISMISS", version: firstTwenty[2].version }]);
   await recordEvents(userId, [{ key: actedKey, type: "ACTION", version: firstTwenty[3].version }]);
@@ -205,14 +207,18 @@ try {
     console.log(`    ${k.padEnd(10)} ${String(v).slice(0, 10)}  ${status.get(v) ?? `SUPPRESSED/${suppressed.get(v)}`}${rank.has(v) ? `  rank ${rank.get(v)}` : ""}`);
   }
 
-  check("a card that was only seen is not removed — it rests, it is not dismissed",
-    suppressed.get(seenKey) === "COOLING" && !(await prisma.recommendationExposure.findUnique({
-      where: { userId_recommendationKey: { userId, recommendationKey: seenKey } },
-    })).dismissedAt);
+  // One sighting must never withhold a card. A reader who scrolls the whole
+  // feed once would otherwise open the app to nothing the next morning.
+  check("a single impression costs priority but never withholds the card",
+    rank.has(seenKey) && status.get(seenKey) === "READY",
+    rank.has(seenKey) ? `still eligible at rank ${rank.get(seenKey)}` : `SUPPRESSED as ${suppressed.get(seenKey)}`);
+  check("scrolling the whole feed once does not empty the next session",
+    second.stored.length >= fresh.stored.length - 5,
+    `${second.stored.length} of ${fresh.stored.length} still eligible after seeing 20`);
   check("a dismissed card is suppressed", suppressed.get(dismissedKey) === "DISMISSED");
   check("a card acted on does not return", suppressed.get(actedKey) === "ACTED_ON");
-  check("an opened card rests longer than one merely seen",
-    suppressed.get(openedKey) === "COOLING");
+  check("an opened card rests where a merely-seen one does not",
+    suppressed.get(openedKey) === "COOLING" && !suppressed.has(seenKey));
   check("a materially changed card becomes eligible again",
     status.get(changedKey) === "MATERIALLY_CHANGED",
     status.get(changedKey) ?? `suppressed as ${suppressed.get(changedKey)}`);
@@ -229,6 +235,10 @@ try {
   check("an opened card rests longer than a seen one",
     openRow.cooldownUntil > seenRow.cooldownUntil,
     `${LIFECYCLE.openCooldownHours}h vs ${LIFECYCLE.impressionCooldownHours}h`);
+
+  check("a card passed over twice does rest",
+    suppressed.get(untouchedKey) === "COOLING",
+    `${(await prisma.recommendationExposure.findUnique({ where: { userId_recommendationKey: { userId, recommendationKey: untouchedKey } } })).impressionCount} impressions`);
 
   // ── Once the rests expire, seen material has to fall behind unseen ───────
   //
@@ -267,6 +277,22 @@ try {
     `unseen ${never.toFixed(3)} > seen once ${once.toFixed(3)} > seen five times ${fiveTimes.toFixed(3)}`);
   check("a heavily-seen card is still eligible, never removed",
     fiveTimes !== undefined);
+
+  // Suppression must never be able to empty the stream. The worst case is a
+  // reader who has scrolled every card twice: the whole universe resting.
+  for (let pass = 0; pass < 2; pass++) {
+    await recordEvents(userId, fresh.stored.map((s2) => ({ key: s2.card.id, type: "IMPRESSION", version: s2.card.version })));
+  }
+  await prisma.recommendationExposure.updateMany({
+    where: { userId }, data: { cooldownUntil: new Date(Date.now() + 86_400_000) },
+  });
+  const starved = await startSession(userId, false);
+  const floor = LIFECYCLE.minEligiblePages * LIFECYCLE.pageSize;
+  check("resting can never empty the feed — longest-rested cards return",
+    starved.stored.length >= Math.min(floor, fresh.stored.length),
+    `every card resting → ${starved.stored.length} still served (floor ${floor})`);
+  check("revived cards are marked as such, not passed off as fresh",
+    starved.stored.some((s2) => s2.lifecycle.status === "REVIVED"));
 } finally {
   await restore();
   await prisma.$disconnect();

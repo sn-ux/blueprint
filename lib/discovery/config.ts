@@ -279,7 +279,18 @@ export const LIFECYCLE = {
   /** Opening is evidence the viewer already investigated it. */
   openPenalty: 0.10,
   openPenaltyMax: 0.30,
-  /** How long a card rests after being seen, and after being opened. */
+  /**
+   * How many times a card may pass through the viewport before it rests.
+   *
+   * One sighting must not gate it. A reader who scrolls the whole feed once
+   * would otherwise rest the entire inventory in a single sitting and open the
+   * app to nothing — which is exactly what happened. The first impression buys
+   * a ranking penalty and nothing more; a card seen twice without ever being
+   * opened is one the reader has now passed over deliberately, and that is
+   * what earns a rest.
+   */
+  impressionsBeforeRest: 2,
+  /** How long a card rests after being passed over, and after being opened. */
   impressionCooldownHours: 20,
   openCooldownHours: 96,
   /** A dismissal stands until the proposition itself changes. */
@@ -298,6 +309,20 @@ export const LIFECYCLE = {
    * becoming the dregs of a single sort.
    */
   pageWindowMultiple: 3,
+  /**
+   * The floor below which resting cards are brought back.
+   *
+   * Resting expresses a preference for fresher material, never a promise that
+   * something valid will be withheld. So when lifecycle suppression would
+   * leave the stream shorter than this, the longest-rested cards return —
+   * carrying their accumulated penalties, so they sort behind anything
+   * genuinely new. Dismissed and resolved cards are never revived: those are
+   * decisions, not rests.
+   *
+   * Expressed in pages so it scales with the feed rather than with any
+   * particular library.
+   */
+  minEligiblePages: 2,
   /** A feed session's ordering is fixed for this long. */
   sessionTtlMinutes: 90,
   /** Sessions kept per viewer, so a detail page opened later still resolves. */

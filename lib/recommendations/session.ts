@@ -3,6 +3,7 @@ import * as CFG from "@/lib/discovery/config";
 import { compose } from "@/lib/discovery/engine";
 import { buildFeed, toFeedCard, type FeedCard, type FeedPerson, type FeedTrack } from "@/lib/discovery/feed";
 import { evaluate, type ExposureState, type LifecycleStatus } from "@/lib/discovery/lifecycle";
+import type { Candidate } from "@/lib/discovery/types";
 
 /**
  * The feed as a persistent stream.
@@ -95,17 +96,47 @@ export async function startSession(viewerId: string, persist = true): Promise<Se
   const now = new Date();
   const exposures = await exposuresOf(viewerId);
 
-  const eligible = [];
+  const eligible: { candidate: Candidate; status: LifecycleStatus }[] = [];
   const suppressed: SessionBuild["suppressed"] = [];
+  const resting: { candidate: Candidate; until: number }[] = [];
   for (const c of result.all) {
     const v = evaluate(c, exposures.get(c.recommendationKey ?? ""), now);
     c.lifecycleScore = v.score;
     c.lifecycleParts = v.parts;
     if (!v.eligible) {
-      suppressed.push({ key: c.recommendationKey ?? "", status: v.status });
+      if (v.revivable) resting.push({ candidate: c, until: v.restingUntil?.getTime() ?? 0 });
+      else suppressed.push({ key: c.recommendationKey ?? "", status: v.status });
       continue;
     }
     eligible.push({ candidate: c, status: v.status });
+  }
+
+  /**
+   * Resting must never mean an empty stream.
+   *
+   * A reader who scrolls the whole feed in one sitting has seen everything
+   * once, and one sighting is not a reason to withhold a valid recommendation
+   * the next morning. So when suppression would leave the stream shorter than
+   * a couple of pages, the longest-rested cards come back — carrying the
+   * penalties they earned, so they sort behind anything genuinely new. Only
+   * cards that are merely cooling are eligible for this; a dismissal or a
+   * resolution is a decision and stays a decision.
+   */
+  const floor = CFG.LIFECYCLE.minEligiblePages * CFG.LIFECYCLE.pageSize;
+  if (eligible.length < floor && resting.length > 0) {
+    resting.sort((a, b) => a.until - b.until
+      || (b.candidate.lifecycleScore ?? 0) - (a.candidate.lifecycleScore ?? 0));
+    for (const r of resting) {
+      if (eligible.length >= floor) {
+        suppressed.push({ key: r.candidate.recommendationKey ?? "", status: "COOLING" });
+        continue;
+      }
+      eligible.push({ candidate: r.candidate, status: "REVIVED" });
+    }
+  } else {
+    for (const r of resting) {
+      suppressed.push({ key: r.candidate.recommendationKey ?? "", status: "COOLING" });
+    }
   }
 
   // Composition runs over lifecycle placement rather than raw ranking, and

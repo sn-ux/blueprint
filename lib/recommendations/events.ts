@@ -54,7 +54,14 @@ export async function recordEvents(
   let applied = 0;
 
   for (const e of ordered) {
-    const cooldown = cooldownFor(e.type, now);
+    // The count *after* this event decides whether the card rests. A first
+    // sighting never does — see cooldownFor.
+    const existing = await prisma.recommendationExposure.findUnique({
+      where: { userId_recommendationKey: { userId, recommendationKey: e.key } },
+      select: { impressionCount: true },
+    });
+    const impressions = (existing?.impressionCount ?? 0) + (e.type === "IMPRESSION" ? 1 : 0);
+    const cooldown = cooldownFor(e.type, now, impressions);
     const base = {
       lastUnderlyingVersion: e.version ?? undefined,
       ...(cooldown ? { cooldownUntil: cooldown } : {}),

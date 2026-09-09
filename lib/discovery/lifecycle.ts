@@ -47,6 +47,7 @@ export type LifecycleStatus =
   | "MATERIALLY_CHANGED"
   | "READY"
   | "COOLING"
+  | "REVIVED"
   | "DISMISSED"
   | "ACTED_ON";
 
@@ -55,6 +56,14 @@ export interface LifecycleVerdict {
   eligible: boolean;
   score: number;
   parts: Record<string, number>;
+  /**
+   * A resting card that may be brought back when the stream would otherwise
+   * run short. True for cooling cards only — a dismissal or a resolution is a
+   * decision and is never revived.
+   */
+  revivable?: boolean;
+  /** When the rest ends, so revival can take the longest-rested first. */
+  restingUntil?: Date | null;
 }
 
 const hours = (ms: number) => ms / 3_600_000;
@@ -94,11 +103,6 @@ export function evaluate(
     return { status: "ACTED_ON", eligible: false, score: 0, parts };
   }
 
-  const cooling = !!state.cooldownUntil && state.cooldownUntil > now;
-  if (cooling && !(changed && LIFECYCLE.materialChangeClearsCooldown)) {
-    return { status: "COOLING", eligible: false, score: 0, parts };
-  }
-
   parts.impressions = -Math.min(
     LIFECYCLE.impressionPenaltyMax,
     LIFECYCLE.impressionPenalty * state.impressionCount,
@@ -110,6 +114,17 @@ export function evaluate(
   if (changed) parts.materialChange = LIFECYCLE.materialChangeBoost;
 
   const score = Object.values(parts).reduce((a, b) => a + b, 0);
+
+  // Resting is decided after the penalties are computed, so a card that comes
+  // back through the floor below carries the same score it would have had.
+  const cooling = !!state.cooldownUntil && state.cooldownUntil > now;
+  if (cooling && !(changed && LIFECYCLE.materialChangeClearsCooldown)) {
+    return {
+      status: "COOLING", eligible: false, score, parts,
+      revivable: true, restingUntil: state.cooldownUntil,
+    };
+  }
+
   return {
     status: changed ? "MATERIALLY_CHANGED" : "READY",
     eligible: true,
@@ -118,10 +133,20 @@ export function evaluate(
   };
 }
 
-/** When a card should rest until, given what just happened to it. */
+/**
+ * When a card should rest until, given what just happened to it.
+ *
+ * `impressions` is the count *after* this event. A first sighting returns
+ * null: it costs the card ranking priority through the penalty above, but it
+ * does not withhold it. Anything else would let one pass through the feed
+ * silence the whole inventory.
+ */
 export function cooldownFor(
-  event: "IMPRESSION" | "OPEN" | "DISMISS" | "ACTION", now: Date,
+  event: "IMPRESSION" | "OPEN" | "DISMISS" | "ACTION",
+  now: Date,
+  impressions = 0,
 ): Date | null {
+  if (event === "IMPRESSION" && impressions < LIFECYCLE.impressionsBeforeRest) return null;
   const h = event === "OPEN" ? LIFECYCLE.openCooldownHours
     : event === "IMPRESSION" ? LIFECYCLE.impressionCooldownHours
     : event === "DISMISS" ? LIFECYCLE.dismissCooldownDays * 24
