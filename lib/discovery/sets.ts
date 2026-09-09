@@ -48,6 +48,30 @@ export interface UnitIndex {
   byFriend: Map<string, Set<string>>;
 }
 
+/**
+ * An album whose real structure we can vouch for.
+ *
+ * Identity is albumId, never the title: reissues, deluxe editions and
+ * rereleases share names and would otherwise be merged into one phantom
+ * record. A position is the pair (disc, track) because track numbers restart
+ * on each disc while totalTracks counts the whole album.
+ */
+export interface AuthoritativeAlbum {
+  albumId: string;
+  title: string;
+  artist: string;
+  albumType: string;
+  totalTracks: number;
+  /** "disc:track" → spotifyId, for every position anyone here holds. */
+  positions: Map<string, string>;
+  ownedPositions: number;
+  /** Observed, unowned, and held by a friend — what can actually be offered. */
+  missing: string[];
+  /** All structural checks passed. Nothing may assert completion without it. */
+  consistent: boolean;
+  inconsistentBecause: string | null;
+}
+
 export interface DiscoveryIndex {
   viewerId: string;
   viewer: PersonRow;
@@ -70,6 +94,10 @@ export interface DiscoveryIndex {
   worlds: Map<string, { world: string; gap: string[]; viewerPresent: boolean; children: Set<string> }>;
   albums: Map<string, UnitIndex>;
   artists: Map<string, UnitIndex>;
+  /** Keyed by albumId. Only albums that survived every structural check. */
+  authAlbums: Map<string, AuthoritativeAlbum>;
+  /** Title-keys of observed albums fully covered by an authoritative record. */
+  authCoveredTitleKeys: Set<string>;
 }
 
 const albumKey = (artist: string, album: string) => `${artist}␟${album}`;
@@ -115,7 +143,14 @@ export function buildIndex(input: EngineInput): DiscoveryIndex {
     if (list) { if (!list.includes(t.userId)) list.push(t.userId); }
     else holders.set(t.spotifyId, [t.userId]);
   }
-  const D = [...holders.keys()];
+  // Holder order decides the order names appear in a caption, and row order
+  // from the database is not stable — a metadata backfill was enough to
+  // reshuffle it and silently reword a dozen cards. Sorting by name here makes
+  // every downstream caption deterministic for the same input.
+  for (const list of holders.values()) {
+    list.sort((a, b) => (nameOf.get(a) ?? "").localeCompare(nameOf.get(b) ?? ""));
+  }
+  const D = [...holders.keys()].sort();
   const DSet = new Set(D);
 
   // ── Lanes: named subgenres only ───────────────────────────────────────────
@@ -206,10 +241,85 @@ export function buildIndex(input: EngineInput): DiscoveryIndex {
     u.missing = missing;
   }
 
+  // ── Authoritative album structure ─────────────────────────────────────────
+  //
+  // Only an album_type of "album" can support a completion claim. Singles and
+  // compilations are excluded outright: a compilation's tracklist is an
+  // editorial choice, not a work someone can be "missing" part of.
+  const grouped = new Map<string, TrackRow[]>();
+  for (const t of tracks) {
+    if (!t.albumId) continue;
+    const list = grouped.get(t.albumId);
+    if (list) list.push(t); else grouped.set(t.albumId, [t]);
+  }
+
+  const authAlbums = new Map<string, AuthoritativeAlbum>();
+  const authCoveredTitleKeys = new Set<string>();
+
+  for (const [albumId, rows2] of grouped) {
+    const first = rows2[0];
+    const totalTracks = first.albumTotalTracks ?? 0;
+    const albumType = first.albumType ?? "";
+
+    let inconsistentBecause: string | null = null;
+    if (albumType !== "album") inconsistentBecause = `album_type=${albumType || "unknown"}`;
+    else if (!totalTracks || totalTracks < 5) inconsistentBecause = `totalTracks=${totalTracks}`;
+    else if (rows2.some((r) => r.albumTotalTracks !== totalTracks)) inconsistentBecause = "totalTracks disagrees across rows";
+
+    const positions = new Map<string, string>();
+    let ownedPositions = 0;
+    const missing: string[] = [];
+    const seenAtPosition = new Map<string, string>();
+
+    if (!inconsistentBecause) {
+      for (const r of rows2) {
+        const tn = r.trackNumber, dn = r.discNumber ?? 1;
+        if (!tn || tn < 1 || tn > totalTracks) { inconsistentBecause = `trackNumber ${tn} outside 1..${totalTracks}`; break; }
+        const key = `${dn}:${tn}`;
+        const prior = seenAtPosition.get(key);
+        // Two different recordings claiming one slot means the identity is not
+        // trustworthy — an alternate master, a regional edit, a bad match.
+        if (prior && prior !== r.spotifyId) { inconsistentBecause = `two tracks at position ${key}`; break; }
+        seenAtPosition.set(key, r.spotifyId);
+        positions.set(key, r.spotifyId);
+      }
+    }
+    if (!inconsistentBecause && positions.size > totalTracks) {
+      inconsistentBecause = `${positions.size} positions observed on a ${totalTracks}-track album`;
+    }
+
+    if (!inconsistentBecause) {
+      for (const [, spotifyId] of positions) {
+        if (U.has(spotifyId)) ownedPositions++;
+        else if (DSet.has(spotifyId)) missing.push(spotifyId);
+      }
+    }
+
+    authAlbums.set(albumId, {
+      albumId, title: first.album ?? "", artist: first.artist, albumType, totalTracks,
+      positions, ownedPositions, missing,
+      consistent: !inconsistentBecause, inconsistentBecause,
+    });
+  }
+
+  // An observed title-key is superseded only when every row under it carries
+  // consistent authoritative structure; anything mixed stays conservative.
+  const titleRows = new Map<string, TrackRow[]>();
+  for (const t of tracks) {
+    if (!t.album) continue;
+    const k = albumKey(t.artist, t.album);
+    const list = titleRows.get(k);
+    if (list) list.push(t); else titleRows.set(k, [t]);
+  }
+  for (const [k, list] of titleRows) {
+    if (list.every((r) => r.albumId && authAlbums.get(r.albumId)?.consistent)) authCoveredTitleKeys.add(k);
+  }
+
   return {
     viewerId, viewer, friends, anchorFriends, nameOf, personOf,
     U, byFriend, D, DSet, holders,
     meta, lanes, worlds, albums, artists,
+    authAlbums, authCoveredTitleKeys,
   };
 }
 

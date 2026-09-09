@@ -25,6 +25,7 @@ import type {
 
 /** Base by claim type: does knowing this make you want to hear the thing. */
 const ATTENTION_BASE: Record<ClaimType, number> = {
+  SOLE_GAP_TRUE:        0.75,   // exact, complete, and one tap from resolved
   ALL_SOURCES_HAVE:     0.75,   // being the sole exception is a position, not a statistic
   ALL_SOURCES_HAVE_SET: 0.60,
   SOLE_GAP_OBSERVED:    0.70,   // one hole in something already held creates tension
@@ -36,6 +37,7 @@ const ATTENTION_BASE: Record<ClaimType, number> = {
   LANE_VOID:            0.45,
   SOURCE_LANE_DEPTH:    0.45,   // one person, one body of work
   ALBUM_AS_UNIT:        0.40,
+  RESIDUE_TRUE:         0.50,
   RESIDUE_OBSERVED:     0.40,
   LANE_GAP:             0.25,   // genre magnitude — fails the gate, correctly
 };
@@ -73,6 +75,14 @@ function simplicityOf(text: string, p: StructuredProposition): number {
   return Math.max(0, Math.min(1, 1 - 0.15 * (clauses - 1) - 0.1 * Math.max(0, num(p) - 1)));
 }
 
+/**
+ * Claim types that assert a complete catalogue.
+ *
+ * Only these may use completion language, and they are only ever constructed
+ * from a verified tracklist length that passed every structural check.
+ */
+const AUTHORITATIVE_CLAIMS = new Set<ClaimType>(["SOLE_GAP_TRUE", "RESIDUE_TRUE"]);
+
 /** Confidence: 1.0 for pure membership facts, hedged where the catalogue is only observed. */
 function confidenceOf(claimType: ClaimType): number {
   if (claimType === "SOLE_GAP_OBSERVED" || claimType === "RESIDUE_OBSERVED") return 0.7;
@@ -82,6 +92,8 @@ function confidenceOf(claimType: ClaimType): number {
 /** How unusual the fact is, judged against the shape of the evidence itself. */
 function exceptionalnessOf(claimType: ClaimType, p: StructuredProposition): number {
   switch (p.type) {
+    case "SOLE_GAP_TRUE":        return 0.92;
+    case "RESIDUE_TRUE":         return Math.max(0.5, 0.8 - 0.08 * p.residue);
     case "ALL_SOURCES_HAVE":     return 0.95;
     case "ALL_SOURCES_HAVE_SET": return 0.9;
     case "K_OF_N_HAVE":          return Math.min(0.85, 0.4 + 0.45 * (p.k / p.n));
@@ -147,6 +159,18 @@ export function enumerateClaims(index: DiscoveryIndex, c: Candidate): Structured
       break;
     case "MULTI_INTERSECTION_SET":
       props.push({ type: "K_SHARE_SET", k: 3, size: c.componentScores.size, names });
+      break;
+    case "ALBUM_SOLE_GAP_TRUE":
+      props.push({
+        type: "SOLE_GAP_TRUE", label: c.album ?? "", artist: c.artist ?? "",
+        totalTracks: c.componentScores.totalTracks,
+      });
+      break;
+    case "ALBUM_NEAR_COMPLETE_TRUE":
+      props.push({
+        type: "RESIDUE_TRUE", label: c.album ?? "", artist: c.artist ?? "",
+        totalTracks: c.componentScores.totalTracks, residue: c.componentScores.residue,
+      });
       break;
     case "ALBUM_SOLE_GAP_OBSERVED":
       props.push({ type: "SOLE_GAP_OBSERVED", unit: "album", label: c.album ?? "", artist: c.artist ?? undefined });
@@ -231,6 +255,8 @@ const assertsCompletion = (text: string) => COMPLETION_LANGUAGE.some((re) => re.
 
 const words = ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
 const spell = (n: number) => (n <= 10 ? words[n] : String(n));
+/** Same word, capitalised, for sentence-initial use. */
+const Spell = (n: number) => { const w = spell(n); return w[0].toUpperCase() + w.slice(1); };
 const list = (ns: string[]) =>
   ns.length <= 1 ? (ns[0] ?? "Someone")
     : `${ns.slice(0, -1).join(", ")} and ${ns[ns.length - 1]}`;
@@ -247,7 +273,7 @@ const TEMPLATES: Template[] = [
     render: (p) => { const q = p as { size: number }; return `There are ${spell(q.size)} tracks every one of your friends has and you don't.`; } },
 
   { id: "kofn-1", claimType: "K_OF_N_HAVE",
-    render: (p) => { const q = p as { k: number; n: number }; return `${spell(q.k)[0].toUpperCase()}${spell(q.k).slice(1)} of your ${spell(q.n)} friends have this. You don't.`; } },
+    render: (p) => { const q = p as { k: number; n: number }; return `${Spell(q.k)} of your ${spell(q.n)} friends have this. You don't.`; } },
   { id: "kofn-2", claimType: "K_OF_N_HAVE",
     render: (p) => `${list((p as { names: string[] }).names)} have this. You don't.` },
 
@@ -270,11 +296,19 @@ const TEMPLATES: Template[] = [
       ? `There's one track from ${q.label} in your friends' libraries and not yours.`
       : `There's one ${q.label} track your friends have and you don't.`; } },
 
-  // Activated by step H, when a real tracklist length backs the assertion.
-  { id: "sole-true-1", claimType: "SOLE_GAP_OBSERVED", requires: "authoritativeCatalog",
-    render: (p) => { const q = p as { unit: string; label: string }; return q.unit === "album"
-      ? `You have every track on ${q.label} but this one.`
-      : `The only ${q.label} track you don't have.`; } },
+  // Authoritative. Reachable only from a verified tracklist length, which is
+  // what makes the completion wording true rather than merely striking.
+  { id: "true-sole-1", claimType: "SOLE_GAP_TRUE",
+    render: (p) => `You have every track on ${(p as { label: string }).label} except this one.` },
+  { id: "true-sole-2", claimType: "SOLE_GAP_TRUE",
+    render: (p) => { const q = p as { label: string; totalTracks: number }; return `One track short of the whole of ${q.label}. This is it.`; } },
+  { id: "true-sole-3", claimType: "SOLE_GAP_TRUE",
+    render: (p) => { const q = p as { label: string; totalTracks: number }; return `${q.totalTracks} tracks on ${q.label}. You have all but this one.`; } },
+
+  { id: "true-residue-1", claimType: "RESIDUE_TRUE",
+    render: (p) => { const q = p as { label: string; residue: number }; return `You're ${spell(q.residue)} tracks short of the whole of ${q.label}.`; } },
+  { id: "true-residue-2", claimType: "RESIDUE_TRUE",
+    render: (p) => { const q = p as { label: string; residue: number; totalTracks: number }; return `${Spell(q.residue)} of the ${q.totalTracks} tracks on ${q.label} aren't in your library.`; } },
 
   { id: "residue-1", claimType: "RESIDUE_OBSERVED",
     render: (p) => { const q = p as { unit: string; label: string; residue: number }; return q.unit === "album"
@@ -282,7 +316,7 @@ const TEMPLATES: Template[] = [
       : `Your friends have ${spell(q.residue)} ${q.label} tracks you don't.`; } },
 
   { id: "unit-1", claimType: "ALBUM_AS_UNIT",
-    render: (p) => { const q = p as { label: string; holders: number; depth: number }; return `${spell(q.holders)[0].toUpperCase()}${spell(q.holders).slice(1)} of your friends kept ${spell(q.depth)} or more tracks from ${q.label}. You have none of it.`; } },
+    render: (p) => { const q = p as { label: string; holders: number; depth: number }; return `${Spell(q.holders)} of your friends kept ${spell(q.depth)} or more tracks from ${q.label}. You have none of it.`; } },
 
   { id: "artistabsent-1", claimType: "ARTIST_ABSENT",
     render: (p) => { const q = p as { artist: string; lane: string; catalogSize: number }; return `You have ${q.lane} tracks and nothing by ${q.artist}. Your friends have ${q.catalogSize}.`; } },
@@ -326,9 +360,13 @@ export function buildClaims(index: DiscoveryIndex, c: Candidate): CaptionClaim[]
     if (!tpl) continue;
     const text = tpl.render(p);
     if (!text || /undefined|NaN|\s{2,}|^\s|""/.test(text)) continue;
-    // Backstop: a rendered sentence may never imply a complete catalogue while
-    // the catalogue is only observed.
-    if (!CAPABILITIES.authoritativeCatalog && assertsCompletion(text)) continue;
+    // Backstop: a rendered sentence may never imply a complete catalogue unless
+    // the claim is one of the authoritative types, which cannot be constructed
+    // without a verified tracklist length. The check is scoped, not relaxed —
+    // every observed claim is still held to it.
+    if (!AUTHORITATIVE_CLAIMS.has(p.type)
+      && !CAPABILITIES.authoritativeCatalog
+      && assertsCompletion(text)) continue;
 
     const exceptionalness = exceptionalnessOf(p.type, p);
     const specificity = specificityOf(p);

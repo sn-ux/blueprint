@@ -30,11 +30,16 @@ type RawTrack = {
   is_local?: boolean;
   preview_url: string | null;
   duration_ms?: number | null;
+  track_number?: number | null;
+  disc_number?: number | null;
   album?: {
+    id?: string | null;
     name?: string | null;
     images?: { url: string }[];
     release_date?: string | null;
     release_date_precision?: string | null;
+    total_tracks?: number | null;
+    album_type?: string | null;
   };
   artists?: { id: string; name: string }[];
 };
@@ -49,6 +54,12 @@ type NormalizedTrack = {
   // Kept exactly as Spotify gives it, with its own precision alongside.
   releaseDate:          string | null;
   releaseDatePrecision: string | null;
+  // Album identity and position. albumId is the key — never the title.
+  albumId:          string | null;
+  albumTotalTracks: number | null;
+  trackNumber:      number | null;
+  discNumber:       number | null;
+  albumType:        string | null;
   artists:       { id: string; name: string }[];
 };
 
@@ -148,6 +159,11 @@ function normalizeTrack(t: RawTrack): NormalizedTrack {
     albumImageUrl: t.album?.images?.[0]?.url ?? null,
     releaseDate:          t.album?.release_date ?? null,
     releaseDatePrecision: t.album?.release_date_precision ?? null,
+    albumId:          t.album?.id ?? null,
+    albumTotalTracks: typeof t.album?.total_tracks === "number" ? t.album.total_tracks : null,
+    trackNumber:      typeof t.track_number === "number" ? t.track_number : null,
+    discNumber:       typeof t.disc_number === "number" ? t.disc_number : null,
+    albumType:        t.album?.album_type ?? null,
     artists:       t.artists ?? [],
   };
 }
@@ -276,7 +292,7 @@ export async function runLikedSongsImport(userId: string): Promise<ImportResult>
 
   for (const playlist of ownedPlaylists) {
     let url: string | null =
-      `https://api.spotify.com/v1/playlists/${playlist.id}/tracks?limit=50&fields=next,items(track(id,name,type,is_local,preview_url,album(name,images),artists(id,name)))`;
+      `https://api.spotify.com/v1/playlists/${playlist.id}/tracks?limit=50&fields=next,items(track(id,name,type,is_local,preview_url,duration_ms,track_number,disc_number,album(id,name,images,release_date,release_date_precision,total_tracks,album_type),artists(id,name)))`;
     while (url) {
       const res = await spotifyGet(url, account);
       for (const item of res.data.items ?? []) {
@@ -331,11 +347,15 @@ export async function runLikedSongsImport(userId: string): Promise<ImportResult>
             imageUrl: t.albumImageUrl, previewUrl: t.previewUrl,
             durationMs: t.durationMs,
             releaseDate: t.releaseDate, releaseDatePrecision: t.releaseDatePrecision,
+            albumId: t.albumId, albumTotalTracks: t.albumTotalTracks,
+            trackNumber: t.trackNumber, discNumber: t.discNumber, albumType: t.albumType,
             rawGenre, blueprintWorld, blueprintSubgenre },
           create: { userId, spotifyId: t.id, name: t.name, artist: firstArtist.name,
             album: t.albumName, imageUrl: t.albumImageUrl, previewUrl: t.previewUrl,
             durationMs: t.durationMs,
             releaseDate: t.releaseDate, releaseDatePrecision: t.releaseDatePrecision,
+            albumId: t.albumId, albumTotalTracks: t.albumTotalTracks,
+            trackNumber: t.trackNumber, discNumber: t.discNumber, albumType: t.albumType,
             rawGenre, blueprintWorld, blueprintSubgenre },
         });
       })

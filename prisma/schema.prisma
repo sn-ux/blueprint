@@ -72,6 +72,17 @@ model Track {
   // records which, so no consumer invents a month or day that was never given.
   releaseDate          String?
   releaseDatePrecision String?
+  // Album structure, straight from Spotify. albumId is the identity key —
+  // title strings collide across reissues, deluxe editions and rereleases, so
+  // nothing may group albums by name. albumTotalTracks counts the whole album
+  // across every disc, while trackNumber restarts on each disc, so a position
+  // is the pair (discNumber, trackNumber) and never trackNumber alone.
+  albumId              String?
+  albumTotalTracks     Int?
+  trackNumber          Int?
+  discNumber           Int?
+  /** "album" | "single" | "compilation". Only "album" supports completion. */
+  albumType            String?
   rawGenre          String
   blueprintWorld    String
   blueprintSubgenre String
@@ -79,4 +90,5 @@ model Track {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, spotifyId])
+  @@index([albumId])
 }

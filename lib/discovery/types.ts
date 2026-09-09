@@ -19,6 +19,12 @@ export interface TrackRow {
   album: string | null;
   blueprintWorld: string;
   blueprintSubgenre: string;
+  /** Album structure. Null on rows imported before it was captured. */
+  albumId?: string | null;
+  albumTotalTracks?: number | null;
+  trackNumber?: number | null;
+  discNumber?: number | null;
+  albumType?: string | null;
 }
 
 export interface PersonRow {
@@ -50,6 +56,7 @@ export type DiscoverySetType =
   | "pair"
   | "tripleIntersection"
   | "albumGap"
+  | "albumGapTrue"
   | "albumUnit"
   | "artistGap"
   | "artistAbsent"
@@ -92,6 +99,9 @@ export type StructuredProposition =
   /** Observed-set phrasing only. Never asserts a real tracklist length. */
   | { type: "SOLE_GAP_OBSERVED"; unit: "album" | "artist"; label: string; artist?: string }
   | { type: "RESIDUE_OBSERVED"; unit: "album" | "artist"; label: string; residue: number }
+  /** Authoritative. Only ever built from a verified album tracklist length. */
+  | { type: "SOLE_GAP_TRUE"; label: string; artist: string; totalTracks: number }
+  | { type: "RESIDUE_TRUE"; label: string; artist: string; totalTracks: number; residue: number }
   | { type: "ALBUM_AS_UNIT"; label: string; artist: string; holders: number; depth: number }
   | { type: "ARTIST_ABSENT"; artist: string; lane: string; catalogSize: number; holders: number }
   | { type: "LANE_VOID"; lane: string; gapSize: number }
@@ -136,6 +146,8 @@ export type GeneratorId =
   | "SUPERMAJORITY_MISS"
   | "PAIR_CONSENSUS"
   | "MULTI_INTERSECTION_SET"
+  | "ALBUM_SOLE_GAP_TRUE"
+  | "ALBUM_NEAR_COMPLETE_TRUE"
   | "ALBUM_SOLE_GAP_OBSERVED"
   | "ALBUM_RESIDUE_OBSERVED"
   | "ALBUM_AS_UNIT"

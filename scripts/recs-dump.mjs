@@ -43,6 +43,7 @@ const tracks = await prisma.track.findMany({
   select: {
     userId: true, spotifyId: true, name: true, artist: true, album: true,
     blueprintWorld: true, blueprintSubgenre: true,
+    albumId: true, albumTotalTracks: true, trackNumber: true, discNumber: true, albumType: true,
   },
 });
 await prisma.$disconnect();

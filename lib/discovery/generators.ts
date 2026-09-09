@@ -265,6 +265,9 @@ function unitCandidates(
   const units = kind === "album" ? index.albums : index.artists;
   const out: Candidate[] = [];
   for (const u of units.values()) {
+    // Superseded by an authoritative record — the stronger, truer form of the
+    // same fact is generated above.
+    if (kind === "album" && index.authCoveredTitleKeys.has(u.key)) continue;
     const observed = u.observed.size;
     const residue = u.missing.length;
     if (observed < opts.minObserved) continue;
@@ -333,6 +336,109 @@ function unitCandidates(
   }
   return out;
 }
+
+// ── Family B(i) · authoritative catalogue ───────────────────────────────────
+//
+// These are the only generators permitted to assert completion, because they
+// are the only ones that know how long the record actually is. Everything
+// about them is gated on structural consistency: the wrong tracklist length
+// turns the strongest sentence in the product into a false one.
+
+/**
+ * Anchored so an exact single residue on a real album lands at 0.88–0.92.
+ *
+ * The three terms are the three things that make a completion fact strong:
+ * how exact the residue is, how much of the record the viewer actually holds,
+ * and how substantial the record is — one missing track from a twenty-track
+ * album says more than one from a six-track EP. Nothing is a constant: a
+ * two-track residue falls to the high 0.70s and a four-track residue to the
+ * low 0.70s, which is where near-complete belongs.
+ */
+function authoritativeScore(totalTracks: number, ownedPositions: number, residue: number): number {
+  const exactness = 1 / residue;
+  const held = Math.min(1, ownedPositions / 8);
+  const scale = Math.min(1, log2(totalTracks) / log2(20));
+  return Math.min(0.92, clamp01(0.60 + 0.24 * exactness * held + 0.08 * scale));
+}
+
+function authoritativeAlbums(
+  index: DiscoveryIndex, generator: GeneratorId, residueMin: number, residueMax: number,
+): Candidate[] {
+  const out: Candidate[] = [];
+  for (const a of index.authAlbums.values()) {
+    if (!a.consistent) continue;
+    const residue = a.totalTracks - a.ownedPositions;
+    if (residue < residueMin || residue > residueMax) continue;
+    if (a.ownedPositions < 4) continue;           // barely-held records prove nothing
+    if (a.missing.length === 0) continue;         // nothing we could actually offer
+    // A sole gap must be the one track we can see, or the claim is unfounded.
+    if (residueMax === 1 && a.missing.length !== 1) continue;
+
+    assertMissing(index, a.missing, generator);
+    const setRef = { kind: "album" as const, artist: a.artist, album: a.title };
+    const expression = `AL_${a.albumId} − U   (${a.ownedPositions}/${a.totalTracks} positions held)`;
+    const set: DiscoverySet = {
+      id: setId(`authalbum:${a.albumId}:${residue}`), type: "albumGapTrue", expression,
+      members: a.missing, sourceSets: [{ kind: "friendsAll" }],
+      exclusionSet: { kind: "user", userId: index.viewerId },
+      rawMetrics: { totalTracks: a.totalTracks, owned: a.ownedPositions, residue },
+    };
+    const holderIds = [...new Set(a.missing.flatMap((id) => index.holders.get(id) ?? []))];
+    const es = authoritativeScore(a.totalTracks, a.ownedPositions, residue);
+    const common = {
+      generator, discoverySetId: set.id, discoveryExpression: expression,
+      evidence: [
+        { kind: "observedOwnership", setRef, owned: a.ownedPositions, observed: a.totalTracks } as Evidence,
+        ...holderEvidence(index, holderIds),
+      ],
+      reasonCodes: [
+        "AUTHORITATIVE_CATALOG", `ALBUM_ID=${a.albumId}`, `TOTAL=${a.totalTracks}`,
+        `OWNED=${a.ownedPositions}`, `RESIDUE=${residue}`, `TYPE=${a.albumType}`,
+      ],
+      evidenceStrength: es,
+      attentionValue: 0,
+      componentScores: {
+        totalTracks: a.totalTracks, ownedPositions: a.ownedPositions, residue,
+        offerable: a.missing.length,
+      },
+      sourceFriendIds: holderIds,
+      sourceFriendNames: holderIds.map((h) => index.nameOf.get(h) ?? "Someone"),
+    };
+
+    if (residueMax === 1) {
+      const only = a.missing[0];
+      const subject = songSubject(index, only);
+      if (!subject) continue;
+      const m = index.meta.get(only)!;
+      out.push({
+        id: nextId(generator), subject, subjectKey: `Song:${only}`, ...common,
+        genre: m.world,
+        subgenre: m.subgenre && m.subgenre !== UNKNOWN_LANE ? m.subgenre : null,
+        artist: a.artist, album: a.title,
+      });
+    } else {
+      out.push({
+        id: nextId(generator),
+        subject: { type: "Album", artist: a.artist, album: a.title },
+        subjectKey: `Album:auth:${a.albumId}`, ...common,
+        genre: null, subgenre: null, artist: a.artist, album: a.title,
+      });
+    }
+  }
+  return out;
+}
+
+const albumSoleGapTrue: GeneratorSpec = {
+  id: "ALBUM_SOLE_GAP_TRUE",
+  mechanism: "The viewer holds every position on a verified album but one, and a friend has it.",
+  run: (index) => authoritativeAlbums(index, "ALBUM_SOLE_GAP_TRUE", 1, 1),
+};
+
+const albumNearCompleteTrue: GeneratorSpec = {
+  id: "ALBUM_NEAR_COMPLETE_TRUE",
+  mechanism: "The viewer is a small, exact number of tracks short of a verified album.",
+  run: (index) => authoritativeAlbums(index, "ALBUM_NEAR_COMPLETE_TRUE", 2, 4),
+};
 
 const albumSoleGap: GeneratorSpec = {
   id: "ALBUM_SOLE_GAP_OBSERVED",
@@ -660,6 +766,7 @@ const genreGap: GeneratorSpec = {
 
 export const GENERATORS: GeneratorSpec[] = [
   unanimousMiss, unanimousSet, supermajorityMiss, pairConsensus, multiIntersectionSet,
+  albumSoleGapTrue, albumNearCompleteTrue,
   albumSoleGap, albumResidue, artistSoleGap, artistResidue, albumAsUnit, artistAbsentInLane,
   subgenreVoid, missingChild, sourceLaneDepth, genreGap,
 ];
