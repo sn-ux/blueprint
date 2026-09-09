@@ -8,6 +8,7 @@ import { PrismaClient } from "@prisma/client";
 import { concentrationOf } from "../lib/discovery/aperture.ts";
 import { APERTURE, CONSENSUS_SET, REDUNDANCY } from "../lib/discovery/config.ts";
 import { buildFeed, deliverablesOf, toFeedCard } from "../lib/discovery/feed.ts";
+import { label } from "../lib/discovery/display.ts";
 import { SONG_SET_MAX, SONG_SET_MIN } from "../lib/discovery/types.ts";
 
 const arg = (f, d) => { const i = process.argv.indexOf(f); return i > -1 ? process.argv[i + 1] : d; };
@@ -166,6 +167,72 @@ check("every card carries a unique stable recommendation key", keyBad === 0);
 check("taxonomy display labels are formatted",
   cards.filter((c) => c.cardType === "SUBGENRE" || c.cardType === "GENRE")
     .every((c) => !/^[a-z]/.test(c.title)));
+
+// ── Title and recipient context ────────────────────────────────────────────
+check("every card has a non-empty subject title",
+  cards.every((c) => typeof c.title === "string" && c.title.trim().length > 0),
+  `shortest "${cards.map((c) => c.title).sort((a, b) => a.length - b.length)[0]}"`);
+
+const typesPresent = [...new Set(cards.map((c) => c.cardType))];
+check("every CardSubjectType present renders a title",
+  typesPresent.every((t) => cards.filter((c) => c.cardType === t).every((c) => c.title.trim())),
+  typesPresent.map((t) => `${t}:${cards.filter((c) => c.cardType === t).length}`).join(" "));
+
+// The title must come from the subject, never from the caption.
+check("titles are sourced from subject metadata, not caption text",
+  all.every((c) => {
+    const f = toFeedCard(index, c);
+    const s2 = c.subject;
+    const expected = s2.type === "Album" ? s2.album
+      : s2.type === "Artist" ? s2.artist
+      : s2.type === "Subgenre" ? label(s2.subgenre)
+      : s2.type === "Genre" ? label(s2.genre)
+      : s2.type === "Songs" ? s2.title : null;
+    return f.title === expected;
+  }));
+check("no card's title is a prefix of its own caption",
+  cards.every((c) => !c.caption.startsWith(c.title)));
+
+check("every card carries a structured recipient context",
+  cards.every((c) => c.recipientContext && c.recipientContext.shortLabel.trim().length > 0));
+check("the context line names the card's actual anchor",
+  all.every((c) => {
+    const f = toFeedCard(index, c);
+    return f.recipientContext?.anchorType === c.anchor?.type
+      && f.recipientContext?.ownedCount === c.anchor?.ownedCount;
+  }));
+check("no context line claims a preference",
+  cards.every((c) => /^(Already in your library|From .+ in your library)$/.test(c.recipientContext.shortLabel)));
+
+// Feed and detail must be two renderings of one proposition.
+check("every card has an expanded detail explanation",
+  cards.every((c) => c.detailExplanation.trim().length > 0));
+check("the detail explanation states the same deliverable count as the caption",
+  all.every((c) => {
+    const f = toFeedCard(index, c);
+    const n = String(c.deliverableCount);
+    const words = ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
+    const w = c.deliverableCount <= 10 ? words[c.deliverableCount] : n;
+    return f.detailExplanation.includes(n) || f.detailExplanation.toLowerCase().includes(w);
+  }));
+check("the detail explanation names the same subject as the title",
+  all.every((c) => {
+    const f = toFeedCard(index, c);
+    if (c.subject.type === "Songs") return true;
+    const key = c.subject.type === "Album" ? c.subject.album
+      : c.subject.type === "Artist" ? c.subject.artist
+      : c.subject.type === "Subgenre" ? label(c.subject.subgenre) : label(c.subject.genre);
+    return f.detailExplanation.includes(key);
+  }));
+
+console.log("\n── card hierarchy, first 6 ──");
+for (const c of cards.slice(0, 6)) {
+  console.log(`  [${c.cardType}]`);
+  console.log(`  ${c.title}${c.byline ? `  · ${c.byline}` : ""}`);
+  console.log(`  ${c.recipientContext.shortLabel}`);
+  console.log(`  ${c.caption}`);
+  console.log();
+}
 
 // C1 — no card may be anchored more loosely than the viewer's library allows.
 const loose = [];

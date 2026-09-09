@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { label } from "./display";
 import { runEngine } from "./engine";
 import type { DiscoveryIndex } from "./sets";
-import type { Candidate, CardSubjectType } from "./types";
+import type { Candidate, CardSubjectType, RecipientContext } from "./types";
 
 /**
  * The recommendation feed as the app consumes it.
@@ -64,6 +64,22 @@ export interface FeedCard {
   subjectImageUrl: string | null;
   /** Why this belongs in front of this viewer. */
   anchor: { type: string; entityName: string; ownedCount: number; specificity: number } | null;
+  /**
+   * The card's own "why you're getting this" line, as structure.
+   *
+   * The client renders from these fields; nothing reverse-engineers it out of
+   * the caption. The relationship is always library membership, never an
+   * inferred preference.
+   */
+  recipientContext: RecipientContext | null;
+  /**
+   * The page's longer telling of the same fact.
+   *
+   * Rendered from the same proposition as `caption`, by a second function
+   * rather than a second author, so the two cannot disagree about the
+   * subject, the counts or the sources.
+   */
+  detailExplanation: string;
 
   /** Named sources behind the recommendation. Never a count. */
   sources: FeedPerson[];
@@ -105,7 +121,8 @@ export function deliverablesOf(index: DiscoveryIndex, c: Candidate): FeedTrack[]
 function titleOf(c: Candidate): { title: string; byline: string } {
   const s = c.subject;
   switch (s.type) {
-    case "Album": return { title: s.album, byline: s.artist };
+    // A record named after the act that made it needs the name once.
+    case "Album": return { title: s.album, byline: s.artist === s.album ? "" : s.artist };
     case "Artist": return { title: s.artist, byline: "" };
     // Taxonomy keys are identity; this is the one place they become readable.
     case "Subgenre": return { title: label(s.subgenre), byline: "" };
@@ -138,6 +155,40 @@ function imageOf(index: DiscoveryIndex, c: Candidate, tracks: FeedTrack[]): stri
   return tracks.find((t) => t.imageUrl)?.imageUrl ?? null;
 }
 
+/**
+ * The recipient-context line.
+ *
+ * Built from the anchor, so it always states the actual set relationship the
+ * recommendation rests on. An artist card anchored on the artist itself reads
+ * "Already in your library"; everything else names the thing the viewer holds
+ * that this came out of.
+ */
+function contextOf(c: Candidate): RecipientContext | null {
+  const a = c.anchor;
+  if (!a) return null;
+  const readable = a.type === "SUBGENRE_PRESENT" || a.type === "PARENT_GENRE_PRESENT"
+    ? label(a.entityName) : a.entityName;
+
+  // The subject is the very thing the viewer already holds some of.
+  const selfAnchored =
+    // A record named after the act that made it is not "from" somewhere else.
+    (c.subject.type === "Album" && c.artist === c.subject.album)
+    || (c.subject.type === "Artist" && a.type === "ARTIST_PRESENT" && a.entityName === c.subject.artist)
+    || (c.subject.type === "Subgenre" && a.type === "SUBGENRE_PRESENT" && a.entityName === c.subject.subgenre)
+    || (c.subject.type === "Genre" && a.type === "PARENT_GENRE_PRESENT" && a.entityName === c.subject.genre);
+
+  // A partial album is reached through the artist who made it.
+  const name = a.type === "ALBUM_PARTIAL" ? (c.artist ?? readable) : readable;
+
+  return {
+    anchorType: a.type,
+    anchorId: a.entityId,
+    anchorName: name,
+    ownedCount: a.ownedCount,
+    shortLabel: selfAnchored ? "Already in your library" : `From ${name} in your library`,
+  };
+}
+
 export function toFeedCard(index: DiscoveryIndex, c: Candidate, previewLimit = 4): FeedCard {
   const all = deliverablesOf(index, c);
   const { title, byline } = titleOf(c);
@@ -167,6 +218,8 @@ export function toFeedCard(index: DiscoveryIndex, c: Candidate, previewLimit = 4
       ownedCount: c.anchor.ownedCount,
       specificity: c.anchor.specificity,
     } : null,
+    recipientContext: contextOf(c),
+    detailExplanation: c.winningClaim?.detailText ?? c.caption ?? "",
     sources: c.sourceFriendIds.map((id) => personOf(index, id)),
     deliverableCount: all.length,
     previewTracks: all.slice(0, previewLimit),

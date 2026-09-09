@@ -77,7 +77,7 @@ export function enumerateClaims(_index: DiscoveryIndex, c: Candidate): Structure
     case "ALBUM_GAP_TRUE":
       return [{
         type: "ALBUM_COMPLETION", album: c.album ?? "", artist: c.artist ?? "",
-        owned: a.ownedCount, total: a.relevantSetSize ?? 0, residue: n,
+        owned: a.ownedCount, total: a.relevantSetSize ?? 0, residue: n, names,
       }];
     case "ALBUM_AS_UNIT":
       return [{
@@ -96,7 +96,7 @@ export function enumerateClaims(_index: DiscoveryIndex, c: Candidate): Structure
     case "MISSING_CHILD":
       return [{
         type: "LANE_VIA_PARENT", parent: a.entityName, lane: c.subgenre ?? "",
-        ownedInParent: a.ownedCount, deliverable: n,
+        ownedInParent: a.ownedCount, deliverable: n, names,
       }];
     case "CONSENSUS_SET": {
       const g = c.groupingReason;
@@ -128,20 +128,52 @@ const Spell = (n: number) => { const w = spell(n); return w[0].toUpperCase() + w
 
 type P<T extends ClaimType> = Extract<StructuredProposition, { type: T }>;
 
+/**
+ * Naming the people behind a recommendation.
+ *
+ * Two or three friends are named outright — "Chris and Sahaj" carries more
+ * than "two of your friends", and it is the same fact. Beyond three a list
+ * stops being readable, so it becomes a count. Never a bare number where a
+ * name would fit.
+ */
+export function friendPhrase(names: string[]): string {
+  const n = names.length;
+  if (n === 0) return "";
+  if (n === 1) return names[0];
+  if (n === 2) return `${names[0]} and ${names[1]}`;
+  if (n === 3) return `${names[0]}, ${names[1]}, and ${names[2]}`;
+  return `${Spell(n)} of your friends`;
+}
+
+/** "Chris and Sahaj have" / "Three of your friends have". */
+const friendsHave = (names: string[]) =>
+  `${friendPhrase(names)} ${names.length <= 3 && names.length > 0 ? (names.length === 1 ? "has" : "have") : "have"}`;
+
 interface Template {
   id: string;
   claimType: ClaimType;
+  /** The feed sentence. Short; never repeats the card's own title. */
   render: (p: StructuredProposition) => string;
+  /** The page's expanded version of the same fact. Names the sources. */
+  detail: (p: StructuredProposition) => string;
 }
 
 const TEMPLATES: Template[] = [
   // Album completion — the only claim permitted to assert a full tracklist,
-  // and only ever built from a verified one.
+  // and only ever built from a verified one. The card's title is the album and
+  // its context line names the artist, so neither is repeated here.
   {
     id: "album-complete-1", claimType: "ALBUM_COMPLETION",
     render: (p) => {
       const q = p as P<"ALBUM_COMPLETION">;
-      return `You have ${num(q.owned)} of the ${q.total} tracks on ${q.album}. Your friends have the other ${spell(q.residue)}.`;
+      return `You have ${q.owned} of the ${q.total} tracks. Your friends have the other ${spell(q.residue)}.`;
+    },
+    detail: (p) => {
+      const q = p as P<"ALBUM_COMPLETION">;
+      const by = q.artist && q.artist !== q.album ? ` by ${q.artist}` : "";
+      return `You already have ${q.owned} of the ${q.total} tracks on ${q.album}${by}.`
+        + ` ${friendsHave(q.names ?? [])} saved the remaining ${spell(q.residue)}, which are not in your library.`
+        + ` ${q.residue === 1 ? "It is" : "Those " + spell(q.residue) + " are"} shown below.`;
     },
   },
   {
@@ -149,8 +181,15 @@ const TEMPLATES: Template[] = [
     render: (p) => {
       const q = p as P<"ALBUM_COMPLETION">;
       return q.residue === 1
-        ? `You have every track on ${q.album} except one, and your friends have it.`
-        : `${Spell(q.residue)} tracks short of the whole of ${q.album}. Your friends have them.`;
+        ? `You have every track but one, and your friends have it.`
+        : `${Spell(q.residue)} tracks short of the whole record. Your friends have them.`;
+    },
+    detail: (p) => {
+      const q = p as P<"ALBUM_COMPLETION">;
+      const by = q.artist && q.artist !== q.album ? ` by ${q.artist}` : "";
+      return `You already have ${q.owned} of the ${q.total} tracks on ${q.album}${by}.`
+        + ` ${friendsHave(q.names ?? [])} saved the remaining ${spell(q.residue)}, which are not in your library.`
+        + ` ${q.residue === 1 ? "It is" : "Those " + spell(q.residue) + " are"} shown below.`;
     },
   },
 
@@ -158,7 +197,13 @@ const TEMPLATES: Template[] = [
     id: "album-via-artist-1", claimType: "ALBUM_VIA_ARTIST",
     render: (p) => {
       const q = p as P<"ALBUM_VIA_ARTIST">;
-      return `You already have ${num(q.ownedByArtist)} tracks by ${q.artist} but nothing from ${q.album}. Your friends have ${q.deliverable}.`;
+      return `You already have ${num(q.ownedByArtist)} ${q.artist} tracks, but nothing from this album. ${friendsHave(q.names)} ${q.deliverable}.`;
+    },
+    detail: (p) => {
+      const q = p as P<"ALBUM_VIA_ARTIST">;
+      return `You already have ${num(q.ownedByArtist)} tracks by ${q.artist}, but none from ${q.album}.`
+        + ` ${friendsHave(q.names)} saved ${q.deliverable} tracks from the album that aren't in your library.`
+        + ` Those ${q.deliverable} tracks are shown below.`;
     },
   },
 
@@ -166,14 +211,26 @@ const TEMPLATES: Template[] = [
     id: "artist-more-1", claimType: "ARTIST_MORE",
     render: (p) => {
       const q = p as P<"ARTIST_MORE">;
-      return `You already have ${num(q.owned)} ${q.owned === 1 ? "track" : "tracks"} by ${q.artist}. Your friends have ${q.deliverable} more you don't.`;
+      return `You already have ${num(q.owned)} ${q.owned === 1 ? "track" : "tracks"}. ${friendsHave(q.names)} ${q.deliverable} more you don't.`;
+    },
+    detail: (p) => {
+      const q = p as P<"ARTIST_MORE">;
+      return `You already have ${num(q.owned)} ${q.artist} ${q.owned === 1 ? "track" : "tracks"} in your library.`
+        + ` ${friendsHave(q.names)} saved ${q.deliverable} more that aren't in yours.`
+        + ` Those ${q.deliverable} tracks are shown below.`;
     },
   },
   {
     id: "artist-more-2", claimType: "ARTIST_MORE",
     render: (p) => {
       const q = p as P<"ARTIST_MORE">;
-      return `${q.artist} is already in your library — ${num(q.owned)} tracks. Your friends kept ${q.deliverable} more.`;
+      return `${num(q.owned)} tracks of theirs are already yours. ${friendsHave(q.names)} ${q.deliverable} more.`;
+    },
+    detail: (p) => {
+      const q = p as P<"ARTIST_MORE">;
+      return `You already have ${num(q.owned)} ${q.artist} ${q.owned === 1 ? "track" : "tracks"} in your library.`
+        + ` ${friendsHave(q.names)} saved ${q.deliverable} more that aren't in yours.`
+        + ` Those ${q.deliverable} tracks are shown below.`;
     },
   },
 
@@ -181,7 +238,13 @@ const TEMPLATES: Template[] = [
     id: "artist-via-lane-1", claimType: "ARTIST_VIA_LANE",
     render: (p) => {
       const q = p as P<"ARTIST_VIA_LANE">;
-      return `You already have ${num(q.ownedInLane)} ${label(q.lane)} tracks. Your friends have ${q.deliverable} by ${q.artist} you haven't saved.`;
+      return `You don't have any tracks by them. ${friendsHave(q.names)} ${q.deliverable}.`;
+    },
+    detail: (p) => {
+      const q = p as P<"ARTIST_VIA_LANE">;
+      return `You already have ${num(q.ownedInLane)} ${label(q.lane)} tracks, but nothing at all by ${q.artist}.`
+        + ` ${friendsHave(q.names)} saved ${q.deliverable} of their tracks that aren't in your library.`
+        + ` Those ${q.deliverable} tracks are shown below.`;
     },
   },
 
@@ -189,14 +252,13 @@ const TEMPLATES: Template[] = [
     id: "lane-more-1", claimType: "LANE_MORE",
     render: (p) => {
       const q = p as P<"LANE_MORE">;
-      return `You already have ${label(q.lane)} in your library. Your friends have ${q.deliverable} more tracks here you don't.`;
+      return `You already have ${num(q.owned)} tracks here. ${friendsHave(q.names)} ${q.deliverable} more you don't.`;
     },
-  },
-  {
-    id: "lane-more-2", claimType: "LANE_MORE",
-    render: (p) => {
+    detail: (p) => {
       const q = p as P<"LANE_MORE">;
-      return `${num(q.owned)} ${label(q.lane)} tracks in your library, and ${q.deliverable} more your friends kept.`;
+      return `You already have ${num(q.owned)} ${label(q.lane)} tracks in your library.`
+        + ` ${friendsHave(q.names)} saved ${q.deliverable} more in the same lane that aren't in yours.`
+        + ` Those ${q.deliverable} tracks are shown below.`;
     },
   },
 
@@ -204,33 +266,29 @@ const TEMPLATES: Template[] = [
     id: "lane-via-parent-1", claimType: "LANE_VIA_PARENT",
     render: (p) => {
       const q = p as P<"LANE_VIA_PARENT">;
-      return `You have plenty of ${label(q.parent)}, but no ${label(q.lane)}. Your friends have ${q.deliverable} tracks there.`;
+      return `You don't have any ${label(q.lane)} saved. ${friendsHave(q.names)} ${q.deliverable} tracks there.`;
     },
-  },
-  {
-    id: "lane-via-parent-2", claimType: "LANE_VIA_PARENT",
-    render: (p) => {
+    detail: (p) => {
       const q = p as P<"LANE_VIA_PARENT">;
-      return `${label(q.lane)} is the corner of ${label(q.parent)} you've never entered. Your friends have ${q.deliverable} tracks in it.`;
+      return `You already have ${num(q.ownedInParent)} tracks across ${label(q.parent)}, but none classified as ${label(q.lane)}.`
+        + ` ${friendsHave(q.names)} saved ${q.deliverable} ${label(q.lane)} tracks that are not in your library.`
+        + ` Those ${q.deliverable} tracks are shown below.`;
     },
   },
 
-  // A curated set states three things: why the area is relevant to the
-  // viewer, why these particular tracks were chosen out of it, and who
-  // vouches for them. Dropping the middle clause would turn it back into the
-  // area's own card.
+  // A curated set states three things: why the area is relevant to the viewer,
+  // why these particular tracks were chosen out of it, and who vouches.
   {
     id: "set-consensus-1", claimType: "SET_CONSENSUS",
     render: (p) => {
       const q = p as P<"SET_CONSENSUS">;
-      return `You already have ${num(q.owned)} ${label(q.scope)} tracks. These ${q.deliverable} are saved by at least ${spell(q.minHolders)} of your friends, and none are in your library.`;
+      return `You already have ${num(q.owned)} tracks in this ${q.scopeIsGenre ? "genre" : "lane"}. These ${q.deliverable} are saved by at least ${spell(q.minHolders)} of your friends, and none are in your library.`;
     },
-  },
-  {
-    id: "set-consensus-2", claimType: "SET_CONSENSUS",
-    render: (p) => {
+    detail: (p) => {
       const q = p as P<"SET_CONSENSUS">;
-      return `${num(q.owned)} ${label(q.scope)} tracks in your library, and none of these ${q.deliverable} — which ${spell(q.minHolders)} of your friends each kept independently.`;
+      return `You already have ${num(q.owned)} ${label(q.scope)} tracks in your library.`
+        + ` Of everything in that ${q.scopeIsGenre ? "genre" : "lane"} you're missing, ${q.qualifying} ${q.qualifying === 1 ? "track has" : "tracks have"} been saved independently by at least ${spell(q.minHolders)} of your friends.`
+        + ` The ${q.deliverable} with the most agreement are shown below.`;
     },
   },
 ];
@@ -282,8 +340,13 @@ export function buildClaims(index: DiscoveryIndex, c: Candidate): CaptionClaim[]
     if (!tpl) continue;
     // Titles carry their own punctuation — "DAMN." ends a sentence on its
     // own — so a template's full stop must not double up behind one.
-    const text = tpl.render(p).replace(/\.\.(?=\s|$)/g, ".");
+    // Titles carry their own punctuation — "DAMN." ends a sentence on its
+    // own — so a template's full stop must not double up behind one.
+    const clean = (t: string) => t.replace(/\.\.(?=\s|$)/g, ".");
+    const text = clean(tpl.render(p));
+    const detailText = clean(tpl.detail(p));
     if (!text || /undefined|NaN|\s{2,}|^\s/.test(text)) continue;
+    if (!detailText || /undefined|NaN|\s{2,}|^\s/.test(detailText)) continue;
 
     const exceptionalness = exceptionalnessOf(p);
     const specificity = specificityOf(p, c.anchor?.specificity ?? 0.5);
@@ -301,7 +364,7 @@ export function buildClaims(index: DiscoveryIndex, c: Candidate): CaptionClaim[]
       + CFG.CLAIM_WEIGHTS.confidence * confidence;
 
     out.push({
-      claimType: p.type, proposition: p, evidence: c.evidence,
+      claimType: p.type, proposition: p, evidence: c.evidence, detailText,
       exceptionalness, specificity, socialMeaning, simplicity, confidence,
       score, text, templateId: tpl.id,
     });

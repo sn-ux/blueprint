@@ -46,7 +46,16 @@ async function restore() {
   await prisma.recommendationFeedSession.deleteMany({
     where: { userId, id: { notIn: savedSessions.map((s) => s.id) } },
   });
-  // Belt and braces: no rest may outlive the run except one a real open made.
+  // A rest is only ever legitimate behind an open, a dismissal or a
+  // resolution. Anything else can only have been forced — by this harness, or
+  // by an older run whose snapshot this one inherited — so it is stripped on
+  // the way out rather than handed to the next device test.
+  const swept = await prisma.recommendationExposure.updateMany({
+    where: { userId, cooldownUntil: { not: null }, openCount: 0,
+             dismissedAt: null, actedOnAt: null },
+    data: { cooldownUntil: null },
+  });
+  if (swept.count > 0) console.log(`  (restore stripped ${swept.count} forced rests)`);
   const leaked = await prisma.recommendationExposure.count({
     where: { userId, cooldownUntil: { gt: new Date() }, openCount: 0,
              dismissedAt: null, actedOnAt: null },
@@ -160,8 +169,14 @@ try {
 
   const byType = new Map();
   let mismatched = 0, withImage = 0;
+  let titleDrift = 0, contextDrift = 0, explanationMissing = 0;
   for (const card of everything) {
     const detail = await cardDetail(userId, card.id);
+    // The page must present the same subject and the same relationship the
+    // feed card did, not a second rendering that could disagree.
+    if (detail?.card.title !== card.title) { titleDrift++; console.log(`    TITLE DRIFT ${card.title} → ${detail?.card.title}`); }
+    if (detail?.card.recipientContext?.shortLabel !== card.recipientContext?.shortLabel) contextDrift++;
+    if (!detail?.card.detailExplanation?.trim()) explanationMissing++;
     const row = byType.get(card.cardType) ?? { pass: 0, fail: 0, noImage: 0 };
     if (!card.subjectImageUrl) row.noImage++;
     else {
@@ -176,6 +191,10 @@ try {
   for (const [t, r] of byType) {
     console.log(`  ${t.padEnd(10)} feed image === detail image: ${r.pass}/${r.pass + r.fail}   without artwork: ${r.noImage}`);
   }
+  check("the detail page shows the same title as the feed card", titleDrift === 0,
+    `${everything.length} cards compared`);
+  check("the detail page shows the same recipient context", contextDrift === 0);
+  check("every detail page carries an expanded explanation", explanationMissing === 0);
   check("every card's detail image is the card's feed image", mismatched === 0,
     `${withImage} cards carry artwork`);
   check("opening a card makes no external request", externalCalls === 0,

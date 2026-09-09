@@ -99,12 +99,12 @@ export type Evidence =
  * cannot be expressed, because no proposition has that shape.
  */
 export type StructuredProposition =
-  | { type: "ALBUM_COMPLETION"; album: string; artist: string; owned: number; total: number; residue: number }
+  | { type: "ALBUM_COMPLETION"; album: string; artist: string; owned: number; total: number; residue: number; names: string[] }
   | { type: "ALBUM_VIA_ARTIST"; album: string; artist: string; ownedByArtist: number; deliverable: number; names: string[] }
   | { type: "ARTIST_MORE"; artist: string; owned: number; deliverable: number; names: string[] }
   | { type: "ARTIST_VIA_LANE"; artist: string; lane: string; ownedInLane: number; deliverable: number; names: string[] }
   | { type: "LANE_MORE"; lane: string; owned: number; deliverable: number; names: string[] }
-  | { type: "LANE_VIA_PARENT"; parent: string; lane: string; ownedInParent: number; deliverable: number }
+  | { type: "LANE_VIA_PARENT"; parent: string; lane: string; ownedInParent: number; deliverable: number; names: string[] }
   /**
    * A curated set: the area, the rule that picked these tracks out of it, and
    * the evidence. All three are required — the middle one is what separates
@@ -122,6 +122,16 @@ export interface CaptionClaim {
   claimType: ClaimType;
   proposition: StructuredProposition;
   evidence: Evidence[];
+  /**
+   * Two surfaces, one proposition.
+   *
+   * The feed sentence and the page's longer explanation are rendered from the
+   * same structured fact by two functions, never written independently. That
+   * is what stops them drifting: there is no second source of numbers for a
+   * detail page to disagree with, and the validation asserts the subject,
+   * counts and sources match across both.
+   */
+  detailText?: string;
 
   exceptionalness: number;
   specificity: number;
@@ -164,6 +174,23 @@ export interface RecipientAnchor {
    * than a lane, a lane than a whole genre.
    */
   specificity: number;
+}
+
+/**
+ * The card's own statement of why it is in front of this viewer.
+ *
+ * Structured, not prose: the UI renders the line from these fields, and
+ * nothing anywhere parses it back out of a caption. The relationship is
+ * always library membership — "From Old School Hip Hop in your library" —
+ * and never an inferred preference.
+ */
+export interface RecipientContext {
+  anchorType: RecipientAnchorType;
+  anchorId: string;
+  anchorName: string;
+  ownedCount: number;
+  /** The rendered line, e.g. "From J. Cole in your library". */
+  shortLabel: string;
 }
 
 export const ANCHOR_SPECIFICITY: Record<RecipientAnchorType, number> = {
