@@ -100,6 +100,9 @@ export async function loadCorpus(): Promise<Corpus & { reused: boolean }> {
       // Spotify's album release date. Read for the card's year range; its
       // precision varies, so only the year is ever taken from it.
       releaseDate: true,
+      // When the owner saved it. Read only for the viewer's own rows, to
+      // weight how recent the material a card hangs off is.
+      savedAt: true,
     },
   });
 

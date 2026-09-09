@@ -93,6 +93,15 @@ model Track {
   // than fetched per card.
   artistId             String?
   artistImageUrl       String?
+  /**
+   * When Spotify says this track was saved to Liked Songs.
+   *
+   * `added_at` from /v1/me/tracks, kept verbatim. Null on rows imported
+   * before this was captured, and null for tracks that only ever came from an
+   * owned playlist — a playlist add is not a Liked Songs save, and nothing
+   * substitutes one for the other or infers a date that was never given.
+   */
+  savedAt              DateTime?
   rawGenre             String
   blueprintWorld       String
   blueprintSubgenre    String

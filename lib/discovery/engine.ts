@@ -6,6 +6,8 @@ import { resolveRedundancy, type CoexistingPair, type RedundancyPair } from "./r
 import * as CFG from "./config";
 import { attentionValue, ATTENTION_FLOOR, buildClaims, CLAIM_FLOOR, promisedCount } from "./claims";
 import { ES_FLOOR, GENERATORS } from "./generators";
+import { anchorRecency, artistFamiliarity } from "./recency";
+import { noveltyOf, wantedAt, type NoveltyClass } from "./novelty";
 import { buildIndex, type DiscoveryIndex } from "./sets";
 import type { Candidate, EngineInput, GeneratorId, Rejection } from "./types";
 
@@ -216,6 +218,29 @@ export function runEngine(input: EngineInput, opts: EngineOptions = {}): EngineR
       c.deliverableIds = ap.deliverableIds;
       c.deliverableCount = ap.deliverableIds.length;
     }
+
+    /**
+     * Gate 7 — a card's page must hold a dozen songs.
+     *
+     * Applied here, where the aperture has settled what the page will actually
+     * contain and the library has already been subtracted from it, so this
+     * counts what the reader gets rather than what the set held beforehand. A
+     * short list is suppressed rather than padded: there is nothing to pad it
+     * with that would not be manufacturing the thing the floor exists for.
+     *
+     * An album is exempt, and structurally: a record is a fixed object, and an
+     * album card's page is the part of that record the viewer is missing — not
+     * a list assembled to a length. Every other card type is a list.
+     */
+    if (!CFG.MIN_DELIVERABLE_EXEMPT.includes(c.cardType)
+      && c.deliverableCount < CFG.MIN_DELIVERABLE) {
+      rejected.push({
+        stage: "deliverability", reasonCode: "BELOW_TRACK_MINIMUM",
+        generator: c.generator, subjectKey: c.subjectKey,
+        detail: `${c.deliverableCount} track(s), floor is ${CFG.MIN_DELIVERABLE}`,
+      });
+      continue;
+    }
     resolved.push(c);
   }
 
@@ -275,14 +300,33 @@ export function runEngine(input: EngineInput, opts: EngineOptions = {}): EngineR
   }
 
   // ── Ranking. Base stays in [0,1]; rankingScore may exceed it. ─────────────
+  //
+  // Two adjustments sit outside the base, deliberately: evidenceStrength and
+  // attentionValue are anchored measures of the recommendation itself and mean
+  // the same for every viewer, while both of these are facts about one
+  // library. Keeping them apart is what lets the anchor table stay readable.
+  const now = Date.now();
   for (const c of explained) {
     c.baseRankingScore = clamp01(
       CFG.RANK_WEIGHTS.evidence * c.evidenceStrength
       + CFG.RANK_WEIGHTS.attention * c.attentionValue,
     );
+    // How lately the viewer saved anything in the set this card hangs off.
+    // Zero, and therefore inert, until a library carries save dates.
+    c.anchorRecency = anchorRecency(index, c, now);
+    // How much of the page is artists already well represented in the library.
+    c.artistFamiliarity = artistFamiliarity(index, c);
+    c.recencyBonus = CFG.RECENCY.weight * c.anchorRecency;
+    c.familiarArtistPenalty = CFG.FAMILIAR_ARTIST.max * c.artistFamiliarity;
     c.corroborationBonus = 0;
-    c.rankingScore = c.baseRankingScore + (c.tieBreak ?? 0);
+    c.rankingScore = c.baseRankingScore + (c.tieBreak ?? 0)
+      + c.recencyBonus - c.familiarArtistPenalty;
     c.qualityBand = qualityBand(c.evidenceStrength, c.attentionValue);
+    c.componentScores = {
+      ...c.componentScores,
+      anchorRecency: c.anchorRecency,
+      artistFamiliarity: c.artistFamiliarity,
+    };
   }
 
   // ── F · collapse duplicate subjects, keeping the strongest rationale ──────
@@ -305,7 +349,9 @@ export function runEngine(input: EngineInput, opts: EngineOptions = {}): EngineR
       winner.corroborationBonus = Math.min(
         CFG.CORROBORATION_MAX, CFG.CORROBORATION_PER_GENERATOR * distinct,
       );
-      winner.rankingScore = (winner.baseRankingScore ?? 0) + (winner.tieBreak ?? 0) + winner.corroborationBonus;
+      winner.rankingScore = (winner.baseRankingScore ?? 0) + (winner.tieBreak ?? 0)
+        + winner.corroborationBonus
+        + (winner.recencyBonus ?? 0) - (winner.familiarArtistPenalty ?? 0);
       for (const o of others) {
         rejected.push({ stage: "collapse", reasonCode: "DUPLICATE_SUBJECT", generator: o.generator, subjectKey: o.subjectKey, detail: `lost to ${winner.generator}` });
       }
@@ -355,6 +401,9 @@ export function runEngine(input: EngineInput, opts: EngineOptions = {}): EngineR
   for (const c of kept) {
     c.discoveryDistance = distanceOf(index, c);
     c.distanceBand = bandOf(c.discoveryDistance);
+    // New ground or ground beside something already held. Set containment,
+    // read by the composer to pace the reading between the two.
+    c.novelty = noveltyOf(index, c);
   }
 
   // ── G · feed composition ──────────────────────────────────────────────────
@@ -434,6 +483,14 @@ export function compose(
 ): Candidate[] {
   const chosen: Candidate[] = [];
   const remaining = [...pool].sort((a, b) => score(b) - score(a));
+  /**
+   * How much of the reading so far is new ground.
+   *
+   * Counted across the whole reading rather than the rolling window, because
+   * the proportion is a property of the reading and a later page continuing
+   * from `positionOffset` has to keep it.
+   */
+  let newSoFar = 0;
 
   while (chosen.length < size && remaining.length > 0) {
     const recent = chosen.slice(-CFG.FEED.window);
@@ -453,6 +510,13 @@ export function compose(
     }
     const last = chosen[chosen.length - 1];
     const first = chosen.length === 0;
+    const position = positionOffset + chosen.length;
+    // What this slot is asking for — the opening pattern while it lasts, then
+    // whichever class restores the proportion. Null when the reading is
+    // already where it should be, and then novelty costs nothing at all.
+    const wanted: NoveltyClass | null = wantedAt(
+      position, newSoFar, position, CFG.FEED.novelty,
+    );
 
     /**
      * Diversity, as a preference rather than a rule.
@@ -485,6 +549,11 @@ export function compose(
       // The feed opens on the tightest connection available rather than on a
       // whole region.
       if (first && (c.cardType === "SUBGENRE" || c.cardType === "GENRE")) p += P.opener;
+      // A slot asking for new ground costs a card that extends something
+      // already held, and the other way round. A preference like the rest of
+      // these: a card far enough ahead still takes the slot, and nothing is
+      // conjured to fill one.
+      if (wanted && (c.novelty ?? "ADJACENT") !== wanted) p += CFG.FEED.novelty.offPattern;
       return p;
     };
 
@@ -509,12 +578,17 @@ export function compose(
       const sim = recent.length ? Math.max(...recent.map((p2) => similarity(c, p2))) : 0;
       // The aperture widens with position: a far card is set back near the top
       // and not at all further down.
-      const far = distancePenalty(c.discoveryDistance ?? 0, positionOffset + chosen.length);
+      // A slot asking for new ground is asking for the widening the distance
+      // ramp holds back, so a new card is largely spared it there. Everywhere
+      // else the ramp is untouched.
+      const wantsThis = wanted && (c.novelty ?? "ADJACENT") === wanted;
+      const relief = wanted === "NEW" && wantsThis ? CFG.FEED.novelty.distanceRelief : 1;
+      const far = relief * distancePenalty(c.discoveryDistance ?? 0, position);
       // Weaker tiers sit behind everything above them, and the setback decays
       // with position, so the feed reaches them once the strong material is
       // spent rather than never.
       const depth = CFG.FEED.tierPenalty * (c.tier ?? 0)
-        * Math.max(0, 1 - (positionOffset + chosen.length) / CFG.FEED.tierRamp);
+        * Math.max(0, 1 - position / CFG.FEED.tierRamp);
       const s2 = score(c) - lambda * sim - far - depth - crowding(c);
       eligible.push({ c, j, s: s2 });
       if (s2 > bestScore) bestScore = s2;
@@ -525,7 +599,7 @@ export function compose(
       .filter((e) => e.s >= bestScore - CFG.FEED.selectionBand)
       .sort((a, b) => b.s - a.s
         || (a.c.recommendationKey ?? a.c.id).localeCompare(b.c.recommendationKey ?? b.c.id));
-    const draw = seed ? jitterFor(seed, `slot:${positionOffset + chosen.length}`) : 0;
+    const draw = seed ? jitterFor(seed, `slot:${position}`) : 0;
     const choice = band[Math.min(band.length - 1, Math.floor(draw * band.length))];
     picked = choice.c;
     pickedIdx = choice.j;
@@ -534,6 +608,7 @@ export function compose(
     if (!picked) break;
 
     picked.feedScore = pickedScore;
+    if ((picked.novelty ?? "ADJACENT") === "NEW") newSoFar++;
     chosen.push(picked);
     remaining.splice(pickedIdx, 1);
   }
