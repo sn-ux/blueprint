@@ -109,6 +109,8 @@ export async function POST(req: NextRequest) {
      *  non-empty) the server uses this list as-is — preserving the exact sort
      *  order the user sees in the Track tab — instead of re-sorting from DB. */
     trackIds?: string[];
+    /** What to call it. Falls back to the subgenre, then the genre. */
+    name?: string;
   };
 
   try {
@@ -117,7 +119,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const { worldType, userId, genre, subgenre, trackIds } = body;
+  const { worldType, userId, genre, subgenre, trackIds, name } = body;
 
   if (!genre) {
     return NextResponse.json({ error: "genre is required" }, { status: 400 });
@@ -211,14 +213,14 @@ export async function POST(req: NextRequest) {
   // Individual genre:    Blueprint · [User Name] · [Genre]
   // Individual subgenre: Blueprint · [User Name] · [Subgenre]
   // Friends subgenre:    Blueprint · Friends · [Subgenre]
-  let playlistName: string;
-  if (worldType === "friends") {
-    playlistName = `Blueprint · Friends · ${subgenre!}`;
-  } else {
-    const displayName = user.name?.split(" ")[0] ?? "Me";
-    const label = subgenre ?? genre;
-    playlistName = `Blueprint · ${displayName} · ${label}`;
-  }
+  // A caller that knows what the list is may say so; otherwise the subgenre,
+  // otherwise the genre. The subgenre used to be asserted non-null and is not
+  // sent by the app at all, so every playlist it made was called
+  // "Blueprint · Friends · undefined".
+  const label = (name?.trim() || subgenre || genre);
+  const playlistName = worldType === "friends"
+    ? `Blueprint · Friends · ${label}`
+    : `Blueprint · ${user.name?.split(" ")[0] ?? "Me"} · ${label}`;
 
   // ── Create the playlist ──────────────────────────────────────────────────────
   const createRes = await spotifyFetch(
