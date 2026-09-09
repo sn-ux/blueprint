@@ -89,6 +89,18 @@ export interface FeedCard {
   deliverableCount: number;
   /** A few tracks for the card itself; the full set comes from the detail route. */
   previewTracks: FeedTrack[];
+  /**
+   * The years the card's own material spans.
+   *
+   * Measured over the tracks this card actually hands over, whatever its
+   * subject: an album card spans its album's year because that is what its
+   * tracks are, and an artist card spans the years of the tracks behind it
+   * rather than a career the engine would have to go and guess at. Null when
+   * none of its tracks carries a release date, which is how a client can tell
+   * "no date" from "some date" and refuse to match either way.
+   */
+  releaseYearMin: number | null;
+  releaseYearMax: number | null;
 }
 
 const spotifyUrl = (id: string | null) =>
@@ -118,6 +130,27 @@ export function trackOf(index: DiscoveryIndex, spotifyId: string): FeedTrack | n
 export function deliverablesOf(index: DiscoveryIndex, c: Candidate): FeedTrack[] {
   const ids = c.deliverableIds ?? [];
   return ids.map((id) => trackOf(index, id)).filter((t): t is FeedTrack => t !== null);
+}
+
+/**
+ * The span of release years across a card's deliverable tracks.
+ *
+ * Derived, never asserted: a track with no release date contributes nothing
+ * rather than being counted at some default, and a card whose tracks all lack
+ * one comes back null on both ends instead of spanning everything.
+ */
+function yearSpanOf(
+  index: DiscoveryIndex, tracks: FeedTrack[],
+): { releaseYearMin: number | null; releaseYearMax: number | null } {
+  let lo: number | null = null;
+  let hi: number | null = null;
+  for (const t of tracks) {
+    const y = index.meta.get(t.spotifyId ?? "")?.year ?? null;
+    if (y === null) continue;
+    if (lo === null || y < lo) lo = y;
+    if (hi === null || y > hi) hi = y;
+  }
+  return { releaseYearMin: lo, releaseYearMax: hi };
 }
 
 function titleOf(c: Candidate): { title: string; byline: string } {
@@ -226,6 +259,7 @@ export function toFeedCard(index: DiscoveryIndex, c: Candidate, previewLimit = 4
     sources: c.sourceFriendIds.map((id) => personOf(index, id)),
     deliverableCount: all.length,
     previewTracks: all.slice(0, previewLimit),
+    ...yearSpanOf(index, all),
   };
 }
 

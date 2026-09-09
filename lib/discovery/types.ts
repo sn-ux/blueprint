@@ -28,6 +28,8 @@ export interface TrackRow {
   trackNumber?: number | null;
   discNumber?: number | null;
   albumType?: string | null;
+  /** Spotify's album release date. Precision varies; only the year is used. */
+  releaseDate?: string | null;
 }
 
 export interface PersonRow {

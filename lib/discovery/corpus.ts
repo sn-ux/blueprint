@@ -97,6 +97,9 @@ export async function loadCorpus(): Promise<Corpus & { reused: boolean }> {
       blueprintWorld: true, blueprintSubgenre: true,
       albumId: true, albumTotalTracks: true, trackNumber: true, discNumber: true,
       albumType: true,
+      // Spotify's album release date. Read for the card's year range; its
+      // precision varies, so only the year is ever taken from it.
+      releaseDate: true,
     },
   });
 

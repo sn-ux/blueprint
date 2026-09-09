@@ -51,6 +51,22 @@ export interface TrackMeta {
   artistId: string | null;
   world: string;
   subgenre: string;
+  /**
+   * Release year, from Spotify's album release date.
+   *
+   * That date is "2019", "2019-04" or "2019-04-12" depending on what Spotify
+   * knows; every precision still carries a year, so the year is taken and the
+   * rest is left alone. Null where the date is missing or unparseable —
+   * never substituted, because a guessed year would filter real cards out.
+   */
+  year: number | null;
+}
+
+/** The year in a Spotify release date, whatever its precision. */
+export function yearOf(releaseDate: string | null | undefined): number | null {
+  if (!releaseDate) return null;
+  const y = Number(releaseDate.slice(0, 4));
+  return Number.isFinite(y) && y > 1000 ? y : null;
 }
 
 export interface LaneIndex {
@@ -217,6 +233,7 @@ export function buildIndex(input: EngineInput): DiscoveryIndex {
       if (!seen.artistId && t.artistId) seen.artistId = t.artistId;
       if (!seen.artistImageUrl && t.artistImageUrl) seen.artistImageUrl = t.artistImageUrl;
       if (!seen.imageUrl && t.imageUrl) seen.imageUrl = t.imageUrl;
+      if (seen.year === null) seen.year = yearOf(t.releaseDate);
       continue;
     }
     meta.set(t.spotifyId, {
@@ -229,6 +246,7 @@ export function buildIndex(input: EngineInput): DiscoveryIndex {
       artistId: t.artistId ?? null,
       world: t.blueprintWorld,
       subgenre: (t.blueprintSubgenre ?? "").trim(),
+      year: yearOf(t.releaseDate),
     });
   }
 
