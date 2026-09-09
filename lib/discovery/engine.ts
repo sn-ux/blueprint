@@ -1,3 +1,4 @@
+import { isAllowedCardType, resolveAperture } from "./aperture";
 import { attentionValue, ATTENTION_FLOOR, buildClaims, CLAIM_FLOOR, promisedCount } from "./claims";
 import { ES_FLOOR, GENERATORS } from "./generators";
 import { buildIndex, type DiscoveryIndex } from "./sets";
@@ -110,9 +111,35 @@ export function runEngine(input: EngineInput, opts: EngineOptions = {}): EngineR
     eligible.push(c);
   }
 
+  // ── Presentation resolution · every card is one of six things ─────────────
+  const resolved: Candidate[] = [];
+  for (const c of eligible) {
+    const ap = resolveAperture(index, c);
+    if (!isAllowedCardType(ap.cardType)) {
+      rejected.push({
+        stage: "aperture", reasonCode: "APERTURE_UNRESOLVED",
+        generator: c.generator, subjectKey: c.subjectKey, detail: ap.note,
+      });
+      continue;
+    }
+    c.cardType = ap.cardType;
+    c.apertureNote = ap.note;
+    if (ap.subject) {
+      c.subject = ap.subject;
+      c.subjectKey = ap.subject.type === "Subgenre" ? `Subgenre:${ap.subject.subgenre}`
+        : ap.subject.type === "Genre" ? `Genre:${ap.subject.genre}`
+        : c.subjectKey;
+    }
+    if (ap.deliverableIds) {
+      c.deliverableIds = ap.deliverableIds;
+      c.deliverableCount = ap.deliverableIds.length;
+    }
+    resolved.push(c);
+  }
+
   // ── E · claims, then the attention and explainability gates ───────────────
   const explained: Candidate[] = [];
-  for (const c of eligible) {
+  for (const c of resolved) {
     const claims = buildClaims(index, c);
     if (claims.length === 0) {
       rejected.push({ stage: "claims", reasonCode: "INEXPLICABLE", generator: c.generator, subjectKey: c.subjectKey, detail: "no claim available" });
@@ -209,6 +236,14 @@ export function runEngine(input: EngineInput, opts: EngineOptions = {}): EngineR
     }
     seenFact.add(c.discoverySetId);
     all.push(c);
+  }
+
+  // The hard gate, re-asserted at the boundary: no candidate reaches the feed
+  // without one of the six allowed card subjects.
+  for (const c of all) {
+    if (!isAllowedCardType(c.cardType)) {
+      throw new Error(`card subject invariant violated: ${c.generator} produced ${String(c.cardType)}`);
+    }
   }
 
   // ── G · feed composition ──────────────────────────────────────────────────

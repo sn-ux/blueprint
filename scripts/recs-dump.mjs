@@ -59,6 +59,8 @@ mkdirSync(outDir, { recursive: true });
 // ── candidates.jsonl ────────────────────────────────────────────────────────
 const detail = (c) => ({
   feedRank: c.feedRank ?? null,
+  cardType: c.cardType,
+  apertureNote: c.apertureNote,
   qualityBand: c.qualityBand,
   subject: c.subject,
   subjectType: c.subject.type,
@@ -88,6 +90,8 @@ const detail = (c) => ({
   corroborationBonus: round(c.corroborationBonus),
   rankingScore: round(c.rankingScore),
   feedScore: round(c.feedScore),
+  deliverableCount: c.deliverableCount,
+  deliverableIds: c.deliverableIds ?? null,
   componentScores: Object.fromEntries(Object.entries(c.componentScores).map(([k, v]) => [k, round(v)])),
   whyItSurvived: c.reasonCodes,
   evidence: c.evidence,
@@ -118,18 +122,21 @@ const subjectLabel = (c) => {
   }
 };
 const GRADE_COLS = [
-  "rank", "qualityBand", "subject", "subjectType", "generator", "setRelationship", "caption",
-  "winningClaim", "evidenceStrength", "attentionValue", "baseRankingScore",
-  "rankingScore", "feedScore", "friends", "genre", "subgenre", "artist", "album",
-  "whyItSurvived", "alternativesThatLost",
+  "rank", "cardType", "qualityBand", "subject", "generator", "discoverySetId",
+  "setRelationship", "caption", "winningClaim",
+  "evidenceStrength", "attentionValue", "baseRankingScore", "rankingScore", "feedScore",
+  "deliverableCount", "primarySource", "friends", "genre", "subgenre", "artist", "album",
+  "apertureNote", "whyItSurvived", "alternativesThatLost",
   "recommendationQuality", "captionQuality", "notes",
 ];
 const gradeRow = (c, rank) => [
-  rank, c.qualityBand, subjectLabel(c), c.subject.type, c.generator, c.discoveryExpression, c.caption,
-  c.winningClaim?.claimType, round(c.evidenceStrength), round(c.attentionValue),
+  rank, c.cardType, c.qualityBand, subjectLabel(c), c.generator, c.discoverySetId,
+  c.discoveryExpression, c.caption, c.winningClaim?.claimType,
+  round(c.evidenceStrength), round(c.attentionValue),
   round(c.baseRankingScore), round(c.rankingScore), round(c.feedScore),
-  c.sourceFriendNames.join(" + "), c.genre, c.subgenre, c.artist, c.album,
-  c.reasonCodes.join(" "),
+  c.deliverableCount, c.sourceFriendNames[0] ?? "", c.sourceFriendNames.join(" + "),
+  c.genre, c.subgenre, c.artist, c.album,
+  c.apertureNote, c.reasonCodes.join(" "),
   (c.losingClaims ?? []).map((l) => `${l.claimType}:${round(l.score)}`).join(" | "),
   "", "", "",
 ].map(esc).join(",");
@@ -188,7 +195,8 @@ const lines = [
   section("per-generator quality bands", tally(all, (c) => `${c.generator} · ${c.qualityBand}`), 52),
   section("candidates by evidenceStrength band", tally(all, (c) => band(c.evidenceStrength))),
   section("candidates by attentionValue band", tally(all, (c) => band(c.attentionValue))),
-  section("candidates by subject type", tally(all, (c) => c.subject.type)),
+  section("candidates by CardSubjectType", tally(all, (c) => c.cardType)),
+  section("feed by CardSubjectType", tally(feed, (c) => c.cardType)),
   section("candidates by source", tally(all, (c) => c.sourceFriendNames)),
   section("feed by source", tally(feed, (c) => c.sourceFriendNames)),
   section("candidates by genre", tally(all, (c) => c.genre)),

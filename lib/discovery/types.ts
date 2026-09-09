@@ -130,7 +130,34 @@ export interface CaptionClaim {
 
 // ── Candidates ──────────────────────────────────────────────────────────────
 
+/**
+ * The only six presentation units a card may have.
+ *
+ * DiscoverySets stay as complex as the evidence requires. Cards do not: every
+ * card has to answer "what am I looking at?" immediately, and the answer is
+ * always exactly one song, one small coherent set of songs, one album, one
+ * artist, one subgenre or one genre. Multiple entities can be evidence for a
+ * card; they can never be its subject.
+ */
+export type CardSubjectType =
+  | "SONG"
+  | "SONG_SET"
+  | "ALBUM"
+  | "ARTIST"
+  | "SUBGENRE"
+  | "GENRE";
+
 export type SubjectType = "Song" | "Songs" | "Album" | "Artist" | "Subgenre" | "Genre";
+
+/** The internal subject shape maps one-to-one onto an allowed card type. */
+export const CARD_TYPE_OF: Record<SubjectType, CardSubjectType> = {
+  Song: "SONG", Songs: "SONG_SET", Album: "ALBUM",
+  Artist: "ARTIST", Subgenre: "SUBGENRE", Genre: "GENRE",
+};
+
+/** Bounds for the one card type allowed to hold multiple independent items. */
+export const SONG_SET_MIN = 8;
+export const SONG_SET_MAX = 15;
 
 export type Subject =
   | { type: "Song"; spotifyId: string; name: string; artist: string; album: string | null }
@@ -185,6 +212,11 @@ export interface Candidate {
    * describes a structural fact without promising an enumeration promises 0.
    */
   deliverableCount: number;
+  /** The exact tracks the detail page would contain. */
+  deliverableIds?: string[];
+  /** Set by the aperture stage; validated before feed composition. */
+  cardType?: CardSubjectType;
+  apertureNote?: string;
 
   /** Context the harness and diversifier read. */
   sourceFriendIds: string[];
