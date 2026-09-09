@@ -3,13 +3,20 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { discoveryFilter } from "@/lib/friends-discovery";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   context: { params: Promise<{ genre: string }> },
 ) {
+  // ?excludeMine=1 drops everything the caller already has, before counting.
+  const filter = await discoveryFilter(req);
+  if (!filter.ok) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
   const { genre } = await context.params;
   const blueprintWorld = decodeURIComponent(genre);
 
@@ -27,6 +34,7 @@ export async function GET(
   for (const t of allTracks) {
     if (seen.has(t.spotifyId)) continue;
     seen.add(t.spotifyId);
+    if (!filter.keep(t.spotifyId)) continue;
     const sub = t.blueprintSubgenre?.trim();
     if (!sub) continue;
     counts[sub] = (counts[sub] ?? 0) + 1;

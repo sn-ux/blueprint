@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { discoveryFilter } from "@/lib/friends-discovery";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,15 @@ export async function GET(
   context: { params: Promise<{ genre: string }> },
 ) {
   const t0 = Date.now();
+
+  // ?excludeMine=1 drops everything the caller already has. Applied before the
+  // representative track and the subgenre counts are built, so the counts and
+  // the list they head can never disagree.
+  const filter = await discoveryFilter(req);
+  if (!filter.ok) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
   const { searchParams }  = new URL(req.url);
   const unheardForUserId  = searchParams.get("unheardForUserId");
   const { genre } = await context.params;
@@ -64,6 +74,7 @@ export async function GET(
   const socialUserMap = new Map<string, { id: string; name: string | null; image: string | null }[]>();
 
   for (const t of allTracks) {
+    if (!filter.keep(t.spotifyId)) continue;
     const existing = repMap.get(t.spotifyId);
     if (!existing || (!existing.imageUrl && t.imageUrl)) {
       repMap.set(t.spotifyId, t);
@@ -123,8 +134,10 @@ export async function GET(
   // Responses that include user-specific unheard data must be private (never
   // served from a shared CDN cache to a different user).  Responses without
   // the param are safe to cache publicly for a short window.
-  const cacheHeader = unheardForUserId
-    ? "private, no-cache"
+  // A filtered response is personal to the caller, as is unheard data, so
+  // neither may reach a shared CDN cache.
+  const cacheHeader = (unheardForUserId || filter.excluded)
+    ? "private, no-store"
     : "public, max-age=60, stale-while-revalidate=300";
 
   return NextResponse.json(
