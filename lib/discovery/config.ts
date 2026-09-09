@@ -195,6 +195,59 @@ export const MULTI_SOURCE_SET = {
   sizeSaturation: 25,
 };
 
+// ── Stacked propositions ────────────────────────────────────────────────────
+
+/**
+ * The artist bridge.
+ *
+ * A lane the viewer has never entered stops being a stranger the moment
+ * someone already in their library turns out to work there. That is a set
+ * relationship — this artist has tracks classified in this lane — and it is
+ * the most specific anchor available for territory the viewer does not
+ * occupy, which is why it beats naming the parent genre.
+ *
+ * The weight that matters is how much of those artists the viewer already
+ * holds, not how many artists there are: one artist they have forty tracks of
+ * is a stronger bridge than four they have one track of each.
+ */
+export const BRIDGE = {
+  minArtists: 1,
+  /** Combined tracks the viewer holds by the bridging artists. */
+  minOwnedByBridge: 5,
+  /** Tracks the lane must be able to hand over. */
+  minDeliverable: 6,
+};
+
+/**
+ * New territory vouched for by depth rather than by agreement.
+ *
+ * Per-track corroboration is an intersection, and intersections vanish in
+ * thin territory: outside the two worlds this circle shares, almost no track
+ * is held twice. Depth is the axis that survives — several people each keeping
+ * a real amount of a lane says something about the lane even when no two of
+ * them kept the same song.
+ *
+ * "A real amount" is tied to the set being handed over rather than invented:
+ * a source vouches for a dozen tracks by holding at least a dozen itself.
+ */
+export const NEW_TERRITORY = {
+  /**
+   * Sources that must each occupy the lane in their own right.
+   *
+   * "Occupies" is the bar Blueprint already uses for the viewer's own
+   * presence — LANE.minOwnedForPresent — applied to a source instead. Reusing
+   * it keeps one definition of what it means to be in a lane, rather than
+   * inventing a second one here.
+   */
+  minSources: 2,
+  /**
+   * ...and at least one of them must hold a full set's worth, so the starter
+   * set is drawn from somebody's real collection rather than assembled out of
+   * everyone's stray tracks. Set at SONG_SET_MIN by the generator.
+   */
+  minDeepestHolding: 12,
+};
+
 // ── Aperture ────────────────────────────────────────────────────────────────
 
 /**

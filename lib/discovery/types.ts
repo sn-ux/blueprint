@@ -114,6 +114,26 @@ export type StructuredProposition =
       type: "SET_CONSENSUS"; scope: string; scopeIsGenre: boolean;
       owned: number; deliverable: number; minHolders: number;
       qualifying: number; names: string[];
+    }
+  /**
+   * New territory reached over a bridge the viewer already owns.
+   *
+   * Three facts at once: they have none of this lane, several named artists
+   * already in their library work in it, and more than one source keeps
+   * material there. The bridge is a set relationship — this artist has tracks
+   * classified in this lane — never a claim about what anyone likes.
+   */
+  | {
+      type: "LANE_VIA_BRIDGE"; lane: string; parent: string;
+      bridgeArtists: string[]; ownedByBridge: number;
+      deliverable: number; names: string[];
+    }
+  /** New territory delivered as a set, vouched for by depth rather than agreement. */
+  | {
+      type: "NEW_TERRITORY"; scope: string; scopeIsGenre: boolean;
+      parent: string; ownedInParent: number;
+      deepSources: string[]; deepCounts: number[];
+      bridgeArtists: string[]; deliverable: number; laneInventory: number;
     };
 
 export type ClaimType = StructuredProposition["type"];
@@ -261,7 +281,10 @@ export const SONG_SET_MAX = 15;
  * Both may exist over the same taxonomy. Taxonomic concentration disqualifies
  * nothing: a landscape and an entry point into it are different cards.
  */
-export type SelectionRuleId = "MIN_INDEPENDENT_HOLDERS";
+export type SelectionRuleId =
+  | "MIN_INDEPENDENT_HOLDERS"
+  /** Several sources each independently hold at least a set's worth here. */
+  | "MULTI_SOURCE_DEPTH";
 
 export type ScopeEntity = "ALBUM" | "ARTIST" | "SUBGENRE" | "GENRE";
 
@@ -302,7 +325,19 @@ export type GeneratorId =
   | "ARTIST_ABSENT_IN_LANE"
   | "SUBGENRE_GAP"
   | "MISSING_CHILD"
-  | "CONSENSUS_SET";
+  | "CONSENSUS_SET"
+  /**
+   * Stacked propositions — where two or three factual relationships together
+   * say something neither says alone.
+   *
+   * "Your friends have 63 Jazz Rap tracks you don't" is true and dull. "Four
+   * artists already in your library also make Jazz Rap, and two of your
+   * friends have deep collections of it" is the same missed material with a
+   * reason attached. The extra variable has to earn its place: these only
+   * emit when the stack is genuinely stronger than its parts.
+   */
+  | "BRIDGED_LANE"
+  | "NEW_TERRITORY_SET";
 
 export interface Candidate {
   id: string;
@@ -342,6 +377,12 @@ export interface Candidate {
   apertureNote?: string;
   /** Concentration of the set by each singular entity, for the report. */
   concentration?: Record<"album" | "artist" | "subgenre" | "genre", number>;
+
+  /** Named artists already in the viewer's library who work in this lane. */
+  bridgeArtists?: string[];
+  /** Sources with a collection of their own here, and how much each holds. */
+  deepSourceNames?: string[];
+  deepSourceCounts?: number[];
 
   /** Context the harness and diversifier read. */
   sourceFriendIds: string[];

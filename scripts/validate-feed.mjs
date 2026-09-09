@@ -6,7 +6,7 @@
  */
 import { PrismaClient } from "@prisma/client";
 import { concentrationOf } from "../lib/discovery/aperture.ts";
-import { APERTURE, CONSENSUS_SET, REDUNDANCY } from "../lib/discovery/config.ts";
+import { APERTURE, CONSENSUS_SET, MIN_SOURCES_PER_TRACK as CFG_MIN_SOURCES_PER_TRACK, REDUNDANCY } from "../lib/discovery/config.ts";
 import { buildFeed, deliverablesOf, toFeedCard } from "../lib/discovery/feed.ts";
 import { label } from "../lib/discovery/display.ts";
 import { SONG_SET_MAX, SONG_SET_MIN } from "../lib/discovery/types.ts";
@@ -79,15 +79,30 @@ for (const c of emitted) {
 for (const r of setCandidates) console.log(`  ${r.generator} ${r.subjectKey} → no card (${r.detail})`);
 for (const r of collapsed) console.log(`  ${r.subjectKey} → dropped at ${r.stage} (${r.detail})`);
 
+// Each rule kind has its own bar for being stronger than a bare scope.
+const ruleHolds = (c) => {
+  if (c.groupingReason.kind !== "SELECTED") return false;
+  const r = c.groupingReason.rule;
+  if (r.id === "MIN_INDEPENDENT_HOLDERS") return r.threshold > CFG_MIN_SOURCES_PER_TRACK;
+  if (r.id === "MULTI_SOURCE_DEPTH") return r.threshold >= 2;
+  return false;
+};
 check("every SONG_SET carries a selection rule, not just a scope",
-  songSets.every((c) => c.groupingReason.kind === "SELECTED"
-    && c.groupingReason.rule.threshold > 2),
-  `${songSets.length} SONG_SET in the universe`);
-check("every SONG_SET is materially smaller than the area it was drawn from",
-  songSets.every((c) => c.groupingReason.kind === "SELECTED"
-    && c.deliverableCount < c.groupingReason.rule.scopeInventory / 2),
-  songSets.map((c) => c.groupingReason.kind === "SELECTED"
-    ? `${c.deliverableCount} of ${c.groupingReason.rule.scopeInventory}` : "").join(", "));
+  songSets.every(ruleHolds),
+  `${songSets.length} SONG_SET; rules ${[...new Set(songSets.map((c) => c.groupingReason.rule.id))].join(", ")}`);
+
+// A set drawn from territory the viewer occupies must be materially smaller
+// than the area card that already covers it. Territory they have nothing in
+// has no such card, so there is nothing for it to be smaller than.
+const occupied = songSets.filter((c) => (index.viewerByLane.get(c.groupingReason.scope.key) ?? 0) > 0
+  || (index.viewerByWorld.get(c.groupingReason.scope.key) ?? 0) > 0);
+check("a set inside territory you occupy is materially smaller than it",
+  occupied.every((c) => c.deliverableCount < c.groupingReason.rule.scopeInventory / 2),
+  occupied.map((c) => `${c.deliverableCount} of ${c.groupingReason.rule.scopeInventory}`).join(", ") || "none");
+check("a set in new territory hands over a startable dozen",
+  songSets.filter((c) => !occupied.includes(c))
+    .every((c) => c.deliverableCount >= 12 && c.deliverableCount <= 15),
+  `${songSets.length - occupied.length} new-territory sets`);
 
 console.log("\n── cross-card redundancy ──");
 console.log(`containment >= ${REDUNDANCY.containment}, shared >= ${REDUNDANCY.minShared}`);
@@ -111,6 +126,15 @@ console.log("  by generator:");
 for (const [k, v] of tally(all, (c) => c.generator)) console.log(`    ${String(k).padEnd(24)} ${v}`);
 console.log("  by anchor:");
 for (const [k, v] of tally(all, (c) => c.anchor?.type ?? "NONE")) console.log(`    ${String(k).padEnd(24)} ${v}`);
+console.log("  by world:");
+for (const [k, v] of tally(all, (c) => c.genre ?? "—")) {
+  const types = tally(all.filter((c) => (c.genre ?? "—") === k), (c) => c.cardType);
+  console.log(`    ${String(k).padEnd(32)} ${String(v).padStart(3)}   ${types.map(([t, n]) => `${t}:${n}`).join(" ")}`);
+}
+console.log("  stacked vs standalone:");
+const stacked = all.filter((c) => c.reasonCodes.includes("STACKED")).length;
+console.log(`    stacked (2+ facts)             ${stacked}`);
+console.log(`    standalone                     ${all.length - stacked}`);
 console.log("  by quality band:");
 for (const [k, v] of tally(all, (c) => c.qualityBand)) console.log(`    ${String(k).padEnd(24)} ${v}`);
 console.log("  rejections:");

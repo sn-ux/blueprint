@@ -32,6 +32,10 @@ export const ATTENTION_BASE: Record<ClaimType, number> = {
   ALBUM_COMPLETION: 0.80,
   ARTIST_MORE: 0.70,
   SET_CONSENSUS: 0.65,
+  // Stacked propositions carry more than one reason, which is the whole point
+  // of stacking: they are worth more attention than either half alone.
+  LANE_VIA_BRIDGE: 0.78,
+  NEW_TERRITORY: 0.72,
   ALBUM_VIA_ARTIST: 0.60,
   ARTIST_VIA_LANE: 0.55,
   LANE_VIA_PARENT: 0.55,
@@ -98,6 +102,27 @@ export function enumerateClaims(_index: DiscoveryIndex, c: Candidate): Structure
         type: "LANE_VIA_PARENT", parent: a.entityName, lane: c.subgenre ?? "",
         ownedInParent: a.ownedCount, deliverable: n, names,
       }];
+    case "BRIDGED_LANE": {
+      const g = c.componentScores;
+      return [{
+        type: "LANE_VIA_BRIDGE", lane: c.subgenre ?? "", parent: c.genre ?? "",
+        bridgeArtists: (c.bridgeArtists ?? []).slice(0, 3),
+        ownedByBridge: g.ownedByBridge ?? a.ownedCount,
+        deliverable: n, names,
+      }];
+    }
+    case "NEW_TERRITORY_SET": {
+      const g = c.groupingReason;
+      if (g.kind !== "SELECTED") return [];
+      return [{
+        type: "NEW_TERRITORY", scope: g.scope.key, scopeIsGenre: false,
+        parent: c.genre ?? "", ownedInParent: c.componentScores.ownedInParent ?? 0,
+        deepSources: c.deepSourceNames ?? names,
+        deepCounts: c.deepSourceCounts ?? [],
+        bridgeArtists: (c.bridgeArtists ?? []).slice(0, 3),
+        deliverable: n, laneInventory: c.componentScores.laneInventory ?? n,
+      }];
+    }
     case "CONSENSUS_SET": {
       const g = c.groupingReason;
       if (g.kind !== "SELECTED") return [];
@@ -136,6 +161,14 @@ type P<T extends ClaimType> = Extract<StructuredProposition, { type: T }>;
  * stops being readable, so it becomes a count. Never a bare number where a
  * name would fit.
  */
+/** "Funkadelic", "Funkadelic and Sly Stone", "A, B, and C". */
+export function listOf(items: string[]): string {
+  if (items.length === 0) return "";
+  if (items.length === 1) return items[0];
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
+}
+
 export function friendPhrase(names: string[]): string {
   const n = names.length;
   if (n === 0) return "";
@@ -291,6 +324,46 @@ const TEMPLATES: Template[] = [
         + ` The ${q.deliverable} with the most agreement are shown below.`;
     },
   },
+
+  // Two facts at once, and the second is what makes the first worth reading:
+  // named artists already in the library work in a lane the viewer has never
+  // entered. Never "you like these artists" — only that they are held.
+  {
+    id: "lane-via-bridge-1", claimType: "LANE_VIA_BRIDGE",
+    render: (p) => {
+      const q = p as P<"LANE_VIA_BRIDGE">;
+      return `You have none of this, but ${listOf(q.bridgeArtists)} — ${num(q.ownedByBridge)} of whose tracks are already yours — ${q.bridgeArtists.length === 1 ? "works" : "work"} here. ${friendsHave(q.names)} ${q.deliverable}.`;
+    },
+    detail: (p) => {
+      const q = p as P<"LANE_VIA_BRIDGE">;
+      return `You have no ${label(q.lane)} in your library at all.`
+        + ` But ${listOf(q.bridgeArtists)}${q.bridgeArtists.length === 1 ? " is an artist" : " are artists"} you already hold — ${num(q.ownedByBridge)} of their tracks are in your library — and ${q.bridgeArtists.length === 1 ? "they have" : "they have"} tracks classified as ${label(q.lane)}.`
+        + ` ${friendsHave(q.names)} saved ${q.deliverable} ${label(q.lane)} tracks that aren't in yours. Those ${q.deliverable} are shown below.`;
+    },
+  },
+
+  // New territory as a starting set: depth rather than agreement is the vouch,
+  // and the card hands over tracks rather than announcing a genre.
+  {
+    id: "new-territory-1", claimType: "NEW_TERRITORY",
+    render: (p) => {
+      const q = p as P<"NEW_TERRITORY">;
+      const who = q.deepSources.length ? `${listOf(q.deepSources.slice(0, 3))} each keep a collection here` : "";
+      const bridge = q.bridgeArtists.length
+        ? `, and ${listOf(q.bridgeArtists)} — already in your library — ${q.bridgeArtists.length === 1 ? "works" : "work"} in it`
+        : "";
+      return `New to you: ${who}${bridge}. These ${q.deliverable} are where to start.`;
+    },
+    detail: (p) => {
+      const q = p as P<"NEW_TERRITORY">;
+      const bridge = q.bridgeArtists.length
+        ? ` ${listOf(q.bridgeArtists)}, already in your library, ${q.bridgeArtists.length === 1 ? "has" : "have"} tracks classified here.`
+        : "";
+      return `You have nothing at all classified as ${label(q.scope)}, though you hold ${num(q.ownedInParent)} tracks across ${label(q.parent)}.`
+        + ` ${listOf(q.deepSources.slice(0, 3))} each keep a collection of it${q.deepCounts.length ? ` — ${q.deepCounts.slice(0, 3).join(", ")} tracks respectively` : ""}, and between them there are ${q.laneInventory} you don't have.${bridge}`
+        + ` The ${q.deliverable} most widely kept are shown below.`;
+    },
+  },
 ];
 
 /** Deterministic per candidate, so a card always reads the same way. */
@@ -319,6 +392,8 @@ function exceptionalnessOf(p: StructuredProposition): number {
     case "ALBUM_COMPLETION": return Math.max(0.6, 0.95 - 0.08 * p.residue);
     case "ARTIST_MORE": return 0.7;
     case "SET_CONSENSUS": return 0.65;
+    case "LANE_VIA_BRIDGE": return 0.8;
+    case "NEW_TERRITORY": return 0.7;
     case "LANE_VIA_PARENT": return 0.6;
     case "ALBUM_VIA_ARTIST": return 0.6;
     case "ARTIST_VIA_LANE": return 0.55;

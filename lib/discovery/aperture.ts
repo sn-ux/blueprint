@@ -136,7 +136,14 @@ export function resolveAperture(index: DiscoveryIndex, c: Candidate): ApertureRe
   // wholly inside one lane and still be a real selection within it.
   const { rule } = reason;
   const share = rule.scopeInventory > 0 ? rule.qualifying / rule.scopeInventory : 1;
-  if (share > APERTURE_MAX_SCOPE_SHARE) {
+  // The guard exists to stop a set being the same proposition as the area
+  // card that already covers it. Territory the viewer occupies has such a
+  // card; territory they have nothing in does not, so a starter set there is
+  // not standing in for anything and the test does not apply.
+  const viewerOccupies = reason.scope.entity === "SUBGENRE"
+    ? (index.viewerByLane.get(reason.scope.key) ?? 0) > 0
+    : (index.viewerByWorld.get(reason.scope.key) ?? 0) > 0;
+  if (viewerOccupies && share > APERTURE_MAX_SCOPE_SHARE) {
     return {
       cardType: null, concentration,
       note: `${rule.qualifying} of the scope's ${rule.scopeInventory} corroborated tracks clear the rule (${Math.round(share * 100)}%) — that is the area, not a selection within it`,

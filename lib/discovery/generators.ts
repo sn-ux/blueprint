@@ -99,6 +99,9 @@ interface Built {
   artist: string | null;
   album: string | null;
   albumId?: string | null;
+  bridgeArtists?: string[];
+  deepSourceNames?: string[];
+  deepSourceCounts?: number[];
 }
 
 /** Assembles a candidate and re-asserts the invariant over its deliverables. */
@@ -137,6 +140,9 @@ function build(index: DiscoveryIndex, b: Built): Candidate {
     sourceFriendNames: sources.map((h) => index.nameOf.get(h) ?? "Someone"),
     genre: b.genre, subgenre: b.subgenre, artist: b.artist, album: b.album,
     albumId: b.albumId ?? null,
+    bridgeArtists: b.bridgeArtists,
+    deepSourceNames: b.deepSourceNames,
+    deepSourceCounts: b.deepSourceCounts,
   };
 }
 
@@ -545,9 +551,194 @@ const consensusSet: GeneratorSpec = {
   },
 };
 
+// ── Stacked propositions ────────────────────────────────────────────────────
+
+/**
+ * Artists already in the viewer's library who also work in a lane.
+ *
+ * Purely structural: the artist has tracks classified in this lane, and the
+ * viewer holds tracks by that artist. Nothing here says the viewer likes
+ * anyone; it says their library and this lane overlap at a named point.
+ */
+function bridgeOf(index: DiscoveryIndex, gap: string[]) {
+  const owned = new Map<string, number>();
+  for (const id of gap) {
+    const a = index.meta.get(id)?.artist;
+    if (!a) continue;
+    const n = index.viewerByArtist.get(a) ?? 0;
+    if (n > 0) owned.set(a, n);
+  }
+  const ranked = [...owned.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  return {
+    artists: ranked.map(([a]) => a),
+    ranked,
+    totalOwned: ranked.reduce((s, [, n]) => s + n, 0),
+    tracks: gap.filter((id) => owned.has(index.meta.get(id)?.artist ?? "")),
+  };
+}
+
+/** Most-held first, then alphabetical, so a set is the same set every run. */
+const byStrength = (index: DiscoveryIndex) => (a: string, b: string) =>
+  (index.holders.get(b)?.length ?? 0) - (index.holders.get(a)?.length ?? 0)
+  || (index.meta.get(a)?.name ?? "").localeCompare(index.meta.get(b)?.name ?? "");
+
+/**
+ * A lane the viewer has never entered, reached over artists they already have.
+ *
+ * Three facts stacked: the lane is absent from their library, several sources
+ * keep material in it, and named artists already in their library work there.
+ * The third is what turns "your friends have things you don't" into a reason.
+ */
+const bridgedLane: GeneratorSpec = {
+  id: "BRIDGED_LANE",
+  mechanism: "A lane absent from the viewer's library, where artists they already hold also work.",
+  run: (index) => {
+    const out: Candidate[] = [];
+    for (const lane of index.lanes.values()) {
+      if (lane.subgenre === UNKNOWN_LANE) continue;
+      if ((index.viewerByLane.get(lane.subgenre) ?? 0) !== 0) continue;
+
+      const bridge = bridgeOf(index, lane.gap);
+      if (bridge.artists.length < CFG.BRIDGE.minArtists) continue;
+      if (bridge.totalOwned < CFG.BRIDGE.minOwnedByBridge) continue;
+
+      const members = lane.gap.slice().sort(byStrength(index)).slice(0, CFG.DELIVERABLE_MAX);
+      if (members.length < CFG.BRIDGE.minDeliverable) continue;
+      if (sourcesOf(index, members).length < CFG.MIN_SOURCES_PER_CARD) continue;
+
+      const [topArtist, topOwned] = bridge.ranked[0];
+      const eligible = index.sourcesInWorld.get(lane.world)?.size ?? 0;
+      const cov = coverageOf([...lane.byFriend.keys()].length, eligible);
+
+      out.push(build(index, {
+        generator: "BRIDGED_LANE",
+        subject: { type: "Subgenre", subgenre: lane.subgenre },
+        subjectKey: `Subgenre:${lane.subgenre}`,
+        groupingReason: { kind: "AREA", entity: "SUBGENRE", key: lane.subgenre },
+        setType: "laneVoid", setKey: `bridge:${lane.subgenre}`,
+        expression: `(F_all ∩ S_${lane.subgenre}) − U, S ∩ U = ∅, bridge = {${bridge.artists.slice(0, 3).join(", ")}}`,
+        members,
+        // The bridging artist is the tightest true connection to territory the
+        // viewer does not occupy — tighter than naming the parent genre.
+        anchor: anchorOf("ARTIST_PRESENT", topArtist, topArtist, topOwned),
+        evidenceStrength: clamp01(
+          0.50
+          + 0.22 * Math.min(1, log2(bridge.totalOwned) / log2(CFG.ARTIST_GAP.ownedSaturation))
+          + 0.13 * Math.min(1, bridge.artists.length / 4)
+          + 0.10 * cov.sourceCoverage,
+        ),
+        componentScores: {
+          bridgeArtists: bridge.artists.length, ownedByBridge: bridge.totalOwned,
+          deliverable: members.length, sourceCoverage: cov.sourceCoverage,
+        },
+        reasonCodes: [
+          "ANCHOR=ARTIST_PRESENT", "STACKED", "VIEWER_ABSENT_FROM_LANE",
+          `BRIDGE_ARTISTS=${bridge.artists.length}`, `OWNED_BY_BRIDGE=${bridge.totalOwned}`,
+        ],
+        bridgeArtists: bridge.artists,
+        genre: lane.world, subgenre: lane.subgenre, artist: null, album: null,
+      }));
+    }
+    return out;
+  },
+};
+
+/**
+ * New territory handed over as a dozen concrete tracks.
+ *
+ * Telling someone a lane exists is weaker than giving them the tracks to start
+ * with. The vouch here is depth rather than agreement: several sources each
+ * independently keep at least as much of this lane as the set being handed
+ * over. That is the axis that survives in thin territory, where no two people
+ * happen to have kept the same song.
+ */
+const newTerritorySet: GeneratorSpec = {
+  id: "NEW_TERRITORY_SET",
+  mechanism: "A dozen tracks from a lane the viewer has none of, where several sources each keep a lane's worth.",
+  run: (index) => {
+    const out: Candidate[] = [];
+    for (const lane of index.lanes.values()) {
+      if (lane.subgenre === UNKNOWN_LANE) continue;
+      if ((index.viewerByLane.get(lane.subgenre) ?? 0) !== 0) continue;
+      if (lane.gap.length < SONG_SET_MIN) continue;
+
+      // Several sources each occupying the lane in their own right, by the
+      // same bar Blueprint uses for the viewer's own presence — and at least
+      // one of them holding a full set's worth, so the starter set comes out
+      // of somebody's real collection rather than everyone's stray tracks.
+      const deep = [...lane.byFriend.entries()]
+        .filter(([, set]) => set.size >= CFG.LANE.minOwnedForPresent)
+        .sort((a, b) => b[1].size - a[1].size);
+      if (deep.length < CFG.NEW_TERRITORY.minSources) continue;
+      if (deep[0][1].size < SONG_SET_MIN) continue;
+
+      const members = lane.gap.slice().sort(byStrength(index)).slice(0, SONG_SET_MAX);
+      if (members.length < SONG_SET_MIN) continue;
+
+      const bridge = bridgeOf(index, lane.gap);
+      const ownedInParent = index.viewerByWorld.get(lane.world) ?? 0;
+      // Most specific anchor the viewer's library actually supports.
+      const useBridge = bridge.artists.length > 0 && bridge.totalOwned >= CFG.BRIDGE.minOwnedByBridge;
+      if (!useBridge && ownedInParent < CFG.LANE.minOwnedInParent) continue;
+      const anchor = useBridge
+        ? anchorOf("ARTIST_PRESENT", bridge.ranked[0][0], bridge.ranked[0][0], bridge.ranked[0][1])
+        : anchorOf("PARENT_GENRE_PRESENT", lane.world, lane.world, ownedInParent);
+
+      const setKey = `newterritory:${lane.subgenre}`;
+      out.push(build(index, {
+        generator: "NEW_TERRITORY_SET",
+        subject: {
+          type: "Songs",
+          title: `${label(lane.subgenre)} — Where To Start`,
+          scope: lane.subgenre, discoverySetId: "",
+        },
+        subjectKey: `Songs:${setKey}`,
+        groupingReason: {
+          kind: "SELECTED",
+          scope: { entity: "SUBGENRE", key: lane.subgenre },
+          rule: {
+            id: "MULTI_SOURCE_DEPTH",
+            threshold: deep.length,
+            qualifying: members.length,
+            scopeInventory: lane.gap.length,
+            description: `kept by ${deep.length} of your friends who each have a collection here`,
+          },
+          key: setKey,
+        },
+        setType: "kOfN", setKey,
+        expression: `(F_all ∩ S_${lane.subgenre}) − U, S ∩ U = ∅, |F_i ∩ S| ≥ ${SONG_SET_MIN} for ${deep.length} sources`,
+        members,
+        anchor,
+        evidenceStrength: clamp01(
+          0.50
+          + 0.20 * Math.min(1, deep.length / Math.max(2, index.friends.length))
+          + 0.15 * Math.min(1, log2(deep[0][1].size) / log2(CFG.LANE.magnitudeSaturation))
+          + 0.10 * (useBridge ? Math.min(1, bridge.totalOwned / CFG.ARTIST_GAP.ownedSaturation) : 0),
+        ),
+        componentScores: {
+          deepSources: deep.length, deepest: deep[0][1].size,
+          laneInventory: lane.gap.length, deliverable: members.length,
+          bridgeArtists: bridge.artists.length, ownedByBridge: bridge.totalOwned,
+          ownedInParent,
+        },
+        reasonCodes: [
+          `ANCHOR=${anchor.type}`, "STACKED", "NEW_TERRITORY",
+          `DEEP_SOURCES=${deep.length}`, `LANE_INVENTORY=${lane.gap.length}`,
+        ],
+        bridgeArtists: bridge.artists,
+        deepSourceNames: deep.map(([f]) => index.nameOf.get(f) ?? "Someone"),
+        deepSourceCounts: deep.map(([, set]) => set.size),
+        genre: lane.world, subgenre: lane.subgenre, artist: null, album: null,
+      }));
+    }
+    return out;
+  },
+};
+
 export const GENERATORS: GeneratorSpec[] = [
   albumGapTrue, albumAsUnit,
   artistGap, artistAbsentInLane,
   subgenreGap, missingChild,
   consensusSet,
+  bridgedLane, newTerritorySet,
 ];
