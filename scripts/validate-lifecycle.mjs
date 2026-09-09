@@ -92,9 +92,11 @@ try {
 
   // Walk to the end.
   let cursor = p1.nextCursor, seen = [...ids1], guard = 0, last = p1;
+  const walked = [...p1.cards];
   while (cursor && guard++ < 200) {
     last = await feedPage(userId, cursor, size);
     seen.push(...last.cards.map((c) => c.id));
+    walked.push(...last.cards);
     cursor = last.nextCursor;
   }
   check("walking the whole session yields no duplicates",
@@ -108,15 +110,7 @@ try {
   console.log("\n  per-page composition:");
   const pages = [];
   for (let i = 0; i < seen.length; i += size) pages.push(seen.slice(i, i + size));
-  const cardsByKey = new Map();
-  {
-    let cur = null, page = await feedPage(userId, null, size);
-    do {
-      for (const c of page.cards) cardsByKey.set(c.id, c);
-      cur = page.nextCursor;
-      if (cur) page = await feedPage(userId, cur, size);
-    } while (cur);
-  }
+  const cardsByKey = new Map(walked.map((c) => [c.id, c]));
   let worstBandShare = 1;
   pages.forEach((ids, i) => {
     const cs = ids.map((k) => cardsByKey.get(k)).filter(Boolean);
@@ -153,10 +147,11 @@ try {
 
   // ── SECTION 2 · detail images ────────────────────────────────────────────
   console.log("\n═══ SECTION 2 — DETAIL IMAGES ═══");
+  // One session, walked once. Each cursor-less request now seeds a new
+  // ordering, so cards must be compared against the session they came from.
   const session = await feedPage(userId, null, LIFECYCLE.maxPageSize);
-  const everything = [];
+  const everything = [...session.cards];
   let c2 = session.nextCursor;
-  everything.push(...session.cards);
   while (c2) {
     const nxt = await feedPage(userId, c2, LIFECYCLE.maxPageSize);
     everything.push(...nxt.cards);
@@ -338,7 +333,12 @@ try {
   // exposure is *evaluated*, and the event path itself is already covered
   // above. Three hundred sequential upserts to prove the same thing is only a
   // slower way to prove it.
-  await recordEvents(userId, fresh.stored.map((s2) => ({ key: s2.card.id, type: "IMPRESSION", version: s2.card.version })));
+  // The endpoint caps a batch at two hundred events, so a universe larger
+  // than that has to be reported in chunks — as a real client would.
+  const allEvents = fresh.stored.map((s2) => ({ key: s2.card.id, type: "IMPRESSION", version: s2.card.version }));
+  for (let i = 0; i < allEvents.length; i += 150) {
+    await recordEvents(userId, allEvents.slice(i, i + 150));
+  }
   // Rows an earlier step deliberately back-dated are not rests; only a
   // cooldown in the future withholds anything.
   const restsWritten = await prisma.recommendationExposure.count({

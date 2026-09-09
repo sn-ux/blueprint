@@ -85,7 +85,9 @@ const ruleHolds = (c) => {
   const r = c.groupingReason.rule;
   if (r.id === "MIN_INDEPENDENT_HOLDERS") return r.threshold > CFG_MIN_SOURCES_PER_TRACK;
   if (r.id === "MULTI_SOURCE_DEPTH") return r.threshold >= 2;
-  if (r.id === "OWNED_ARTISTS_ONLY") return r.threshold >= 3;
+  // The rule's substance is that every track is by an artist already held;
+  // how many such artists it spans is a strength preference, not the rule.
+  if (r.id === "OWNED_ARTISTS_ONLY") return r.threshold >= 2;
   return false;
 };
 check("every SONG_SET carries a selection rule, not just a scope",
@@ -132,6 +134,8 @@ for (const [k, v] of tally(all, (c) => c.genre ?? "—")) {
   const types = tally(all.filter((c) => (c.genre ?? "—") === k), (c) => c.cardType);
   console.log(`    ${String(k).padEnd(32)} ${String(v).padStart(3)}   ${types.map(([t, n]) => `${t}:${n}`).join(" ")}`);
 }
+console.log("  by tier:");
+for (const [k, v] of tally(all, (c) => `tier ${c.tier ?? 0}`).sort()) console.log(`    ${String(k).padEnd(30)} ${v}`);
 console.log("  discovery distance:");
 for (const [k, v] of tally(all, (c) => c.distanceBand)) console.log(`    ${String(k).padEnd(30)} ${v}`);
 console.log("  stacked vs standalone:");

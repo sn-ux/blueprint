@@ -1,4 +1,5 @@
 import * as CFG from "./config";
+import { T } from "./tiers";
 import { label } from "./display";
 import {
   assertMissing, coverageOf, friendRef, setId, UNKNOWN_LANE,
@@ -155,9 +156,9 @@ const artistGap: GeneratorSpec = {
     const out: Candidate[] = [];
     for (const u of index.artists.values()) {
       const owned = index.viewerByArtist.get(u.artist) ?? 0;
-      if (owned < CFG.ARTIST_GAP.minOwned) continue;
+      if (owned < T.artistGapMinOwned) continue;
       const members = corroborated(index, u.missing);
-      if (members.length < CFG.ARTIST_GAP.minMissing) continue;
+      if (members.length < T.artistGapMinMissing) continue;
       const bounded = members.slice(0, CFG.DELIVERABLE_MAX);
       out.push(build(index, {
         generator: "ARTIST_GAP",
@@ -192,7 +193,7 @@ const artistAbsentInLane: GeneratorSpec = {
     for (const u of index.artists.values()) {
       if ((index.viewerByArtist.get(u.artist) ?? 0) !== 0) continue;
       const members = corroborated(index, u.missing);
-      if (members.length < CFG.ARTIST_ABSENT.minCatalog) continue;
+      if (members.length < T.artistAbsentMinCatalog) continue;
 
       const counts = new Map<string, number>();
       for (const id of members) {
@@ -202,7 +203,7 @@ const artistAbsentInLane: GeneratorSpec = {
       const dominant = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
       if (!dominant) continue;
       const ownedInLane = index.viewerByLane.get(dominant[0]) ?? 0;
-      if (ownedInLane < CFG.ARTIST_ABSENT.minOwnedInLane) continue;
+      if (ownedInLane < T.artistAbsentMinOwnedInLane) continue;
 
       const universe = new Set<string>(index.sourcesInLane.get(dominant[0]) ?? []);
       for (const h of sourcesOf(index, members)) universe.add(h);
@@ -289,9 +290,9 @@ const albumAsUnit: GeneratorSpec = {
       if (!a.consistent) continue;
       if (a.ownedPositions !== 0) continue;
       const ownedByArtist = index.viewerByArtist.get(a.artist) ?? 0;
-      if (ownedByArtist < CFG.ALBUM_AS_UNIT.minOwnedByArtist) continue;
+      if (ownedByArtist < T.albumAsUnitMinOwnedByArtist) continue;
       const members = corroborated(index, a.missing);
-      if (members.length < CFG.ALBUM_AS_UNIT.minDeliverable) continue;
+      if (members.length < T.albumAsUnitMinDeliverable) continue;
 
       out.push(build(index, {
         generator: "ALBUM_AS_UNIT",
@@ -324,9 +325,9 @@ const subgenreGap: GeneratorSpec = {
     const out: Candidate[] = [];
     for (const lane of index.lanes.values()) {
       const owned = index.viewerByLane.get(lane.subgenre) ?? 0;
-      if (owned < CFG.LANE.minOwnedForPresent) continue;
+      if (owned < T.laneMinOwnedForPresent) continue;
       const members = corroborated(index, lane.gap);
-      if (members.length < CFG.LANE.minDeliverable) continue;
+      if (members.length < T.laneMinDeliverable) continue;
       const bounded = members.slice(0, CFG.DELIVERABLE_MAX);
 
       const eligible = index.sourcesInWorld.get(lane.world)?.size ?? 0;
@@ -365,9 +366,9 @@ const missingChild: GeneratorSpec = {
     for (const lane of index.lanes.values()) {
       if ((index.viewerByLane.get(lane.subgenre) ?? 0) !== 0) continue;
       const ownedInParent = index.viewerByWorld.get(lane.world) ?? 0;
-      if (ownedInParent < CFG.LANE.minOwnedInParent) continue;
+      if (ownedInParent < T.laneMinOwnedInParent) continue;
       const members = corroborated(index, lane.gap);
-      if (members.length < CFG.LANE.minDeliverable) continue;
+      if (members.length < T.laneMinDeliverable) continue;
       const bounded = members.slice(0, CFG.DELIVERABLE_MAX);
 
       const eligible = index.sourcesInWorld.get(lane.world)?.size ?? 0;
@@ -465,7 +466,7 @@ const consensusSet: GeneratorSpec = {
     // Most specific first: a lane the viewer is in, then the genre around it.
     for (const lane of index.lanes.values()) {
       const owned = index.viewerByLane.get(lane.subgenre) ?? 0;
-      if (owned < CFG.CONSENSUS_SET.minOwnedInLane) continue;
+      if (owned < T.laneMinOwnedForPresent) continue;
       scopes.push({
         entity: "SUBGENRE", key: lane.subgenre, world: lane.world, gap: lane.gap, owned,
         anchor: anchorOf("SUBGENRE_PRESENT", lane.subgenre, lane.subgenre, owned),
@@ -600,10 +601,10 @@ const bridgedLane: GeneratorSpec = {
 
       const bridge = bridgeOf(index, lane.gap);
       if (bridge.artists.length < CFG.BRIDGE.minArtists) continue;
-      if (bridge.totalOwned < CFG.BRIDGE.minOwnedByBridge) continue;
+      if (bridge.totalOwned < T.bridgeMinOwned) continue;
 
       const members = lane.gap.slice().sort(byStrength(index)).slice(0, CFG.DELIVERABLE_MAX);
-      if (members.length < CFG.BRIDGE.minDeliverable) continue;
+      if (members.length < T.bridgeMinDeliverable) continue;
       if (sourcesOf(index, members).length < CFG.MIN_SOURCES_PER_CARD) continue;
 
       const [topArtist, topOwned] = bridge.ranked[0];
@@ -667,9 +668,9 @@ const newTerritorySet: GeneratorSpec = {
       // one of them holding a full set's worth, so the starter set comes out
       // of somebody's real collection rather than everyone's stray tracks.
       const deep = [...lane.byFriend.entries()]
-        .filter(([, set]) => set.size >= CFG.LANE.minOwnedForPresent)
+        .filter(([, set]) => set.size >= T.laneMinOwnedForPresent)
         .sort((a, b) => b[1].size - a[1].size);
-      if (deep.length < CFG.NEW_TERRITORY.minSources) continue;
+      if (deep.length < T.newTerritoryMinSources) continue;
       if (deep[0][1].size < SONG_SET_MIN) continue;
 
       const members = lane.gap.slice().sort(byStrength(index)).slice(0, SONG_SET_MAX);
@@ -678,8 +679,8 @@ const newTerritorySet: GeneratorSpec = {
       const bridge = bridgeOf(index, lane.gap);
       const ownedInParent = index.viewerByWorld.get(lane.world) ?? 0;
       // Most specific anchor the viewer's library actually supports.
-      const useBridge = bridge.artists.length > 0 && bridge.totalOwned >= CFG.BRIDGE.minOwnedByBridge;
-      if (!useBridge && ownedInParent < CFG.LANE.minOwnedInParent) continue;
+      const useBridge = bridge.artists.length > 0 && bridge.totalOwned >= T.bridgeMinOwned;
+      if (!useBridge && ownedInParent < T.laneMinOwnedInParent) continue;
       const anchor = useBridge
         ? anchorOf("ARTIST_PRESENT", bridge.ranked[0][0], bridge.ranked[0][0], bridge.ranked[0][1])
         : anchorOf("PARENT_GENRE_PRESENT", lane.world, lane.world, ownedInParent);
@@ -760,10 +761,10 @@ const albumCatalogGap: GeneratorSpec = {
     for (const a of index.authAlbums.values()) {
       if (!a.consistent || a.ownedPositions !== 0) continue;
       const held = heldAlbumsByArtist.get(a.artist)?.size ?? 0;
-      if (held < CFG.ALBUM_CATALOG_GAP.minAlbumsHeld) continue;
+      if (held < T.albumCatalogMinAlbumsHeld) continue;
       const ownedByArtist = index.viewerByArtist.get(a.artist) ?? 0;
       const members = corroborated(index, a.missing);
-      if (members.length < CFG.ALBUM_CATALOG_GAP.minDeliverable) continue;
+      if (members.length < T.albumCatalogMinDeliverable) continue;
       const bounded = members.slice(0, CFG.DELIVERABLE_MAX);
 
       out.push(build(index, {
@@ -807,13 +808,13 @@ const genreGap: GeneratorSpec = {
       const owned = index.viewerByWorld.get(w.world) ?? 0;
       if (owned < CFG.GENRE_GAP.minOwned) continue;
       const members = corroborated(index, w.gap);
-      if (members.length < CFG.GENRE_GAP.minDeliverable) continue;
+      if (members.length < T.genreGapMinDeliverable) continue;
       // A foothold, not a home: if they already hold much of what is available
       // here, the genre is theirs and this is not the card for it.
       if (owned / (owned + w.gap.length) > CFG.GENRE_GAP.maxOwnedShare) continue;
       const lanes = new Set(w.gap.map((id) => index.meta.get(id)?.subgenre)
         .filter((l) => l && l !== UNKNOWN_LANE));
-      if (lanes.size < CFG.GENRE_GAP.minLanes) continue;
+      if (lanes.size < T.genreGapMinLanes) continue;
 
       const bounded = members.slice(0, CFG.DELIVERABLE_MAX);
       out.push(build(index, {
@@ -858,17 +859,17 @@ const bridgeSet: GeneratorSpec = {
     for (const lane of index.lanes.values()) {
       if (lane.subgenre === UNKNOWN_LANE) continue;
       const owned = index.viewerByLane.get(lane.subgenre) ?? 0;
-      if (owned < CFG.LANE.minOwnedForPresent) continue;
+      if (owned < T.laneMinOwnedForPresent) continue;
 
       const bridge = bridgeOf(index, lane.gap);
-      if (bridge.artists.length < CFG.BRIDGE_SET.minArtists) continue;
-      if (bridge.totalOwned < CFG.BRIDGE_SET.minOwnedByThem) continue;
+      if (bridge.artists.length < T.bridgeSetMinArtists) continue;
+      if (bridge.totalOwned < T.bridgeSetMinOwnedByThem) continue;
       if (bridge.tracks.length < SONG_SET_MIN) continue;
 
       const members = bridge.tracks.slice().sort(byStrength(index)).slice(0, SONG_SET_MAX);
       if (sourcesOf(index, members).length < CFG.MIN_SOURCES_PER_CARD) continue;
       const spread = new Set(members.map((id) => index.meta.get(id)?.artist));
-      if (spread.size < CFG.BRIDGE_SET.minArtists) continue;
+      if (spread.size < T.bridgeSetMinArtists) continue;
 
       const setKey = `owned-artists:${lane.subgenre}`;
       const [topArtist, topOwned] = bridge.ranked[0];

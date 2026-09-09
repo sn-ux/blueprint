@@ -449,6 +449,11 @@ export interface Candidate {
    */
   recommendationKey?: string;
   underlyingVersion?: string;
+  /**
+   * Which generation tier produced it. Zero is full strength; higher tiers are
+   * the same kind of fact at a smaller scale, and sit behind.
+   */
+  tier?: number;
   /** How far this sits from what the viewer already holds, and its band. */
   discoveryDistance?: number;
   distanceBand?: "NEAR" | "MID" | "FAR";

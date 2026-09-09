@@ -1,6 +1,7 @@
 import { isAllowedCardType, resolveAperture } from "./aperture";
 import { bandOf, distanceOf, distancePenalty } from "./distance";
 import { stampIdentity } from "./identity";
+import { TIERS, withTier } from "./tiers";
 import { resolveRedundancy, type CoexistingPair, type RedundancyPair } from "./redundancy";
 import * as CFG from "./config";
 import { attentionValue, ATTENTION_FLOOR, buildClaims, CLAIM_FLOOR, promisedCount } from "./claims";
@@ -99,11 +100,26 @@ export function runEngine(input: EngineInput, opts: EngineOptions = {}): EngineR
   const raw: Candidate[] = [];
   const byGenerator = new Map<GeneratorId, number>();
 
-  // ── C · generate ──────────────────────────────────────────────────────────
-  for (const g of GENERATORS) {
-    const produced = g.run(index);
-    byGenerator.set(g.id, produced.length);
-    raw.push(...produced);
+  // ── C · generate, tier by tier ────────────────────────────────────────────
+  //
+  // Every tier runs every generator; what changes is how much the recipient
+  // side has to hold and how large the miss has to be before it is worth a
+  // card. A candidate found at full strength is never re-emitted weaker, so
+  // each tier only contributes what the ones above it could not reach.
+  const seenSubject = new Set<string>();
+  for (let tier = 0; tier < TIERS.length; tier++) {
+    withTier(tier, () => {
+      for (const g of GENERATORS) {
+        for (const c of g.run(index)) {
+          const key = `${c.generator}␟${c.subjectKey}`;
+          if (seenSubject.has(key)) continue;
+          seenSubject.add(key);
+          c.tier = tier;
+          byGenerator.set(g.id, (byGenerator.get(g.id) ?? 0) + 1);
+          raw.push(c);
+        }
+      }
+    });
   }
 
   // Aperture no longer has to choose between an item and a set: a single
@@ -488,7 +504,12 @@ export function compose(
         // top and not at all further down. Bounded, so an exceptional one
         // still wins an early slot on merit.
         const far = distancePenalty(c.discoveryDistance ?? 0, chosen.length);
-        const s2 = withJitter(c) - lambda * sim - tier.penalty - far;
+        // Weaker tiers sit behind everything above them. The setback decays
+        // with position, so the feed reaches them once the stronger material
+        // is spent rather than never.
+        const depth = CFG.FEED.tierPenalty * (c.tier ?? 0)
+          * Math.max(0, 1 - chosen.length / CFG.FEED.tierRamp);
+        const s2 = withJitter(c) - lambda * sim - tier.penalty - far - depth;
         if (s2 > bestScore) { bestScore = s2; picked = c; pickedIdx = j; pickedScore = s2; }
       }
       if (picked) break;

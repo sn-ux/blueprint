@@ -424,7 +424,15 @@ export const LIFECYCLE = {
   /** A feed session's ordering is fixed for this long. */
   sessionTtlMinutes: 90,
   /** Sessions kept per viewer, so a detail page opened later still resolves. */
-  sessionsRetained: 4,
+  /**
+   * Sessions kept per viewer.
+   *
+   * A detail page is served out of the session that produced it, so this is
+   * how many readings back a card stays openable. Refreshing starts a new one,
+   * and a few pulls in quick succession should not orphan the page someone is
+   * about to open.
+   */
+  sessionsRetained: 8,
 };
 
 // ── Feed composition ────────────────────────────────────────────────────────
@@ -441,6 +449,12 @@ export const FEED = {
    * wins. Quality dominates; this only decides between near-equals.
    */
   jitterBand: 0.06,
+  /**
+   * How far behind a weaker tier starts, and over how many cards that setback
+   * fades. The feed should reach tier two once tier one is spent, not never.
+   */
+  tierPenalty: 0.25,
+  tierRamp: 120,
   lambda: 0.35,
   window: 10,
   caps: { generator: 2, primarySource: 4, artist: 2, genre: 3, subgenre: 2, set: 2 },
