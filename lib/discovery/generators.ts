@@ -69,6 +69,7 @@ function baseSongCandidate(
     evidenceStrength: 0,
     attentionValue: 0,
     componentScores: {},
+    deliverableCount: 1,
     sourceFriendIds: holderIds,
     sourceFriendNames: holderIds.map((h) => index.nameOf.get(h) ?? "Someone"),
     genre: m.world,
@@ -138,6 +139,7 @@ const unanimousSet: GeneratorSpec = {
       evidenceStrength: 0.9,
       attentionValue: 0,
       componentScores: { anchor: 0.9, size: members.length },
+      deliverableCount: members.length,
       sourceFriendIds: holderIds,
       sourceFriendNames: holderIds.map((h) => index.nameOf.get(h) ?? "Someone"),
       genre: null, subgenre: null, artist: null, album: null,
@@ -235,6 +237,7 @@ const multiIntersectionSet: GeneratorSpec = {
             evidenceStrength: clamp01(0.6 + 0.25 * Math.min(1, members.length / 25)),
             attentionValue: 0,
             componentScores: { sources: 3, size: members.length },
+            deliverableCount: members.length,
             sourceFriendIds: ids,
             sourceFriendNames: trio.map((f) => f.name ?? "Someone"),
             genre: null, subgenre: null, artist: null, album: null,
@@ -305,6 +308,7 @@ function unitCandidates(
       evidenceStrength: es,
       attentionValue: 0,
       componentScores: { ownership, residue, observed, owned: u.ownedCount },
+      deliverableCount: u.missing.length,
       sourceFriendIds: holderIds,
       sourceFriendNames: holderIds.map((h) => index.nameOf.get(h) ?? "Someone"),
     };
@@ -370,9 +374,15 @@ function authoritativeAlbums(
     const residue = a.totalTracks - a.ownedPositions;
     if (residue < residueMin || residue > residueMax) continue;
     if (a.ownedPositions < 4) continue;           // barely-held records prove nothing
-    if (a.missing.length === 0) continue;         // nothing we could actually offer
-    // A sole gap must be the one track we can see, or the claim is unfounded.
-    if (residueMax === 1 && a.missing.length !== 1) continue;
+
+    // DELIVERABILITY. Every authoritative missing position must exist in
+    // F_all, so the number the caption implies is the number the page can
+    // show. Ctrl is four short and only one of those four is held by anyone
+    // here — "four tracks short of Ctrl" over a page containing one track is
+    // the kind of promise that costs trust in every other card. An album that
+    // fails this is not a weaker completion card; it is a different fact, and
+    // the observed source-set generators are where it belongs.
+    if (a.missing.length !== residue) continue;
 
     assertMissing(index, a.missing, generator);
     const setRef = { kind: "album" as const, artist: a.artist, album: a.title };
@@ -401,6 +411,7 @@ function authoritativeAlbums(
         totalTracks: a.totalTracks, ownedPositions: a.ownedPositions, residue,
         offerable: a.missing.length,
       },
+      deliverableCount: a.missing.length,
       sourceFriendIds: holderIds,
       sourceFriendNames: holderIds.map((h) => index.nameOf.get(h) ?? "Someone"),
     };
@@ -521,6 +532,7 @@ const albumAsUnit: GeneratorSpec = {
         evidenceStrength: clamp01(0.5 + 0.25 * Math.min(1, depth / 6)),
         attentionValue: 0,
         componentScores: { holders: deep.length, depth, observed: u.observed.size },
+        deliverableCount: missing.length,
         sourceFriendIds: holderIds,
         sourceFriendNames: holderIds.map((h) => index.nameOf.get(h) ?? "Someone"),
         genre: null, subgenre: null, artist: u.artist, album: u.album as string,
@@ -585,6 +597,7 @@ const artistAbsentInLane: GeneratorSpec = {
         ),                                                            // ceiling 0.70
         attentionValue: 0,
         componentScores: { catalogSize: inFriends.length, holders: holderIds.length },
+        deliverableCount: inFriends.length,
         sourceFriendIds: holderIds,
         sourceFriendNames: holderIds.map((h) => index.nameOf.get(h) ?? "Someone"),
         genre: lane.world, subgenre: dominant[0], artist: u.artist, album: null,
@@ -628,6 +641,7 @@ function laneCandidate(
     evidenceStrength: es,
     attentionValue: 0,
     componentScores: { gapSize: lane.gap.length, sources },
+    deliverableCount: lane.gap.length,
     sourceFriendIds: holderIds,
     sourceFriendNames: holderIds.map((h) => index.nameOf.get(h) ?? "Someone"),
     genre: lane.world, subgenre: lane.subgenre, artist: null, album: null,
@@ -721,6 +735,7 @@ const sourceLaneDepth: GeneratorSpec = {
           ),                                                          // ceiling 0.65
           attentionValue: 0,
           componentScores: { count: members.length, share },
+          deliverableCount: members.length,
           sourceFriendIds: [f.id],
           sourceFriendNames: [f.name ?? "Someone"],
           genre: lane.world, subgenre: lane.subgenre, artist: null, album: null,
@@ -756,6 +771,7 @@ const genreGap: GeneratorSpec = {
         evidenceStrength: clamp01(0.35 + 0.2 * Math.min(1, log2(w.gap.length) / 13)),
         attentionValue: 0,
         componentScores: { gapSize: w.gap.length },
+        deliverableCount: w.gap.length,
         sourceFriendIds: [], sourceFriendNames: [],
         genre: w.world, subgenre: null, artist: null, album: null,
       });

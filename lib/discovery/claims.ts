@@ -353,6 +353,36 @@ function pickTemplate(claimType: ClaimType, seed: string): Template | null {
 
 export const CLAIM_FLOOR = 0.35;
 
+/**
+ * How many tracks a proposition promises the page will contain.
+ *
+ * A claim that enumerates or implies a finite set — "three tracks short of
+ * this album", "all four have these six" — has to be able to show all of it.
+ * A claim that states a structural fact without promising an enumeration
+ * promises nothing, and returns 0.
+ */
+export function promisedCount(p: StructuredProposition): number {
+  switch (p.type) {
+    case "ALL_SOURCES_HAVE":
+    case "K_OF_N_HAVE":
+    case "NAMED_PAIR_HAVE":
+    case "SOLE_GAP_TRUE":
+    case "SOLE_GAP_OBSERVED":     return 1;
+    case "ALL_SOURCES_HAVE_SET":
+    case "K_SHARE_SET":           return p.size;
+    case "RESIDUE_TRUE":
+    case "RESIDUE_OBSERVED":      return p.residue;
+    case "ARTIST_ABSENT":         return p.catalogSize;
+    case "LANE_VOID":
+    case "CHILD_VOID":
+    case "LANE_GAP":              return p.gapSize;
+    case "SOURCE_LANE_DEPTH":     return p.count;
+    // Describes how much the holders kept, not a set the page enumerates.
+    case "ALBUM_AS_UNIT":         return 0;
+    default:                      return 0;
+  }
+}
+
 export function buildClaims(index: DiscoveryIndex, c: Candidate): CaptionClaim[] {
   const out: CaptionClaim[] = [];
   for (const p of enumerateClaims(index, c)) {

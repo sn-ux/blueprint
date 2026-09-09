@@ -176,6 +176,16 @@ export interface Candidate {
   attentionValue: number;
   componentScores: Record<string, number>;
 
+  /**
+   * DELIVERABILITY.
+   *
+   * How many tracks the resulting page can actually show. Any claim that
+   * enumerates or implies a finite set must be able to materialise all of it,
+   * so this is checked against the number the caption promises. A claim that
+   * describes a structural fact without promising an enumeration promises 0.
+   */
+  deliverableCount: number;
+
   /** Context the harness and diversifier read. */
   sourceFriendIds: string[];
   sourceFriendNames: string[];

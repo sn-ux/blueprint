@@ -1,4 +1,4 @@
-import { attentionValue, ATTENTION_FLOOR, buildClaims, CLAIM_FLOOR } from "./claims";
+import { attentionValue, ATTENTION_FLOOR, buildClaims, CLAIM_FLOOR, promisedCount } from "./claims";
 import { ES_FLOOR, GENERATORS } from "./generators";
 import { buildIndex, type DiscoveryIndex } from "./sets";
 import type { Candidate, EngineInput, GeneratorId, Rejection } from "./types";
@@ -121,6 +121,19 @@ export function runEngine(input: EngineInput, opts: EngineOptions = {}): EngineR
     const winning = claims[0];
     if (winning.score < CLAIM_FLOOR) {
       rejected.push({ stage: "claims", reasonCode: "INEXPLICABLE", generator: c.generator, subjectKey: c.subjectKey, detail: `claim=${winning.score.toFixed(2)}` });
+      continue;
+    }
+
+    // DELIVERABILITY — the number a caption implies must equal the number the
+    // page can actually show. Enforced here rather than per generator so a new
+    // claim type cannot quietly promise more than its set contains.
+    const promised = promisedCount(winning.proposition);
+    if (promised > c.deliverableCount) {
+      rejected.push({
+        stage: "deliverability", reasonCode: "UNDELIVERABLE",
+        generator: c.generator, subjectKey: c.subjectKey,
+        detail: `caption implies ${promised}, page can show ${c.deliverableCount}`,
+      });
       continue;
     }
 
