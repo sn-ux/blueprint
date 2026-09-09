@@ -17,6 +17,7 @@ export interface TrackRow {
   name: string;
   artist: string;
   album: string | null;
+  imageUrl?: string | null;
   blueprintWorld: string;
   blueprintSubgenre: string;
   /** Album structure. Null on rows imported before it was captured. */

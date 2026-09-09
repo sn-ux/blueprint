@@ -41,7 +41,7 @@ if (!people.some((p) => p.id === userId)) {
 const tracks = await prisma.track.findMany({
   where: { user: { midvaleHidden: false } },
   select: {
-    userId: true, spotifyId: true, name: true, artist: true, album: true,
+    userId: true, spotifyId: true, name: true, artist: true, album: true, imageUrl: true,
     blueprintWorld: true, blueprintSubgenre: true,
     albumId: true, albumTotalTracks: true, trackNumber: true, discNumber: true, albumType: true,
   },

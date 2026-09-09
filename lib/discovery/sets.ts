@@ -18,6 +18,8 @@ export interface TrackMeta {
   name: string;
   artist: string;
   album: string | null;
+  /** Album artwork, carried through for card rendering. */
+  imageUrl: string | null;
   world: string;
   subgenre: string;
 }
@@ -165,6 +167,7 @@ export function buildIndex(input: EngineInput): DiscoveryIndex {
       name: t.name,
       artist: t.artist,
       album: t.album,
+      imageUrl: t.imageUrl ?? null,
       world: t.blueprintWorld,
       subgenre: (t.blueprintSubgenre ?? "").trim(),
     });
