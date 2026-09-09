@@ -1,4 +1,5 @@
 import { isAllowedCardType, resolveAperture } from "./aperture";
+import * as CFG from "./config";
 import { attentionValue, ATTENTION_FLOOR, buildClaims, CLAIM_FLOOR, promisedCount } from "./claims";
 import { ES_FLOOR, GENERATORS } from "./generators";
 import { buildIndex, type DiscoveryIndex } from "./sets";
@@ -41,14 +42,15 @@ const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
 export type QualityBand = "EXCEPTIONAL" | "STRONG" | "SOLID";
 
 export function qualityBand(es: number, av: number): QualityBand {
-  if (es >= 0.80 && av >= 0.90) return "EXCEPTIONAL";
-  if ((es >= 0.68 && av >= 0.80) || (es >= 0.55 && av >= 0.95)) return "STRONG";
+  if (es >= CFG.BANDS.exceptionalEs && av >= CFG.BANDS.exceptionalAv) return "EXCEPTIONAL";
+  if ((es >= CFG.BANDS.strongEs && av >= CFG.BANDS.strongAv)
+    || (es >= CFG.BANDS.strongEsAlt && av >= CFG.BANDS.strongAvAlt)) return "STRONG";
   return "SOLID";
 }
 
 export function runEngine(input: EngineInput, opts: EngineOptions = {}): EngineResult {
   const feedSize = opts.feedSize ?? 100;
-  const lambda = opts.lambda ?? 0.35;
+  const lambda = opts.lambda ?? CFG.FEED.lambda;
 
   const index = buildIndex(input);
   const rejected: Rejection[] = [];
@@ -189,12 +191,15 @@ export function runEngine(input: EngineInput, opts: EngineOptions = {}): EngineR
   for (const list of groups.values()) {
     const sorted = [...list].sort((a, b) => a.evidenceStrength - b.evidenceStrength);
     const n = sorted.length;
-    sorted.forEach((c, i) => { c.tieBreak = n <= 1 ? 0.01 : 0.02 * (i / (n - 1)); });
+    sorted.forEach((c, i) => { c.tieBreak = n <= 1 ? CFG.TIE_BREAK_SINGLETON : CFG.TIE_BREAK_MAX * (i / (n - 1)); });
   }
 
   // ── Ranking. Base stays in [0,1]; rankingScore may exceed it. ─────────────
   for (const c of explained) {
-    c.baseRankingScore = clamp01(0.65 * c.evidenceStrength + 0.35 * c.attentionValue);
+    c.baseRankingScore = clamp01(
+      CFG.RANK_WEIGHTS.evidence * c.evidenceStrength
+      + CFG.RANK_WEIGHTS.attention * c.attentionValue,
+    );
     c.corroborationBonus = 0;
     c.rankingScore = c.baseRankingScore + (c.tieBreak ?? 0);
     c.qualityBand = qualityBand(c.evidenceStrength, c.attentionValue);
@@ -217,7 +222,9 @@ export function runEngine(input: EngineInput, opts: EngineOptions = {}): EngineR
         generator: o.generator, evidenceStrength: o.evidenceStrength, caption: o.caption,
       }));
       const distinct = new Set(others.map((o) => o.generator)).size;
-      winner.corroborationBonus = Math.min(0.10, 0.04 * distinct);
+      winner.corroborationBonus = Math.min(
+        CFG.CORROBORATION_MAX, CFG.CORROBORATION_PER_GENERATOR * distinct,
+      );
       winner.rankingScore = (winner.baseRankingScore ?? 0) + (winner.tieBreak ?? 0) + winner.corroborationBonus;
       for (const o of others) {
         rejected.push({ stage: "collapse", reasonCode: "DUPLICATE_SUBJECT", generator: o.generator, subjectKey: o.subjectKey, detail: `lost to ${winner.generator}` });
@@ -255,14 +262,7 @@ export function runEngine(input: EngineInput, opts: EngineOptions = {}): EngineR
 
 // ── Diversification ─────────────────────────────────────────────────────────
 
-const SIM_WEIGHTS = {
-  generator: 0.30,
-  template: 0.25,
-  artist: 0.20,
-  friend: 0.15,
-  subgenre: 0.10,
-  genre: 0.05,
-};
+const SIM_WEIGHTS = CFG.FEED.similarity;
 
 function similarity(a: Candidate, b: Candidate): number {
   let s = 0;
@@ -286,7 +286,7 @@ interface Caps { generator: number; primarySource: number; artist: number; genre
  * starves it, and every slot falls through to a relaxation tier. The caps that
  * actually shape how the feed reads are generator, artist and lane.
  */
-const CAPS: Caps = { generator: 2, primarySource: 4, artist: 2, genre: 3, subgenre: 2, set: 2 };
+const CAPS: Caps = CFG.FEED.caps;
 
 const relaxed = (c: Caps, by: number): Caps => ({
   generator: c.generator + by, primarySource: c.primarySource + by, artist: c.artist + by,
@@ -298,7 +298,7 @@ function compose(pool: Candidate[], size: number, lambda: number): Candidate[] {
   const remaining = [...pool];
 
   while (chosen.length < size && remaining.length > 0) {
-    const recent = chosen.slice(-10);
+    const recent = chosen.slice(-CFG.FEED.window);
     const counts = {
       generator: new Map<string, number>(), source: new Map<string, number>(),
       artist: new Map<string, number>(), genre: new Map<string, number>(),
@@ -340,10 +340,10 @@ function compose(pool: Candidate[], size: number, lambda: number): Candidate[] {
     // blanket fallback silently discards every cap, which is how a single
     // generator can take half the feed.
     const tiers: { caps: Caps | null; strict: boolean; penalty: number }[] = [
-      { caps: CAPS, strict: true, penalty: 0 },
-      { caps: CAPS, strict: false, penalty: 0.05 },
-      { caps: relaxed(CAPS, 2), strict: false, penalty: 0.15 },
-      { caps: null, strict: false, penalty: 0.3 },
+      { caps: CAPS, strict: true, penalty: CFG.FEED.penalties[0] },
+      { caps: CAPS, strict: false, penalty: CFG.FEED.penalties[1] },
+      { caps: relaxed(CAPS, CFG.FEED.relaxBy), strict: false, penalty: CFG.FEED.penalties[2] },
+      { caps: null, strict: false, penalty: CFG.FEED.penalties[3] },
     ];
 
     let picked: Candidate | null = null;

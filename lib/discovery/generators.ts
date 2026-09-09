@@ -1,5 +1,7 @@
+import * as CFG from "./config";
 import {
-  assertMissing, friendRef, setId, UNKNOWN_LANE, type DiscoveryIndex,
+  assertMissing, coverageOf, friendRef, setId, UNKNOWN_LANE,
+  type Coverage, type DiscoveryIndex,
 } from "./sets";
 import type {
   Candidate, DiscoverySet, Evidence, GeneratorId, Subject,
@@ -22,7 +24,7 @@ import type {
  * Sample size never enters this number.
  */
 
-export const ES_FLOOR = 0.3;
+export const ES_FLOOR = CFG.ES_FLOOR;
 
 export interface GeneratorSpec {
   id: GeneratorId;
@@ -85,10 +87,14 @@ const unanimousMiss: GeneratorSpec = {
   id: "UNANIMOUS_MISS",
   mechanism: "Every source holds it. The viewer is the sole exception.",
   run: (index) => {
-    const n = index.friends.length;
-    if (n < 3) return [];
+    const n = index.eligibleSourceUniverse;
+    if (n < CFG.MIN_INDEPENDENT_SOURCES) return [];
     const out: Candidate[] = [];
     for (const [id, hs] of index.holders) {
+      // Literal unanimity: coverage of exactly 1.0. Left strict on purpose —
+      // if it becomes vanishingly rare in a large circle, that is what the
+      // sentence means, and relaxing it to keep the generator productive
+      // would make the caption false.
       if (hs.length !== n) continue;
       const expression = `(⋂ F_i) − U · ${id}`;
       const set: DiscoverySet = {
@@ -113,8 +119,8 @@ const unanimousSet: GeneratorSpec = {
   id: "UNANIMOUS_SET",
   mechanism: "The whole set of tracks every source holds and the viewer does not.",
   run: (index) => {
-    const n = index.friends.length;
-    if (n < 3) return [];
+    const n = index.eligibleSourceUniverse;
+    if (n < CFG.MIN_INDEPENDENT_SOURCES) return [];
     const members = [...index.holders].filter(([, hs]) => hs.length === n).map(([id]) => id);
     if (members.length < 2) return [];
     const expression = `(⋂ F_i) − U`;
@@ -148,104 +154,156 @@ const unanimousSet: GeneratorSpec = {
   },
 };
 
+/**
+ * The consensus family, expressed as coverage of the source universe.
+ *
+ * A song could in principle be held by anyone, so the denominator here is the
+ * whole circle rather than a neighbourhood of it: "everyone has this except
+ * you" is a claim about the circle. Three holders is a supermajority out of
+ * four and noise out of four hundred, so no tier is defined by a count — each
+ * carries a proportional requirement and the same absolute floor of
+ * independent sources, because one-of-one is unanimous and means nothing.
+ */
 const supermajorityMiss: GeneratorSpec = {
   id: "SUPERMAJORITY_MISS",
-  mechanism: "A strict majority of sources hold it; the viewer does not.",
+  mechanism: "At least two thirds of the source universe holds it; the viewer does not.",
   run: (index) => {
-    const n = index.friends.length;
-    if (n < 4) return [];
+    const n = index.eligibleSourceUniverse;
+    if (n < CFG.MIN_INDEPENDENT_SOURCES) return [];
+    // Smallest holder count that is genuinely a supermajority at this size.
+    const kMin = Math.max(CFG.MIN_INDEPENDENT_SOURCES, Math.ceil(CFG.SUPERMAJORITY_COVERAGE * n));
     const out: Candidate[] = [];
     for (const [id, hs] of index.holders) {
       const k = hs.length;
-      if (k < 3 || k >= n) continue;
-      const expression = `|holders| = ${k} of ${n} · ${id}`;
+      if (k < kMin || k >= n) continue;
+      const cov = coverageOf(k, n);
+      const expression = `|holders| = ${k} of ${n} eligible sources · ${id}`;
       const set: DiscoverySet = {
         id: setId(`kofn:${id}`), type: "kOfN", expression,
         members: [id], sourceSets: hs.map(friendRef), exclusionSet: { kind: "user", userId: index.viewerId },
-        rawMetrics: { k, n },
+        rawMetrics: { k, n, coverage: cov.sourceCoverage },
       };
       assertMissing(index, set.members, "SUPERMAJORITY_MISS");
       const c = baseSongCandidate(index, id, "SUPERMAJORITY_MISS", set, hs);
       if (!c) continue;
-      // Anchors: k = n−1 → 0.85 (near-categorical); k = 3 of many → 0.55.
-      c.evidenceStrength = clamp01(0.55 + 0.3 * ((k - 2) / Math.max(1, n - 2)));
-      c.componentScores = { k, n, coverage: k / n };
-      c.reasonCodes = [`K_OF_N=${k}`, `N=${n}`];
+      // Anchored on distance from unanimity, which is what the scale already
+      // says: 0.85 is "one step from the maximum", and one short of everyone
+      // is exactly that at any cohort size. The span runs from the smallest
+      // genuine supermajority up to n−1.
+      const span = Math.max(0, (n - 1) - kMin);
+      const f = span === 0 ? 1 : (k - kMin) / span;
+      c.evidenceStrength = clamp01(0.55 + 0.30 * f);
+      c.componentScores = { holders: k, eligibleSourceCount: n, sourceCoverage: cov.sourceCoverage };
+      c.reasonCodes = [`HOLDERS=${k}`, `ELIGIBLE=${n}`, `COVERAGE=${cov.sourceCoverage.toFixed(3)}`];
       out.push(c);
     }
     return out;
   },
 };
 
-const pairConsensus: GeneratorSpec = {
-  id: "PAIR_CONSENSUS",
-  mechanism: "Two named sources hold it; the viewer does not.",
+/**
+ * Renamed from PAIR_CONSENSUS.
+ *
+ * "Two of your friends have this" is consensus among four people and
+ * coincidence among four hundred, so the mechanism was never really about
+ * pairs — it is about a majority of the circle, which happens to be two when
+ * the circle is four. Naming it for the pair baked today's cohort into the
+ * concept.
+ */
+const majorityMiss: GeneratorSpec = {
+  id: "MAJORITY_MISS",
+  mechanism: "At least half the source universe holds it, short of a supermajority.",
   run: (index) => {
+    const n = index.eligibleSourceUniverse;
+    if (n < 2) return [];
+    const kMin = Math.max(2, Math.ceil(CFG.MAJORITY_COVERAGE * n));
+    const kMax = Math.max(CFG.MIN_INDEPENDENT_SOURCES, Math.ceil(CFG.SUPERMAJORITY_COVERAGE * n));
     const out: Candidate[] = [];
     for (const [id, hs] of index.holders) {
-      if (hs.length !== 2) continue;
-      const expression = `(F_${hs[0]} ∩ F_${hs[1]}) − U · ${id}`;
+      const k = hs.length;
+      if (k < kMin || k >= kMax || k >= n) continue;
+      const cov = coverageOf(k, n);
+      const expression = `|holders| = ${k} of ${n} eligible sources · ${id}`;
       const set: DiscoverySet = {
-        id: setId(`pair:${id}`), type: "pair", expression,
+        id: setId(`majority:${id}`), type: "pair", expression,
         members: [id], sourceSets: hs.map(friendRef), exclusionSet: { kind: "user", userId: index.viewerId },
-        rawMetrics: { holders: 2 },
+        rawMetrics: { holders: k, n, coverage: cov.sourceCoverage },
       };
-      assertMissing(index, set.members, "PAIR_CONSENSUS");
-      const c = baseSongCandidate(index, id, "PAIR_CONSENSUS", set, hs);
+      assertMissing(index, set.members, "MAJORITY_MISS");
+      const c = baseSongCandidate(index, id, "MAJORITY_MISS", set, hs);
       if (!c) continue;
-      // Anchor: solid. Two independent holders is real evidence and nothing more.
+      // Anchor: solid. A majority is real evidence and nothing more.
       c.evidenceStrength = 0.5;
-      c.componentScores = { anchor: 0.5, holders: 2 };
-      c.reasonCodes = ["K_OF_N=2"];
+      c.componentScores = { anchor: 0.5, holders: k, eligibleSourceCount: n, sourceCoverage: cov.sourceCoverage };
+      c.reasonCodes = [`HOLDERS=${k}`, `ELIGIBLE=${n}`, `COVERAGE=${cov.sourceCoverage.toFixed(3)}`];
       out.push(c);
     }
     return out;
   },
 };
 
-const multiIntersectionSet: GeneratorSpec = {
+/**
+ * Tracks shared by the same group of three or more sources.
+ *
+ * Previously this enumerated every triple of sources and intersected their
+ * libraries — four combinations at four friends, but ten million at four
+ * hundred, and ten billion at four thousand. It only survived the scaling
+ * probe because the anchor-library filter happened to disqualify every
+ * synthetic source, which is luck rather than a guard.
+ *
+ * Inverted: each discoverable track already knows its holders, so grouping
+ * tracks by their holder set produces the same sets in one pass over D. Cost
+ * scales with discoverable tracks, not with combinations of people.
+ */
+const multiSourceSet: GeneratorSpec = {
   id: "MULTI_INTERSECTION_SET",
-  mechanism: "Three sources coincide on a set the viewer is entirely outside of.",
+  mechanism: "One group of three or more sources shares a set the viewer is entirely outside of.",
   run: (index) => {
-    const anchors = index.anchorFriends;
+    const anchors = new Set(index.anchorFriends.map((f) => f.id));
+    const groups = new Map<string, { holders: string[]; members: string[] }>();
+
+    for (const [spotifyId, hs] of index.holders) {
+      const eligible = hs.filter((h) => anchors.has(h)).sort();
+      if (eligible.length < CFG.MULTI_SOURCE_SET.minSources) continue;
+      const key = eligible.join(",");
+      const g = groups.get(key);
+      if (g) g.members.push(spotifyId);
+      else groups.set(key, { holders: eligible, members: [spotifyId] });
+    }
+
     const out: Candidate[] = [];
-    for (let i = 0; i < anchors.length; i++) {
-      for (let j = i + 1; j < anchors.length; j++) {
-        for (let k = j + 1; k < anchors.length; k++) {
-          const trio = [anchors[i], anchors[j], anchors[k]];
-          const [A, B, C] = trio.map((f) => index.byFriend.get(f.id)!);
-          const members = [...A].filter((x) => B.has(x) && C.has(x) && !index.U.has(x));
-          if (members.length < 3) continue;
-          const ids = trio.map((f) => f.id);
-          const expression = `(F_${ids.join(" ∩ F_")}) − U`;
-          const set: DiscoverySet = {
-            id: setId(`triple:${ids.sort().join(",")}`), type: "tripleIntersection", expression,
-            members, sourceSets: ids.map(friendRef), exclusionSet: { kind: "user", userId: index.viewerId },
-            rawMetrics: { size: members.length, sources: 3 },
-          };
-          assertMissing(index, members, "MULTI_INTERSECTION_SET");
-          out.push({
-            id: nextId("MULTI_INTERSECTION_SET"),
-            subject: { type: "Songs", label: `${trio.map((f) => f.name ?? "Someone").join(", ")} all have these`, discoverySetId: set.id },
-            subjectKey: `Songs:${set.id}`,
-            generator: "MULTI_INTERSECTION_SET", discoverySetId: set.id, discoveryExpression: expression,
-            evidence: [
-              ...holderEvidence(index, ids),
-              { kind: "setCardinality", setRef: { kind: "friendsAll" }, value: members.length },
-            ],
-            reasonCodes: [`SOURCES=3`, `SET_SIZE=${members.length}`],
-            // Anchor: strong. Three independent holders, but a set rather than an item.
-            evidenceStrength: clamp01(0.6 + 0.25 * Math.min(1, members.length / 25)),
-            attentionValue: 0,
-            componentScores: { sources: 3, size: members.length },
-            deliverableCount: members.length,
-            deliverableIds: members,
-            sourceFriendIds: ids,
-            sourceFriendNames: trio.map((f) => f.name ?? "Someone"),
-            genre: null, subgenre: null, artist: null, album: null,
-          });
-        }
-      }
+    for (const [key, g] of groups) {
+      if (g.members.length < CFG.MULTI_SOURCE_SET.minMembers) continue;
+      assertMissing(index, g.members, "MULTI_INTERSECTION_SET");
+      const names = g.holders.map((h) => index.nameOf.get(h) ?? "Someone");
+      const expression = `(⋂ F_i over ${g.holders.length} sources) − U`;
+      const set: DiscoverySet = {
+        id: setId(`sharedgroup:${key}`), type: "tripleIntersection", expression,
+        members: g.members, sourceSets: g.holders.map(friendRef),
+        exclusionSet: { kind: "user", userId: index.viewerId },
+        rawMetrics: { size: g.members.length, sources: g.holders.length },
+      };
+      out.push({
+        id: nextId("MULTI_INTERSECTION_SET"),
+        subject: { type: "Songs", label: `${names.join(", ")} all have these`, discoverySetId: set.id },
+        subjectKey: `Songs:${set.id}`,
+        generator: "MULTI_INTERSECTION_SET", discoverySetId: set.id, discoveryExpression: expression,
+        evidence: [
+          ...holderEvidence(index, g.holders),
+          { kind: "setCardinality", setRef: { kind: "friendsAll" }, value: g.members.length },
+        ],
+        reasonCodes: [`SOURCES=${g.holders.length}`, `SET_SIZE=${g.members.length}`],
+        evidenceStrength: clamp01(
+          0.6 + 0.25 * Math.min(1, g.members.length / CFG.MULTI_SOURCE_SET.sizeSaturation),
+        ),
+        attentionValue: 0,
+        componentScores: { sources: g.holders.length, size: g.members.length },
+        deliverableCount: g.members.length,
+        deliverableIds: g.members,
+        sourceFriendIds: g.holders,
+        sourceFriendNames: names,
+        genre: null, subgenre: null, artist: null, album: null,
+      });
     }
     return out;
   },
@@ -362,9 +420,9 @@ function unitCandidates(
  */
 function authoritativeScore(totalTracks: number, ownedPositions: number, residue: number): number {
   const exactness = 1 / residue;
-  const held = Math.min(1, ownedPositions / 8);
-  const scale = Math.min(1, log2(totalTracks) / log2(20));
-  return Math.min(0.92, clamp01(0.60 + 0.24 * exactness * held + 0.08 * scale));
+  const held = Math.min(1, ownedPositions / CFG.ALBUM_AUTHORITATIVE.heldSaturation);
+  const scale = Math.min(1, log2(totalTracks) / log2(CFG.ALBUM_AUTHORITATIVE.scaleSaturation));
+  return Math.min(CFG.ALBUM_AUTHORITATIVE.ceiling, clamp01(0.60 + 0.24 * exactness * held + 0.08 * scale));
 }
 
 function authoritativeAlbums(
@@ -375,7 +433,7 @@ function authoritativeAlbums(
     if (!a.consistent) continue;
     const residue = a.totalTracks - a.ownedPositions;
     if (residue < residueMin || residue > residueMax) continue;
-    if (a.ownedPositions < 4) continue;           // barely-held records prove nothing
+    if (a.ownedPositions < CFG.ALBUM_AUTHORITATIVE.minOwnedPositions) continue;           // barely-held records prove nothing
 
     // DELIVERABILITY. Every authoritative missing position must exist in
     // F_all, so the number the caption implies is the number the page can
@@ -457,7 +515,7 @@ const albumSoleGap: GeneratorSpec = {
   id: "ALBUM_SOLE_GAP_OBSERVED",
   mechanism: "Of everything anyone here holds from one record, the viewer holds all but one track.",
   run: (index) => unitCandidates(index, "album", "ALBUM_SOLE_GAP_OBSERVED", {
-    minObserved: 6, minOwned: 1, minOwnership: 0.85, residueMin: 1, residueMax: 1,
+    minObserved: CFG.ALBUM_OBSERVED.minObserved, minOwned: 1, minOwnership: CFG.ALBUM_OBSERVED.soleMinOwnership, residueMin: 1, residueMax: 1,
     // Anchor: near-categorical at ownership 1.0 — one item short of the whole
     // observed set. Squared so the curve is steep only at the very top.
     score: (ownership) => 0.85 * ownership * ownership,
@@ -469,7 +527,7 @@ const albumResidue: GeneratorSpec = {
   id: "ALBUM_RESIDUE_OBSERVED",
   mechanism: "The viewer holds most of an observed record and misses a small remainder.",
   run: (index) => unitCandidates(index, "album", "ALBUM_RESIDUE_OBSERVED", {
-    minObserved: 6, minOwned: 1, minOwnership: 0.6, residueMin: 2, residueMax: 4,
+    minObserved: CFG.ALBUM_OBSERVED.minObserved, minOwned: 1, minOwnership: CFG.ALBUM_OBSERVED.residueMinOwnership, residueMin: 2, residueMax: CFG.ALBUM_OBSERVED.residueMax,
     score: (ownership, residue) => 0.7 * ownership * ownership * (2 / residue),
     soleOnly: false,
   }),
@@ -479,7 +537,7 @@ const artistSoleGap: GeneratorSpec = {
   id: "ARTIST_SOLE_GAP_OBSERVED",
   mechanism: "One track short of everything anyone here holds by this artist.",
   run: (index) => unitCandidates(index, "artist", "ARTIST_SOLE_GAP_OBSERVED", {
-    minObserved: 1, minOwned: 8, minOwnership: 0.85, residueMin: 1, residueMax: 1,
+    minObserved: 1, minOwned: CFG.ARTIST_OBSERVED.minOwned, minOwnership: CFG.ARTIST_OBSERVED.soleMinOwnership, residueMin: 1, residueMax: 1,
     score: (ownership) => 0.85 * ownership * ownership,
     soleOnly: true,
   }),
@@ -489,7 +547,7 @@ const artistResidue: GeneratorSpec = {
   id: "ARTIST_RESIDUE_OBSERVED",
   mechanism: "A deep artist holding with a small remainder others here keep.",
   run: (index) => unitCandidates(index, "artist", "ARTIST_RESIDUE_OBSERVED", {
-    minObserved: 1, minOwned: 8, minOwnership: 0.75, residueMin: 2, residueMax: 5,
+    minObserved: 1, minOwned: CFG.ARTIST_OBSERVED.minOwned, minOwnership: CFG.ARTIST_OBSERVED.residueMinOwnership, residueMin: 2, residueMax: CFG.ARTIST_OBSERVED.residueMax,
     score: (ownership, residue) => 0.65 * ownership * ownership * (2 / residue),
     soleOnly: false,
   }),
@@ -502,9 +560,9 @@ const albumAsUnit: GeneratorSpec = {
     const out: Candidate[] = [];
     for (const u of index.albums.values()) {
       if (u.ownedCount !== 0) continue;
-      if (u.observed.size < 6) continue;
-      const deep = [...u.byFriend.entries()].filter(([, s]) => s.size >= 3);
-      if (deep.length < 2) continue;
+      if (u.observed.size < CFG.ALBUM_AS_UNIT.minObserved) continue;
+      const deep = [...u.byFriend.entries()].filter(([, s]) => s.size >= CFG.ALBUM_AS_UNIT.minTracksPerHolder);
+      if (deep.length < CFG.ALBUM_AS_UNIT.minHolders) continue;
       const depth = Math.min(...deep.map(([, s]) => s.size));
       const missing = u.missing;
       if (missing.length === 0) continue;
@@ -531,7 +589,7 @@ const albumAsUnit: GeneratorSpec = {
         ],
         reasonCodes: [`HOLDERS=${deep.length}`, `MIN_DEPTH=${depth}`, "VIEWER_ABSENT"],
         // Anchor: solid to strong. Independent multi-track holding is the fact.
-        evidenceStrength: clamp01(0.5 + 0.25 * Math.min(1, depth / 6)),
+        evidenceStrength: clamp01(0.5 + 0.25 * Math.min(1, depth / CFG.ALBUM_AS_UNIT.depthSaturation)),
         attentionValue: 0,
         componentScores: { holders: deep.length, depth, observed: u.observed.size },
         deliverableCount: missing.length,
@@ -552,9 +610,9 @@ const artistAbsentInLane: GeneratorSpec = {
     for (const u of index.artists.values()) {
       if (u.ownedCount !== 0) continue;
       const inFriends = u.missing;
-      if (inFriends.length < 5) continue;
+      if (inFriends.length < CFG.ARTIST_ABSENT.minCatalog) continue;
       const holderIds = [...new Set(inFriends.flatMap((id) => index.holders.get(id) ?? []))];
-      if (holderIds.length < 2) continue;
+      if (holderIds.length < CFG.ARTIST_ABSENT.minHolders) continue;
 
       // Dominant named lane for this artist's observed tracks.
       const counts = new Map<string, number>();
@@ -568,6 +626,19 @@ const artistAbsentInLane: GeneratorSpec = {
       const lane = index.lanes.get(dominant[0]);
       // Binary membership: the lane is represented in the viewer's set at all.
       if (!lane?.viewerPresent) continue;
+
+      // Sources with any material in this artist's lane — not the whole
+      // circle. A source with no jazz never declined to hold this jazz artist.
+      //
+      // Holding the artist is itself material in the neighbourhood, so the
+      // universe is the union of the two. Without that, a holder whose rows
+      // are classified into a neighbouring lane falls outside the denominator
+      // and coverage exceeds 1, which is not a thing coverage can be.
+      const laneSources = index.sourcesInLane.get(dominant[0]) ?? new Set<string>();
+      const universe = new Set<string>(laneSources);
+      for (const h of holderIds) universe.add(h);
+      const eligible = universe.size;
+      const cov = coverageOf(holderIds.length, eligible);
 
       assertMissing(index, inFriends, "ARTIST_ABSENT_IN_LANE");
       const expression = `A_${u.artist} ∩ F_all, A ∩ U = ∅, S_${dominant[0]} ∩ U ≠ ∅`;
@@ -588,17 +659,23 @@ const artistAbsentInLane: GeneratorSpec = {
           { kind: "setCardinality", setRef: { kind: "artist", artist: u.artist }, value: inFriends.length },
           ...holderEvidence(index, holderIds),
         ],
-        reasonCodes: ["VIEWER_ABSENT", `CATALOG=${inFriends.length}`, `HOLDERS=${holderIds.length}`, "LANE_PRESENT"],
+        reasonCodes: [
+          "VIEWER_ABSENT", `CATALOG=${inFriends.length}`, `HOLDERS=${holderIds.length}`,
+          `ELIGIBLE=${eligible}`, `COVERAGE=${cov.sourceCoverage.toFixed(3)}`, "LANE_PRESENT",
+        ],
         // Same shape as a lane void: broad inventory. Catalogue size alone
         // saturated the old term at 0.75 for a third of these, so breadth of
         // independent sources leads and size saturates well below the ceiling.
         evidenceStrength: clamp01(
           0.35
-          + 0.20 * (holderIds.length / Math.max(1, index.friends.length))
-          + 0.15 * Math.min(1, log2(inFriends.length) / log2(60)),
+          + 0.20 * cov.sourceCoverage
+          + 0.15 * Math.min(1, log2(inFriends.length) / log2(CFG.ARTIST_ABSENT.catalogSaturation)),
         ),                                                            // ceiling 0.70
         attentionValue: 0,
-        componentScores: { catalogSize: inFriends.length, holders: holderIds.length },
+        componentScores: {
+          catalogSize: inFriends.length, holders: holderIds.length,
+          eligibleSourceCount: eligible, sourceCoverage: cov.sourceCoverage,
+        },
         deliverableCount: inFriends.length,
         sourceFriendIds: holderIds,
         sourceFriendNames: holderIds.map((h) => index.nameOf.get(h) ?? "Someone"),
@@ -618,7 +695,7 @@ const artistAbsentInLane: GeneratorSpec = {
 
 function laneCandidate(
   index: DiscoveryIndex, generator: GeneratorId, lane: { subgenre: string; world: string; gap: string[]; byFriend: Map<string, Set<string>> },
-  es: number, parent: string | null, sources: number,
+  es: number, parent: string | null, cov: Coverage,
 ): Candidate {
   const holderIds = [...lane.byFriend.keys()];
   const expression = `(F_all ∩ S_${lane.subgenre}) − U, S ∩ U = ∅`;
@@ -639,10 +716,18 @@ function laneCandidate(
       { kind: "setCardinality", setRef: { kind: "subgenre", subgenre: lane.subgenre }, value: lane.gap.length },
       ...holderEvidence(index, holderIds),
     ],
-    reasonCodes: ["VIEWER_ABSENT", `GAP=${lane.gap.length}`, ...(parent ? [`PARENT_PRESENT=${parent}`] : [])],
+    reasonCodes: [
+      "VIEWER_ABSENT", `GAP=${lane.gap.length}`,
+      `HOLDERS=${cov.holders}`, `ELIGIBLE=${cov.eligibleSourceCount}`,
+      `COVERAGE=${cov.sourceCoverage.toFixed(3)}`,
+      ...(parent ? [`PARENT_PRESENT=${parent}`] : []),
+    ],
     evidenceStrength: es,
     attentionValue: 0,
-    componentScores: { gapSize: lane.gap.length, sources },
+    componentScores: {
+      gapSize: lane.gap.length, holders: cov.holders,
+      eligibleSourceCount: cov.eligibleSourceCount, sourceCoverage: cov.sourceCoverage,
+    },
     deliverableCount: lane.gap.length,
     deliverableIds: lane.gap,
     sourceFriendIds: holderIds,
@@ -661,8 +746,8 @@ function voidLanes(index: DiscoveryIndex, wantParentPresent: boolean): Candidate
   const out: Candidate[] = [];
   for (const lane of index.lanes.values()) {
     if (lane.viewerPresent) continue;
-    if (lane.gap.length < 15) continue;
-    const deepEnough = [...lane.byFriend.values()].some((s) => s.size >= 10);
+    if (lane.gap.length < CFG.LANE.minGap) continue;
+    const deepEnough = [...lane.byFriend.values()].some((s) => s.size >= CFG.LANE.minDeepHolder);
     if (!deepEnough) continue;
     const parentPresent = index.worlds.get(lane.world)?.viewerPresent ?? false;
     if (parentPresent !== wantParentPresent) continue;
@@ -673,14 +758,20 @@ function voidLanes(index: DiscoveryIndex, wantParentPresent: boolean): Candidate
     // ordinary void from an unusual one is how many independent sources hold
     // material there — one person's shelf is one person's shelf at any size —
     // so breadth carries more weight than magnitude, and magnitude saturates.
+    // Sources holding this lane, over sources holding anything in its parent
+    // genre. Dividing by the whole circle understated breadth in a large
+    // cohort and overstated it in a tiny one — at a single source it was
+    // always 1.0, handing maximum corroboration credit to one person.
     const sources = [...lane.byFriend.values()].filter((s2) => s2.size >= 1).length;
-    const breadth = sources / Math.max(1, index.friends.length);
-    const magnitude = Math.min(1, log2(lane.gap.length) / log2(300));
+    const eligible = index.sourcesInWorld.get(lane.world)?.size ?? 0;
+    const cov = coverageOf(sources, eligible);
+    const breadth = cov.sourceCoverage;
+    const magnitude = Math.min(1, log2(lane.gap.length) / log2(CFG.LANE.magnitudeSaturation));
     const es = clamp01(0.35 + 0.22 * breadth + 0.13 * magnitude);   // ceiling 0.70
     if (wantParentPresent) {
-      out.push(laneCandidate(index, "MISSING_CHILD", lane, es, lane.world, sources));
+      out.push(laneCandidate(index, "MISSING_CHILD", lane, es, lane.world, cov));
     } else {
-      out.push(laneCandidate(index, "SUBGENRE_VOID", lane, es, null, sources));
+      out.push(laneCandidate(index, "SUBGENRE_VOID", lane, es, null, cov));
     }
   }
   return out;
@@ -706,11 +797,11 @@ const sourceLaneDepth: GeneratorSpec = {
     for (const lane of index.lanes.values()) {
       for (const f of index.anchorFriends) {
         const held = lane.byFriend.get(f.id);
-        if (!held || held.size < 30) continue;
+        if (!held || held.size < CFG.SOURCE_LANE_DEPTH.minHeld) continue;
         const share = held.size / lane.friendAll.size;
-        if (share < 0.5) continue;
+        if (share < CFG.SOURCE_LANE_DEPTH.minShareOfLane) continue;
         const members = [...held].filter((id) => !index.U.has(id));
-        if (members.length < 15) continue;
+        if (members.length < CFG.SOURCE_LANE_DEPTH.minOfferable) continue;
         assertMissing(index, members, "SOURCE_LANE_DEPTH");
 
         const expression = `(F_${f.id} ∩ S_${lane.subgenre}) − U`;
@@ -734,7 +825,7 @@ const sourceLaneDepth: GeneratorSpec = {
           // One source by construction, so this tops out below anything with
           // independent corroboration however deep that one shelf runs.
           evidenceStrength: clamp01(
-            0.35 + 0.20 * share + 0.10 * Math.min(1, log2(members.length) / log2(120)),
+            0.35 + 0.20 * share + 0.10 * Math.min(1, log2(members.length) / log2(CFG.SOURCE_LANE_DEPTH.countSaturation)),
           ),                                                          // ceiling 0.65
           attentionValue: 0,
           componentScores: { count: members.length, share },
@@ -756,7 +847,7 @@ const genreGap: GeneratorSpec = {
   run: (index) => {
     const out: Candidate[] = [];
     for (const w of index.worlds.values()) {
-      if (w.gap.length < 100) continue;
+      if (w.gap.length < CFG.GENRE_GAP.minGap) continue;
       assertMissing(index, w.gap, "GENRE_GAP");
       const expression = `(F_all ∩ G_${w.world}) − U`;
       const set: DiscoverySet = {
@@ -772,7 +863,7 @@ const genreGap: GeneratorSpec = {
         generator: "GENRE_GAP", discoverySetId: set.id, discoveryExpression: expression,
         evidence: [{ kind: "setCardinality", setRef: { kind: "genre", genre: w.world }, value: w.gap.length }],
         reasonCodes: [`GAP=${w.gap.length}`],
-        evidenceStrength: clamp01(0.35 + 0.2 * Math.min(1, log2(w.gap.length) / 13)),
+        evidenceStrength: clamp01(0.35 + 0.2 * Math.min(1, log2(w.gap.length) / CFG.GENRE_GAP.magnitudeSaturation)),
         attentionValue: 0,
         componentScores: { gapSize: w.gap.length },
         deliverableCount: w.gap.length,
@@ -785,7 +876,7 @@ const genreGap: GeneratorSpec = {
 };
 
 export const GENERATORS: GeneratorSpec[] = [
-  unanimousMiss, unanimousSet, supermajorityMiss, pairConsensus, multiIntersectionSet,
+  unanimousMiss, unanimousSet, supermajorityMiss, majorityMiss, multiSourceSet,
   albumSoleGapTrue, albumNearCompleteTrue,
   albumSoleGap, albumResidue, artistSoleGap, artistResidue, albumAsUnit, artistAbsentInLane,
   subgenreVoid, missingChild, sourceLaneDepth, genreGap,

@@ -1,3 +1,4 @@
+import { APERTURE } from "./config";
 import { UNKNOWN_LANE, type DiscoveryIndex } from "./sets";
 import {
   CARD_TYPE_OF, SONG_SET_MAX, SONG_SET_MIN,
@@ -22,10 +23,10 @@ import {
  */
 
 /** A dominant entity has to actually dominate, not merely lead. */
-const DOMINANT_SHARE = 0.6;
-const DOMINANT_MIN_ALBUM = 4;
-const DOMINANT_MIN_ARTIST = 4;
-const DOMINANT_MIN_LANE = 8;
+const DOMINANT_SHARE = APERTURE.dominantShare;
+const DOMINANT_MIN_ALBUM = APERTURE.minAlbumTracks;
+const DOMINANT_MIN_ARTIST = APERTURE.minArtistTracks;
+const DOMINANT_MIN_LANE = APERTURE.minLaneTracks;
 
 export interface ApertureResult {
   cardType: CardSubjectType | null;

@@ -1,3 +1,4 @@
+import { MIN_ANCHOR_LIBRARY } from "./config";
 import type { EngineInput, PersonRow, SetRef, TrackRow } from "./types";
 
 /**
@@ -11,9 +12,6 @@ import type { EngineInput, PersonRow, SetRef, TrackRow } from "./types";
 
 /** Subgenre bucket the classifier uses when it could not decide. Not a lane. */
 export const UNKNOWN_LANE = "unknown";
-
-/** A source needs this many tracks before it can anchor a claim on its own. */
-export const MIN_ANCHOR_LIBRARY = 300;
 
 export interface TrackMeta {
   spotifyId: string;
@@ -72,6 +70,37 @@ export interface AuthoritativeAlbum {
   inconsistentBecause: string | null;
 }
 
+/**
+ * How many sources could meaningfully have contributed evidence here.
+ *
+ * Coverage is only interpretable against the right denominator. "Four sources
+ * have surf rock" means one thing out of five people and another out of five
+ * hundred — but dividing by the whole cohort is wrong too, because most of a
+ * large cohort was never in a position to contribute: a source with no rock at
+ * all is not a source that declined to hold surf rock.
+ *
+ * So a contextual claim divides by the sources with material in the
+ * surrounding neighbourhood — the parent genre for a lane, the lane for an
+ * artist. This is set membership, not eligibility inferred from anyone's
+ * taste. Track-level consensus is different and deliberately divides by the
+ * whole source universe: "everyone in your circle has this" is a claim about
+ * the circle, not about a corner of it.
+ */
+export interface Coverage {
+  holders: number;
+  eligibleSourceCount: number;
+  /** holders / eligibleSourceCount, or 0 when nothing is eligible. */
+  sourceCoverage: number;
+}
+
+export function coverageOf(holders: number, eligibleSourceCount: number): Coverage {
+  return {
+    holders,
+    eligibleSourceCount,
+    sourceCoverage: eligibleSourceCount > 0 ? holders / eligibleSourceCount : 0,
+  };
+}
+
 export interface DiscoveryIndex {
   viewerId: string;
   viewer: PersonRow;
@@ -98,6 +127,13 @@ export interface DiscoveryIndex {
   authAlbums: Map<string, AuthoritativeAlbum>;
   /** Title-keys of observed albums fully covered by an authoritative record. */
   authCoveredTitleKeys: Set<string>;
+
+  /** Sources with any material in a genre. The denominator for lane claims. */
+  sourcesInWorld: Map<string, Set<string>>;
+  /** Sources with any material in a subgenre. The denominator for artist claims. */
+  sourcesInLane: Map<string, Set<string>>;
+  /** The whole source universe — the denominator for track-level consensus. */
+  eligibleSourceUniverse: number;
 }
 
 const albumKey = (artist: string, album: string) => `${artist}␟${album}`;
@@ -178,6 +214,21 @@ export function buildIndex(input: EngineInput): DiscoveryIndex {
   for (const lane of lanes.values()) {
     lane.viewerPresent = viewerLanes.has(lane.subgenre);
     lane.gap = [...lane.friendAll].filter((id) => !U.has(id));
+  }
+
+  // ── Contextual source universes ───────────────────────────────────────────
+  const sourcesInWorld = new Map<string, Set<string>>();
+  const sourcesInLane = new Map<string, Set<string>>();
+  for (const t of tracks) {
+    if (t.userId === viewerId) continue;
+    let w = sourcesInWorld.get(t.blueprintWorld);
+    if (!w) { w = new Set(); sourcesInWorld.set(t.blueprintWorld, w); }
+    w.add(t.userId);
+    const sub = (t.blueprintSubgenre ?? "").trim();
+    if (!sub || sub === UNKNOWN_LANE) continue;
+    let l = sourcesInLane.get(sub);
+    if (!l) { l = new Set(); sourcesInLane.set(sub, l); }
+    l.add(t.userId);
   }
 
   // ── Worlds and their named children ───────────────────────────────────────
@@ -320,6 +371,7 @@ export function buildIndex(input: EngineInput): DiscoveryIndex {
     U, byFriend, D, DSet, holders,
     meta, lanes, worlds, albums, artists,
     authAlbums, authCoveredTitleKeys,
+    sourcesInWorld, sourcesInLane, eligibleSourceUniverse: friends.length,
   };
 }
 

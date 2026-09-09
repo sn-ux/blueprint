@@ -1,3 +1,4 @@
+import * as CFG from "./config";
 import type { DiscoveryIndex } from "./sets";
 import type {
   Candidate, CaptionClaim, ClaimType, Evidence, StructuredProposition,
@@ -24,7 +25,7 @@ import type {
 // ── attentionValue ──────────────────────────────────────────────────────────
 
 /** Base by claim type: does knowing this make you want to hear the thing. */
-const ATTENTION_BASE: Record<ClaimType, number> = {
+export const ATTENTION_BASE: Record<ClaimType, number> = {
   SOLE_GAP_TRUE:        0.75,   // exact, complete, and one tap from resolved
   ALL_SOURCES_HAVE:     0.75,   // being the sole exception is a position, not a statistic
   ALL_SOURCES_HAVE_SET: 0.60,
@@ -42,21 +43,21 @@ const ATTENTION_BASE: Record<ClaimType, number> = {
   LANE_GAP:             0.25,   // genre magnitude — fails the gate, correctly
 };
 
-export const ATTENTION_FLOOR = 0.4;
+export const ATTENTION_FLOOR = CFG.ATTENTION_FLOOR;
 
 export function attentionValue(claimType: ClaimType, c: Candidate): { value: number; parts: Record<string, number> } {
   const base = ATTENTION_BASE[claimType] ?? 0.4;
   const parts: Record<string, number> = { base };
 
   // A named person attached to the fact.
-  if (c.sourceFriendNames.length > 0) parts.namedSource = 0.15;
+  if (c.sourceFriendNames.length > 0) parts.namedSource = CFG.ATTENTION_MODIFIERS.namedSource;
   // A single track can be played right now; a set has to be browsed.
-  if (c.subject.type === "Song") parts.actionable = 0.10;
+  if (c.subject.type === "Song") parts.actionable = CFG.ATTENTION_MODIFIERS.actionableSingleTrack;
   // Magnitude and rank facts describe the library, not the music.
-  if (claimType === "LANE_GAP") parts.magnitudeOnly = -0.25;
+  if (claimType === "LANE_GAP") parts.magnitudeOnly = CFG.ATTENTION_MODIFIERS.magnitudeOnly;
   // A set too large to act on.
   const size = c.componentScores.gapSize ?? c.componentScores.size ?? c.componentScores.count ?? 0;
-  if (size > 500) parts.unactionableSize = -0.15;
+  if (size > CFG.ATTENTION_MODIFIERS.unactionableAbove) parts.unactionableSize = CFG.ATTENTION_MODIFIERS.unactionableSize;
 
   const value = Math.max(0, Math.min(1, Object.values(parts).reduce((a, b) => a + b, 0)));
   return { value, parts };
@@ -85,7 +86,7 @@ const AUTHORITATIVE_CLAIMS = new Set<ClaimType>(["SOLE_GAP_TRUE", "RESIDUE_TRUE"
 
 /** Confidence: 1.0 for pure membership facts, hedged where the catalogue is only observed. */
 function confidenceOf(claimType: ClaimType): number {
-  if (claimType === "SOLE_GAP_OBSERVED" || claimType === "RESIDUE_OBSERVED") return 0.7;
+  if (claimType === "SOLE_GAP_OBSERVED" || claimType === "RESIDUE_OBSERVED") return CFG.OBSERVED_CATALOG_CONFIDENCE;
   return 1.0;
 }
 
@@ -351,7 +352,7 @@ function pickTemplate(claimType: ClaimType, seed: string): Template | null {
   return family[h % family.length];
 }
 
-export const CLAIM_FLOOR = 0.35;
+export const CLAIM_FLOOR = CFG.CLAIM_FLOOR;
 
 /**
  * How many tracks a proposition promises the page will contain.
@@ -405,11 +406,11 @@ export function buildClaims(index: DiscoveryIndex, c: Candidate): CaptionClaim[]
     const confidence = confidenceOf(p.type);
 
     const score =
-      0.30 * exceptionalness +
-      0.25 * specificity +
-      0.15 * socialMeaning +
-      0.15 * simplicity +
-      0.15 * confidence;
+      CFG.CLAIM_WEIGHTS.exceptionalness * exceptionalness +
+      CFG.CLAIM_WEIGHTS.specificity * specificity +
+      CFG.CLAIM_WEIGHTS.socialMeaning * socialMeaning +
+      CFG.CLAIM_WEIGHTS.simplicity * simplicity +
+      CFG.CLAIM_WEIGHTS.confidence * confidence;
 
     const evidence: Evidence[] = c.evidence;
     out.push({
