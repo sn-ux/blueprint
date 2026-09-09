@@ -57,7 +57,7 @@ export async function GET(
     .filter((id): id is string => !!id);
 
   // Map from spotifyId → deduped array of { id, name } for OTHER users
-  const socialUsersMap = new Map<string, { id: string; name: string | null }[]>();
+  const socialUsersMap = new Map<string, { id: string; name: string | null; image: string | null }[]>();
   if (spotifyIds.length > 0) {
     const otherTracks = await prisma.track.findMany({
       where: {
@@ -66,7 +66,7 @@ export async function GET(
       },
       select: {
         spotifyId: true,
-        user:      { select: { id: true, name: true } },
+        user:      { select: { id: true, name: true, image: true } },
       },
     });
     for (const ot of otherTracks) {

@@ -19,7 +19,7 @@ type RawTrack = {
   previewUrl:        string | null;
   spotifyId:         string;
   blueprintSubgenre: string;
-  user:              { id: string; name: string | null };
+  user:              { id: string; name: string | null; image: string | null };
 };
 
 export async function GET(
@@ -45,7 +45,7 @@ export async function GET(
       previewUrl:        true,
       spotifyId:         true,
       blueprintSubgenre: true,
-      user:              { select: { id: true, name: true } },
+      user:              { select: { id: true, name: true, image: true } },
     },
     orderBy: [{ artist: "asc" }, { name: "asc" }],
   });
@@ -61,7 +61,7 @@ export async function GET(
   // 2. deduped socialUsers list per spotifyId
 
   const repMap        = new Map<string, RawTrack>();
-  const socialUserMap = new Map<string, { id: string; name: string | null }[]>();
+  const socialUserMap = new Map<string, { id: string; name: string | null; image: string | null }[]>();
 
   for (const t of allTracks) {
     const existing = repMap.get(t.spotifyId);
