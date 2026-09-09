@@ -48,6 +48,18 @@ const D = {
   OUTSIDE_HELD_GENRE: 0.1,
 };
 
+/**
+ * How wide an aperture each card type is.
+ *
+ * Distance is not only about what the viewer holds; it is also about how much
+ * ground the card covers. A record is a specific thing to go and listen to. A
+ * whole genre is a region. Both can be well anchored, but the genre asks more
+ * of the reader, so it belongs further down the same widening.
+ */
+const WIDTH: Record<string, number> = {
+  ALBUM: 0, ARTIST: 0.05, SONG_SET: 0.12, SUBGENRE: 0.18, GENRE: 0.4,
+};
+
 export function bandOf(d: number): DistanceBand {
   if (d < CFG.FEED.distance.nearBelow) return "NEAR";
   if (d < CFG.FEED.distance.farAtOrAbove) return "MID";
@@ -76,7 +88,8 @@ function subjectOwned(index: DiscoveryIndex, c: Candidate): number {
  * is nearer than the same lane vouched for by friend activity alone.
  */
 export function distanceOf(index: DiscoveryIndex, c: Candidate): number {
-  if (subjectOwned(index, c) > 0) return D.INSIDE_SUBJECT;
+  const width = WIDTH[c.cardType ?? ""] ?? 0;
+  if (subjectOwned(index, c) > 0) return D.INSIDE_SUBJECT + width;
 
   const lane = c.subgenre;
   const world = c.genre;
@@ -110,7 +123,7 @@ export function distanceOf(index: DiscoveryIndex, c: Candidate): number {
     base -= CFG.FEED.distance.bridgeCredit * strength;
   }
 
-  return Math.max(0, Math.min(1, base));
+  return Math.max(0, Math.min(1, base + (WIDTH[c.cardType ?? ""] ?? 0)));
 }
 
 /**

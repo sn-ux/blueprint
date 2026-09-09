@@ -80,6 +80,8 @@ export interface FeedCard {
    * subject, the counts or the sources.
    */
   detailExplanation: string;
+  /** How far this sits from what the viewer already holds. */
+  distanceBand: "NEAR" | "MID" | "FAR";
 
   /** Named sources behind the recommendation. Never a count. */
   sources: FeedPerson[];
@@ -220,6 +222,7 @@ export function toFeedCard(index: DiscoveryIndex, c: Candidate, previewLimit = 4
     } : null,
     recipientContext: contextOf(c),
     detailExplanation: c.winningClaim?.detailText ?? c.caption ?? "",
+    distanceBand: c.distanceBand ?? "NEAR",
     sources: c.sourceFriendIds.map((id) => personOf(index, id)),
     deliverableCount: all.length,
     previewTracks: all.slice(0, previewLimit),

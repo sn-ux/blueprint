@@ -142,12 +142,17 @@ export async function startSession(viewerId: string, persist = true): Promise<Se
   // Composition runs over lifecycle placement rather than raw ranking, and
   // draws each slot from a window a few pages deep so a later page stays
   // mixed instead of becoming the dregs of one sort.
+  // A seed per session. Two sessions over unchanged lifecycle state would
+  // otherwise compose identically, which is how a card ends up pinned to the
+  // same position across every refresh.
+  const seed = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   const ordered = compose(
     eligible.map((e) => e.candidate),
     Infinity,
     CFG.FEED.lambda,
     (c) => c.lifecycleScore ?? c.rankingScore ?? 0,
     CFG.LIFECYCLE.pageSize * CFG.LIFECYCLE.pageWindowMultiple,
+    seed,
   );
   ordered.forEach((c, i) => { c.feedRank = i + 1; });
 

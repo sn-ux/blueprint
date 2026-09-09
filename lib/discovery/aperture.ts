@@ -143,7 +143,12 @@ export function resolveAperture(index: DiscoveryIndex, c: Candidate): ApertureRe
   const viewerOccupies = reason.scope.entity === "SUBGENRE"
     ? (index.viewerByLane.get(reason.scope.key) ?? 0) > 0
     : (index.viewerByWorld.get(reason.scope.key) ?? 0) > 0;
-  if (viewerOccupies && share > APERTURE_MAX_SCOPE_SHARE) {
+  // ...and it is only meaningful for a rule that claims to narrow the pool.
+  // A rule whose point is *which* tracks these are rather than how few — every
+  // one by an artist already in the library — is a different proposition from
+  // the area card however much of the area happens to satisfy it.
+  const claimsToNarrow = rule.id === "MIN_INDEPENDENT_HOLDERS";
+  if (claimsToNarrow && viewerOccupies && share > APERTURE_MAX_SCOPE_SHARE) {
     return {
       cardType: null, concentration,
       note: `${rule.qualifying} of the scope's ${rule.scopeInventory} corroborated tracks clear the rule (${Math.round(share * 100)}%) — that is the area, not a selection within it`,

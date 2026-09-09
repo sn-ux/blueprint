@@ -85,6 +85,7 @@ const ruleHolds = (c) => {
   const r = c.groupingReason.rule;
   if (r.id === "MIN_INDEPENDENT_HOLDERS") return r.threshold > CFG_MIN_SOURCES_PER_TRACK;
   if (r.id === "MULTI_SOURCE_DEPTH") return r.threshold >= 2;
+  if (r.id === "OWNED_ARTISTS_ONLY") return r.threshold >= 3;
   return false;
 };
 check("every SONG_SET carries a selection rule, not just a scope",

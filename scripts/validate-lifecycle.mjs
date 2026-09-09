@@ -8,6 +8,7 @@
  */
 import { prisma } from "../lib/prisma.ts";
 import { LIFECYCLE } from "../lib/discovery/config.ts";
+import * as LIFECYCLE_CFG from "../lib/discovery/config.ts";
 import { recordEvents } from "../lib/recommendations/events.ts";
 import { cardDetail, feedPage, startSession } from "../lib/recommendations/session.ts";
 import { evaluate } from "../lib/discovery/lifecycle.ts";
@@ -290,13 +291,28 @@ try {
   const third = await startSession(userId, false);
   const r3 = new Map(third.stored.map((s, i) => [s.card.id, i + 1]));
   const median = (xs) => xs.slice().sort((a, b) => a - b)[Math.floor(xs.length / 2)] ?? Infinity;
-  const unseenRanks = third.stored.filter((s) => s.lifecycle.status === "UNSEEN").map((s) => r3.get(s.card.id));
-  const seenRanks = third.stored.filter((s) => s.lifecycle.status !== "UNSEEN" && s.card.id !== changedKey)
+  // Compared within one distance band. The composer now also widens the
+  // aperture with position, and the cards that were shown first are the ones
+  // that ranked best — which correlates with being near. Mixing bands would
+  // measure that correlation rather than the lifecycle penalty.
+  const bandOfCard = new Map(third.stored.map((s) => [s.card.id, s.card.distanceBand]));
+  const seenIds = new Set(third.stored.filter((s) => s.lifecycle.status !== "UNSEEN"
+    && s.card.id !== changedKey).map((s) => s.card.id));
+  const bands = [...new Set([...seenIds].map((k) => bandOfCard.get(k)))];
+  const unseenRanks = third.stored
+    .filter((s) => s.lifecycle.status === "UNSEEN" && bands.includes(s.card.distanceBand))
     .map((s) => r3.get(s.card.id));
+  const seenRanks = [...seenIds].map((k) => r3.get(k));
   console.log(`  rests expired: ${third.stored.length} eligible`);
   console.log(`    median rank — unseen ${median(unseenRanks)} (${unseenRanks.length} cards), previously seen ${median(seenRanks)} (${seenRanks.length} cards)`);
-  check("once rested, cards already shown fall behind unseen ones",
-    median(unseenRanks) < median(seenRanks));
+  check("once rested, cards already shown fall behind comparable unseen ones",
+    median(unseenRanks) < median(seenRanks),
+    `bands ${bands.join("/")}`);
+  // Session shuffling must never outrank the lifecycle penalty it sits beside.
+  check("session shuffling stays smaller than a single impression's penalty",
+    LIFECYCLE_CFG.FEED.jitterBand
+      < LIFECYCLE.impressionPenalty + LIFECYCLE.recentImpressionPenalty,
+    `jitter ${LIFECYCLE_CFG.FEED.jitterBand} vs penalty ${(LIFECYCLE.impressionPenalty + LIFECYCLE.recentImpressionPenalty).toFixed(2)}`);
   check("nothing that was merely seen was removed from the universe",
     seenRanks.length + 2 === 20 || seenRanks.length >= 17,
     `${seenRanks.length} of the 20 shown are back in the stream`);

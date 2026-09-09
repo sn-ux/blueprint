@@ -128,6 +128,26 @@ export type StructuredProposition =
       bridgeArtists: string[]; ownedByBridge: number;
       deliverable: number; names: string[];
     }
+  /**
+   * The record that is the hole in a catalogue otherwise covered.
+   *
+   * Stronger than "an album you don't have by an artist you do", because it
+   * says how much of the rest the viewer already holds.
+   */
+  | {
+      type: "ALBUM_CATALOG_GAP"; album: string; artist: string;
+      ownedByArtist: number; albumsHeld: number; deliverable: number; names: string[];
+    }
+  /** A genre they have barely entered, where the sources have not. */
+  | {
+      type: "GENRE_THIN"; genre: string; owned: number;
+      deliverable: number; laneCount: number; names: string[];
+    }
+  /** A dozen tracks by artists already in the library, inside a known lane. */
+  | {
+      type: "OWNED_ARTIST_SET"; scope: string; artists: string[];
+      ownedByThem: number; deliverable: number; names: string[];
+    }
   /** New territory delivered as a set, vouched for by depth rather than agreement. */
   | {
       type: "NEW_TERRITORY"; scope: string; scopeIsGenre: boolean;
@@ -284,7 +304,9 @@ export const SONG_SET_MAX = 15;
 export type SelectionRuleId =
   | "MIN_INDEPENDENT_HOLDERS"
   /** Several sources each independently hold at least a set's worth here. */
-  | "MULTI_SOURCE_DEPTH";
+  | "MULTI_SOURCE_DEPTH"
+  /** Every track is by an artist already in the viewer's library. */
+  | "OWNED_ARTISTS_ONLY";
 
 export type ScopeEntity = "ALBUM" | "ARTIST" | "SUBGENRE" | "GENRE";
 
@@ -337,7 +359,13 @@ export type GeneratorId =
    * emit when the stack is genuinely stronger than its parts.
    */
   | "BRIDGED_LANE"
-  | "NEW_TERRITORY_SET";
+  | "NEW_TERRITORY_SET"
+  /** A record that is the hole in a catalogue the viewer otherwise covers. */
+  | "ALBUM_CATALOG_GAP"
+  /** A whole genre they are barely into, where the sources are not. */
+  | "GENRE_GAP"
+  /** A dozen tracks by artists they already hold, inside a lane they occupy. */
+  | "BRIDGE_SET";
 
 export interface Candidate {
   id: string;

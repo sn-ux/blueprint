@@ -735,10 +735,194 @@ const newTerritorySet: GeneratorSpec = {
   },
 };
 
+/**
+ * A record that is the hole in a catalogue otherwise covered.
+ *
+ * "An album you don't have by an artist you do" is a fact about one record.
+ * How much of the rest of that catalogue is already in the library is what
+ * turns it into a gap worth closing, and it is the stacked version of the
+ * same missed material.
+ */
+const albumCatalogGap: GeneratorSpec = {
+  id: "ALBUM_CATALOG_GAP",
+  mechanism: "A record the viewer has none of, by an artist whose other albums they hold.",
+  run: (index) => {
+    const out: Candidate[] = [];
+    // How many distinct albums of each artist the viewer already holds part of.
+    const heldAlbumsByArtist = new Map<string, Set<string>>();
+    for (const a of index.authAlbums.values()) {
+      if ((index.viewerByAlbumId.get(a.albumId) ?? 0) === 0) continue;
+      const set = heldAlbumsByArtist.get(a.artist) ?? new Set<string>();
+      set.add(a.albumId);
+      heldAlbumsByArtist.set(a.artist, set);
+    }
+
+    for (const a of index.authAlbums.values()) {
+      if (!a.consistent || a.ownedPositions !== 0) continue;
+      const held = heldAlbumsByArtist.get(a.artist)?.size ?? 0;
+      if (held < CFG.ALBUM_CATALOG_GAP.minAlbumsHeld) continue;
+      const ownedByArtist = index.viewerByArtist.get(a.artist) ?? 0;
+      const members = corroborated(index, a.missing);
+      if (members.length < CFG.ALBUM_CATALOG_GAP.minDeliverable) continue;
+      const bounded = members.slice(0, CFG.DELIVERABLE_MAX);
+
+      out.push(build(index, {
+        generator: "ALBUM_CATALOG_GAP",
+        subject: { type: "Album", artist: a.artist, album: a.title },
+        subjectKey: `Album:${a.albumId}`,
+        groupingReason: { kind: "AREA", entity: "ALBUM", key: a.albumId },
+        setType: "albumUnit", setKey: `catalog:${a.albumId}`,
+        expression: `AL_${a.albumId} ∩ F_all, AL ∩ U = ∅, |{albums of ${a.artist} ∩ U}| = ${held}`,
+        members: bounded,
+        anchor: anchorOf("ARTIST_PRESENT", a.artist, a.artist, ownedByArtist),
+        evidenceStrength: clamp01(
+          0.58
+          + 0.18 * Math.min(1, log2(held) / log2(6))
+          + 0.14 * Math.min(1, ownedByArtist / CFG.ARTIST_GAP.ownedSaturation)
+          + 0.08 * Math.min(1, bounded.length / Math.max(1, a.totalTracks)),
+        ),
+        componentScores: { albumsHeld: held, ownedByArtist, deliverable: bounded.length },
+        reasonCodes: ["ANCHOR=ARTIST_PRESENT", "STACKED", `ALBUMS_HELD=${held}`, `ALBUM_ID=${a.albumId}`],
+        genre: null, subgenre: null, artist: a.artist, album: a.title, albumId: a.albumId,
+      }));
+    }
+    return out;
+  },
+};
+
+/**
+ * A whole genre the viewer is on the edge of.
+ *
+ * Not a lane and not a void: a region they have a foothold in, small against
+ * everything the sources keep there. It is the one aperture wide enough to say
+ * "this entire area is mostly absent from your library", which no subgenre
+ * card can say.
+ */
+const genreGap: GeneratorSpec = {
+  id: "GENRE_GAP",
+  mechanism: "A genre the viewer holds a little of, where the sources hold a great deal.",
+  run: (index) => {
+    const out: Candidate[] = [];
+    for (const w of index.worlds.values()) {
+      const owned = index.viewerByWorld.get(w.world) ?? 0;
+      if (owned < CFG.GENRE_GAP.minOwned) continue;
+      const members = corroborated(index, w.gap);
+      if (members.length < CFG.GENRE_GAP.minDeliverable) continue;
+      // A foothold, not a home: if they already hold much of what is available
+      // here, the genre is theirs and this is not the card for it.
+      if (owned / (owned + w.gap.length) > CFG.GENRE_GAP.maxOwnedShare) continue;
+      const lanes = new Set(w.gap.map((id) => index.meta.get(id)?.subgenre)
+        .filter((l) => l && l !== UNKNOWN_LANE));
+      if (lanes.size < CFG.GENRE_GAP.minLanes) continue;
+
+      const bounded = members.slice(0, CFG.DELIVERABLE_MAX);
+      out.push(build(index, {
+        generator: "GENRE_GAP",
+        subject: { type: "Genre", genre: w.world },
+        subjectKey: `Genre:${w.world}`,
+        groupingReason: { kind: "AREA", entity: "GENRE", key: w.world },
+        setType: "genreGap", setKey: `genre:${w.world}`,
+        expression: `(F_all ∩ G_${w.world}) − U, |G ∩ U| = ${owned}, lanes = ${lanes.size}`,
+        members: bounded,
+        anchor: anchorOf("PARENT_GENRE_PRESENT", w.world, w.world, owned),
+        evidenceStrength: clamp01(
+          0.45
+          + 0.20 * Math.min(1, log2(w.gap.length) / log2(CFG.GENRE_GAP.magnitudeSaturation))
+          + 0.15 * Math.min(1, lanes.size / 20),
+        ),
+        componentScores: {
+          ownedInGenre: owned, genreGap: w.gap.length, laneCount: lanes.size,
+          deliverable: bounded.length,
+        },
+        reasonCodes: ["ANCHOR=PARENT_GENRE_PRESENT", `LANES=${lanes.size}`, `GAP=${w.gap.length}`],
+        genre: w.world, subgenre: null, artist: null, album: null,
+      }));
+    }
+    return out;
+  },
+};
+
+/**
+ * A dozen tracks, every one by an artist already in the library.
+ *
+ * A cross-artist way into a lane the viewer occupies: not the lane's whole
+ * inventory and not one artist's catalogue, but the material they are missing
+ * from people they already keep. The selection rule is the strictest one
+ * available — every track is by a named artist in their own library.
+ */
+const bridgeSet: GeneratorSpec = {
+  id: "BRIDGE_SET",
+  mechanism: "Missed tracks inside a lane the viewer occupies, all by artists they already hold.",
+  run: (index) => {
+    const out: Candidate[] = [];
+    for (const lane of index.lanes.values()) {
+      if (lane.subgenre === UNKNOWN_LANE) continue;
+      const owned = index.viewerByLane.get(lane.subgenre) ?? 0;
+      if (owned < CFG.LANE.minOwnedForPresent) continue;
+
+      const bridge = bridgeOf(index, lane.gap);
+      if (bridge.artists.length < CFG.BRIDGE_SET.minArtists) continue;
+      if (bridge.totalOwned < CFG.BRIDGE_SET.minOwnedByThem) continue;
+      if (bridge.tracks.length < SONG_SET_MIN) continue;
+
+      const members = bridge.tracks.slice().sort(byStrength(index)).slice(0, SONG_SET_MAX);
+      if (sourcesOf(index, members).length < CFG.MIN_SOURCES_PER_CARD) continue;
+      const spread = new Set(members.map((id) => index.meta.get(id)?.artist));
+      if (spread.size < CFG.BRIDGE_SET.minArtists) continue;
+
+      const setKey = `owned-artists:${lane.subgenre}`;
+      const [topArtist, topOwned] = bridge.ranked[0];
+      out.push(build(index, {
+        generator: "BRIDGE_SET",
+        subject: {
+          type: "Songs",
+          title: `${label(lane.subgenre)} — From Artists You Have`,
+          scope: lane.subgenre, discoverySetId: "",
+        },
+        subjectKey: `Songs:${setKey}`,
+        groupingReason: {
+          kind: "SELECTED",
+          scope: { entity: "SUBGENRE", key: lane.subgenre },
+          rule: {
+            id: "OWNED_ARTISTS_ONLY",
+            threshold: spread.size,
+            qualifying: bridge.tracks.length,
+            scopeInventory: lane.gap.length,
+            description: `all by artists already in your library`,
+          },
+          key: setKey,
+        },
+        setType: "kOfN", setKey,
+        expression: `{ t ∈ (F_all ∩ S_${lane.subgenre}) − U : artist(t) ∈ artists(U) }`,
+        members,
+        anchor: anchorOf("ARTIST_PRESENT", topArtist, topArtist, topOwned),
+        evidenceStrength: clamp01(
+          0.55
+          + 0.20 * Math.min(1, log2(bridge.totalOwned) / log2(CFG.ARTIST_GAP.ownedSaturation))
+          + 0.15 * Math.min(1, spread.size / 6)
+          + 0.08 * Math.min(1, members.length / SONG_SET_MAX),
+        ),
+        componentScores: {
+          bridgeArtists: spread.size, ownedByBridge: bridge.totalOwned,
+          deliverable: members.length, ownedInLane: owned,
+        },
+        reasonCodes: [
+          "ANCHOR=ARTIST_PRESENT", "STACKED", "OWNED_ARTISTS_ONLY",
+          `ARTISTS=${spread.size}`, `OWNED_BY_THEM=${bridge.totalOwned}`,
+        ],
+        bridgeArtists: [...spread].filter((a): a is string => !!a),
+        genre: lane.world, subgenre: lane.subgenre, artist: null, album: null,
+      }));
+    }
+    return out;
+  },
+};
+
 export const GENERATORS: GeneratorSpec[] = [
   albumGapTrue, albumAsUnit,
   artistGap, artistAbsentInLane,
   subgenreGap, missingChild,
   consensusSet,
   bridgedLane, newTerritorySet,
+  albumCatalogGap, genreGap, bridgeSet,
 ];

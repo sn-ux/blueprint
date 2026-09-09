@@ -36,6 +36,9 @@ export const ATTENTION_BASE: Record<ClaimType, number> = {
   // of stacking: they are worth more attention than either half alone.
   LANE_VIA_BRIDGE: 0.78,
   NEW_TERRITORY: 0.72,
+  ALBUM_CATALOG_GAP: 0.82,
+  OWNED_ARTIST_SET: 0.76,
+  GENRE_THIN: 0.55,
   ALBUM_VIA_ARTIST: 0.60,
   ARTIST_VIA_LANE: 0.55,
   LANE_VIA_PARENT: 0.55,
@@ -101,6 +104,23 @@ export function enumerateClaims(_index: DiscoveryIndex, c: Candidate): Structure
       return [{
         type: "LANE_VIA_PARENT", parent: a.entityName, lane: c.subgenre ?? "",
         ownedInParent: a.ownedCount, deliverable: n, names,
+      }];
+    case "ALBUM_CATALOG_GAP":
+      return [{
+        type: "ALBUM_CATALOG_GAP", album: c.album ?? "", artist: c.artist ?? "",
+        ownedByArtist: a.ownedCount, albumsHeld: c.componentScores.albumsHeld ?? 0,
+        deliverable: n, names,
+      }];
+    case "GENRE_GAP":
+      return [{
+        type: "GENRE_THIN", genre: c.genre ?? "", owned: a.ownedCount,
+        deliverable: n, laneCount: c.componentScores.laneCount ?? 0, names,
+      }];
+    case "BRIDGE_SET":
+      return [{
+        type: "OWNED_ARTIST_SET", scope: c.subgenre ?? "",
+        artists: (c.bridgeArtists ?? []).slice(0, 3),
+        ownedByThem: c.componentScores.ownedByBridge ?? 0, deliverable: n, names,
       }];
     case "BRIDGED_LANE": {
       const g = c.componentScores;
@@ -271,7 +291,7 @@ const TEMPLATES: Template[] = [
     id: "artist-via-lane-1", claimType: "ARTIST_VIA_LANE",
     render: (p) => {
       const q = p as P<"ARTIST_VIA_LANE">;
-      return `You don't have any tracks by them. ${friendsHave(q.names)} ${q.deliverable}.`;
+      return `Nothing by them in your library, though you have ${num(q.ownedInLane)} ${label(q.lane)} tracks. ${friendsHave(q.names)} ${q.deliverable}.`;
     },
     detail: (p) => {
       const q = p as P<"ARTIST_VIA_LANE">;
@@ -299,7 +319,7 @@ const TEMPLATES: Template[] = [
     id: "lane-via-parent-1", claimType: "LANE_VIA_PARENT",
     render: (p) => {
       const q = p as P<"LANE_VIA_PARENT">;
-      return `You don't have any ${label(q.lane)} saved. ${friendsHave(q.names)} ${q.deliverable} tracks there.`;
+      return `${listOf(q.names.slice(0, 3))} all save ${label(q.lane)} — ${q.deliverable} tracks you don't have — and it is the one corner of your ${num(q.ownedInParent)} ${label(q.parent)} tracks you have never entered.`;
     },
     detail: (p) => {
       const q = p as P<"LANE_VIA_PARENT">;
@@ -364,6 +384,52 @@ const TEMPLATES: Template[] = [
         + ` The ${q.deliverable} most widely kept are shown below.`;
     },
   },
+
+  // The record that is the hole in a catalogue otherwise covered. How much of
+  // the rest is already held is what makes this one worth closing.
+  {
+    id: "album-catalog-gap-1", claimType: "ALBUM_CATALOG_GAP",
+    render: (p) => {
+      const q = p as P<"ALBUM_CATALOG_GAP">;
+      return `You have ${num(q.ownedByArtist)} ${q.artist} tracks across ${spell(q.albumsHeld)} of their records — and nothing from this one. ${friendsHave(q.names)} ${q.deliverable}.`;
+    },
+    detail: (p) => {
+      const q = p as P<"ALBUM_CATALOG_GAP">;
+      return `Your library covers ${spell(q.albumsHeld)} of ${q.artist}'s records, ${num(q.ownedByArtist)} tracks in all, but nothing at all from ${q.album}.`
+        + ` ${friendsHave(q.names)} saved ${q.deliverable} tracks from it that aren't in yours.`
+        + ` Those ${q.deliverable} tracks are shown below.`;
+    },
+  },
+
+  // A genre they are on the edge of rather than inside.
+  {
+    id: "genre-thin-1", claimType: "GENRE_THIN",
+    render: (p) => {
+      const q = p as P<"GENRE_THIN">;
+      return `You have ${num(q.owned)} tracks here against ${spell(q.laneCount)} distinct styles your friends keep. ${friendsHave(q.names)} ${q.deliverable} of the most widely held.`;
+    },
+    detail: (p) => {
+      const q = p as P<"GENRE_THIN">;
+      return `${label(q.genre)} is a genre you have a foothold in — ${num(q.owned)} tracks — while your friends keep material across ${spell(q.laneCount)} distinct styles inside it that your library has none of.`
+        + ` The ${q.deliverable} held by more than one of them are shown below.`;
+    },
+  },
+
+  // Every track by an artist already in the library: the strictest selection
+  // rule available, and the easiest one to act on.
+  {
+    id: "owned-artist-set-1", claimType: "OWNED_ARTIST_SET",
+    render: (p) => {
+      const q = p as P<"OWNED_ARTIST_SET">;
+      return `Every one of these ${q.deliverable} is by an artist already in your library — ${listOf(q.artists)} among them — and none are yours yet.`;
+    },
+    detail: (p) => {
+      const q = p as P<"OWNED_ARTIST_SET">;
+      return `You already hold ${num(q.ownedByThem)} tracks by the artists behind this set, ${listOf(q.artists)} among them.`
+        + ` These ${q.deliverable} ${label(q.scope)} tracks are theirs too, kept by your friends and missing from your library.`
+        + ` All ${q.deliverable} are shown below.`;
+    },
+  },
 ];
 
 /** Deterministic per candidate, so a card always reads the same way. */
@@ -393,6 +459,9 @@ function exceptionalnessOf(p: StructuredProposition): number {
     case "ARTIST_MORE": return 0.7;
     case "SET_CONSENSUS": return 0.65;
     case "LANE_VIA_BRIDGE": return 0.8;
+    case "ALBUM_CATALOG_GAP": return 0.85;
+    case "OWNED_ARTIST_SET": return 0.78;
+    case "GENRE_THIN": return 0.5;
     case "NEW_TERRITORY": return 0.7;
     case "LANE_VIA_PARENT": return 0.6;
     case "ALBUM_VIA_ARTIST": return 0.6;

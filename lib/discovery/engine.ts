@@ -21,6 +21,8 @@ export interface EngineOptions {
   feedSize?: number;
   /** Diversification strength. */
   lambda?: number;
+  /** Per-session seed for tie-breaking between near-equal cards. */
+  seed?: string;
 }
 
 export interface EngineResult {
@@ -334,7 +336,7 @@ export function runEngine(input: EngineInput, opts: EngineOptions = {}): EngineR
   }
 
   // ── G · feed composition ──────────────────────────────────────────────────
-  const feed = compose(kept, feedSize, lambda);
+  const feed = compose(kept, feedSize, lambda, undefined, undefined, opts.seed);
   feed.forEach((c, i) => { c.feedRank = i + 1; });
 
   return { index, all: kept, feed, rejected, byGenerator, redundancy: pairs, coexisting };
@@ -387,13 +389,37 @@ const relaxed = (c: Caps, by: number): Caps => ({
  * `score` selects the quantity being composed over: the recommendation's own
  * ranking score for a one-shot run, its lifecycle placement for a real feed.
  */
+/**
+ * A stable pseudo-random in [0,1) from a seed and a key.
+ *
+ * Stable within a session and different across sessions, so an order can be
+ * reproduced for pagination while a new session genuinely reshuffles.
+ */
+function jitterFor(seed: string, key: string): number {
+  let h = 2166136261;
+  const s = `${seed}␟${key}`;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h / 4294967296;
+}
+
 export function compose(
   pool: Candidate[], size: number, lambda: number,
   score: (c: Candidate) => number = (c) => c.rankingScore ?? 0,
   windowSize = Infinity,
+  seed = "",
 ): Candidate[] {
   const chosen: Candidate[] = [];
-  const remaining = [...pool].sort((a, b) => score(b) - score(a));
+  // Cards within a band of each other are ordered by the session seed rather
+  // than by a fixed tie-break, so refreshing reshuffles near-equals without
+  // ever lifting a materially weaker card over a stronger one.
+  const jitter = (c: Candidate) => (seed
+    ? CFG.FEED.jitterBand * jitterFor(seed, c.recommendationKey ?? c.id)
+    : 0);
+  const withJitter = (c: Candidate) => score(c) + jitter(c);
+  const remaining = [...pool].sort((a, b) => withJitter(b) - withJitter(a));
 
   while (chosen.length < size && remaining.length > 0) {
     const recent = chosen.slice(-CFG.FEED.window);
@@ -462,7 +488,7 @@ export function compose(
         // top and not at all further down. Bounded, so an exceptional one
         // still wins an early slot on merit.
         const far = distancePenalty(c.discoveryDistance ?? 0, chosen.length);
-        const s2 = score(c) - lambda * sim - tier.penalty - far;
+        const s2 = withJitter(c) - lambda * sim - tier.penalty - far;
         if (s2 > bestScore) { bestScore = s2; picked = c; pickedIdx = j; pickedScore = s2; }
       }
       if (picked) break;

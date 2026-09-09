@@ -185,7 +185,40 @@ export const SOURCE_LANE_DEPTH = {
   countSaturation: 120,
 };
 
-export const GENRE_GAP = { minGap: 100, magnitudeSaturation: 13 };
+/**
+ * A whole genre the viewer has barely entered.
+ *
+ * The card exists when their foothold is small against what the sources keep
+ * there — a real region of music they are on the edge of rather than inside.
+ * Ratio rather than raw counts, so it means the same for a large library and
+ * a small one.
+ */
+export const GENRE_GAP = {
+  /** Corroborated tracks the genre must be able to hand over. */
+  minDeliverable: 8,
+  /** The viewer must hold at least this much to be on its edge rather than outside. */
+  minOwned: 1,
+  /** ...and no more than this share of what is available, or they are inside it. */
+  maxOwnedShare: 0.25,
+  /** Distinct lanes the gap must span, so it is a genre and not one lane. */
+  minLanes: 6,
+  magnitudeSaturation: 200,
+};
+
+/** A record that is the hole in a catalogue the viewer otherwise covers. */
+export const ALBUM_CATALOG_GAP = {
+  /** Other albums by the artist the viewer already holds something from. */
+  minAlbumsHeld: 2,
+  minDeliverable: 4,
+};
+
+/** A set drawn only from artists already in the viewer's library. */
+export const BRIDGE_SET = {
+  /** Distinct owned artists the set must span, so it is not one artist's card. */
+  minArtists: 3,
+  /** Combined tracks the viewer holds by them. */
+  minOwnedByThem: 10,
+};
 
 export const MULTI_SOURCE_SET = {
   /** Distinct sources that must share the group. */
@@ -397,6 +430,17 @@ export const LIFECYCLE = {
 // ── Feed composition ────────────────────────────────────────────────────────
 
 export const FEED = {
+  /**
+   * Session jitter.
+   *
+   * Composition is otherwise fully deterministic, so two sessions over
+   * unchanged lifecycle state produce the identical order — which is how a
+   * card with a comfortable margin ends up pinned to the same position across
+   * every refresh. A per-session seed spreads cards inside a narrow band so a
+   * pull genuinely reshuffles, while a card better than the band is wide still
+   * wins. Quality dominates; this only decides between near-equals.
+   */
+  jitterBand: 0.06,
   lambda: 0.35,
   window: 10,
   caps: { generator: 2, primarySource: 4, artist: 2, genre: 3, subgenre: 2, set: 2 },
@@ -412,7 +456,7 @@ export const FEED = {
    * end. Neither number bans anything from anywhere.
    */
   distance: {
-    weight: 0.35,
+    weight: 0.5,
     ramp: 60,
     nearBelow: 0.35,
     farAtOrAbove: 0.7,
