@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { loadCorpus } from "./corpus";
 import { label } from "./display";
 import { runEngine } from "./engine";
 import type { DiscoveryIndex } from "./sets";
@@ -237,21 +237,8 @@ export function toFeedCard(index: DiscoveryIndex, c: Candidate, previewLimit = 4
  * is no product boundary at any particular number.
  */
 export async function buildFeed(viewerId: string, limit = Infinity, depth = Infinity) {
-  const people = await prisma.user.findMany({
-    where: { midvaleHidden: false, tracks: { some: {} } },
-    select: { id: true, name: true, image: true },
-  });
+  const { people, tracks } = await loadCorpus();
   if (!people.some((p) => p.id === viewerId)) return null;
-
-  const tracks = await prisma.track.findMany({
-    where: { user: { midvaleHidden: false } },
-    select: {
-      userId: true, spotifyId: true, name: true, artist: true, album: true,
-      imageUrl: true, artistId: true, artistImageUrl: true,
-      blueprintWorld: true, blueprintSubgenre: true,
-      albumId: true, albumTotalTracks: true, trackNumber: true, discNumber: true, albumType: true,
-    },
-  });
 
   return runEngine({ viewerId, people, tracks }, { feedSize: limit, depth });
 }

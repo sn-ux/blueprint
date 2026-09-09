@@ -95,6 +95,13 @@ model Track {
   rawGenre             String
   blueprintWorld       String
   blueprintSubgenre    String
+  /**
+   * Touched by any write. The recommendation corpus is cached in process and
+   * revalidated against the maximum of these per user, which costs five rows
+   * instead of the whole table — so this is what makes an import or a backfill
+   * visible without reading everything to find out whether anything changed.
+   */
+  updatedAt            DateTime @default(now()) @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
