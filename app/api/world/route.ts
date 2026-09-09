@@ -1,27 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser } from "@/lib/current-user";
+import { resolveWorldUser, unauthenticated } from "@/lib/world-user";
 
 export async function GET(req: NextRequest) {
   const t0 = Date.now();
 
-  // Priority:
-  //  1. ?userId=<id>  — explicit userId (Midvale public view, no auth required)
-  //  2. Authenticated session  — user views their own world
-  //  3. Fallback — first user in DB who has imported tracks (unauthenticated homepage)
-  const { searchParams } = new URL(req.url);
-  const queryUserId = searchParams.get("userId");
-  const isPublicView = !!queryUserId;
+  // Either an explicitly named profile, or the authenticated caller's own
+  // library. Anything else is refused rather than answered with a stranger's.
+  const resolved = await resolveWorldUser(req);
+  if (!resolved) return unauthenticated();
 
-  let user;
-  if (queryUserId) {
-    user = await prisma.user.findUnique({ where: { id: queryUserId } });
-  } else {
-    const authed = await getCurrentUser();
-    user =
-      authed ??
-      (await prisma.user.findFirst({ where: { tracks: { some: {} } } }));
-  }
+  const isPublicView = resolved.kind === "public";
+  const user = resolved.user;
 
   if (!user) {
     return NextResponse.json({});
@@ -42,7 +32,7 @@ export async function GET(req: NextRequest) {
     Object.entries(worlds).sort((a, b) => b[1] - a[1])
   );
 
-  console.log(`[perf] /api/world (userId=${queryUserId ?? "session"}) → ${Object.keys(sortedWorlds).length} genres in ${Date.now() - t0}ms`);
+  console.log(`[perf] /api/world (${isPublicView ? `userId=${user.id}` : "session"}) → ${Object.keys(sortedWorlds).length} genres in ${Date.now() - t0}ms`);
 
   // Public Midvale views: allow short-lived CDN + client cache.
   // Own-world: no-store so auto-sync changes are always reflected.

@@ -3,13 +3,14 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/current-user";
 
 export async function GET() {
-  const authed = await getCurrentUser();
-  const user =
-    authed ??
-    (await prisma.user.findFirst({ where: { tracks: { some: {} } } }));
+  // Counts over the caller's own library. This route has no public form —
+  // nothing here names a profile — so without a credential there is no
+  // question to answer, and answering with somebody else's totals is the bug
+  // this replaces.
+  const user = await getCurrentUser();
 
   if (!user) {
-    return NextResponse.json({ artistCount: 0, subgenreCount: 0 });
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
   const [artistRows, subgenreRows] = await Promise.all([

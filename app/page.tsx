@@ -886,8 +886,11 @@ export default function LandingPage() {
 
     // 🔍 WORLD-TRACE
     console.log("[WORLD-TRACE] personal world fetch START — url:", worldUrl, "isMobile:", isMobileRef.current, "worldOwnerId:", worldOwnerId, "sessionStatus:", sessionStatus);
+    // A logged-out visitor has no personal world: /api/world answers 401
+    // rather than handing back whichever library came first. Its error body
+    // must not reach the counts, or "error" becomes a genre.
     fetch(worldUrl)
-      .then(r => r.json())
+      .then(r => (r.ok ? r.json() : {}))
       .then((d: Record<string, number>) => {
         const worldKey = Object.keys(d).find(k => k.toLowerCase().includes("world"));
         // 🔍 WORLD-TRACE

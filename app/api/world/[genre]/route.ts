@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser } from "@/lib/current-user";
+import { resolveWorldUser, unauthenticated } from "@/lib/world-user";
 
 export async function GET(
   req: NextRequest,
@@ -9,19 +9,15 @@ export async function GET(
   const t0 = Date.now();
 
   const { searchParams } = new URL(req.url);
-  const queryUserId      = searchParams.get("userId");
   const unheardForUserId = searchParams.get("unheardForUserId");
-  const isPublicView     = !!queryUserId;
 
-  let user;
-  if (queryUserId) {
-    user = await prisma.user.findUnique({ where: { id: queryUserId } });
-  } else {
-    const authed = await getCurrentUser();
-    user =
-      authed ??
-      (await prisma.user.findFirst({ where: { tracks: { some: {} } } }));
-  }
+  // Either an explicitly named profile, or the authenticated caller's own
+  // library. Anything else is refused rather than answered with a stranger's.
+  const resolved = await resolveWorldUser(req);
+  if (!resolved) return unauthenticated();
+
+  const isPublicView = resolved.kind === "public";
+  const user = resolved.user;
 
   const { genre } = await context.params;
   const blueprintWorld = decodeURIComponent(genre);
@@ -115,7 +111,7 @@ export async function GET(
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count);
 
-  console.log(`[perf] /api/world/${blueprintWorld} (userId=${queryUserId ?? "session"}) → ${tracks.length} tracks, ${subgenres.length} subgenres in ${Date.now() - t0}ms (db=${tDB - t0}ms, js=${Date.now() - tDB}ms)`);
+  console.log(`[perf] /api/world/${blueprintWorld} (${isPublicView ? `userId=${user.id}` : "session"}) → ${tracks.length} tracks, ${subgenres.length} subgenres in ${Date.now() - t0}ms (db=${tDB - t0}ms, js=${Date.now() - tDB}ms)`);
 
   // First track with social data for debug
   const firstSocial = tracksWithSocial.find(t => t.socialCount > 0);

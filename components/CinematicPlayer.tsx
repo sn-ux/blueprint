@@ -240,8 +240,11 @@ export default function CinematicPlayer({ mode = "investor" }: { mode?: string }
 
   // ── Fetch worlds (real data) — fall back to demo ───────────────────────────
   useEffect(() => {
+    // /api/world answers 401 to a caller with no session — it is one person's
+    // library, not public data. A logged-out visitor gets the demo world, so
+    // the response has to be checked before its body is read as counts.
     fetch("/api/world")
-      .then(r => r.json())
+      .then(r => (r.ok ? r.json() : null))
       .then(d => { setWorlds(d && Object.keys(d).length > 0 ? d : DEMO_WORLDS); })
       .catch(() => setWorlds(DEMO_WORLDS));
   }, []);
