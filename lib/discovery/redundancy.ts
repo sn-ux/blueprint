@@ -2,29 +2,28 @@ import { REDUNDANCY } from "./config";
 import type { Candidate, CardSubjectType } from "./types";
 
 /**
- * Cross-card redundancy — one fact, one card.
+ * Cross-card redundancy — one proposition, one card.
  *
- * The aperture stage stops a single candidate being shown at the wrong zoom
- * level. It cannot stop two different candidates describing the same discovery
- * material: an artist card and a lane card can hold the same fifteen tracks
- * and read, to anyone scrolling, as the same recommendation written twice.
+ * Sharing tracks is not the same as saying the same thing. A curated
+ * fifteen-track set is meant to sit inside the area it was drawn from; that is
+ * what an entry point is, and removing it because it is contained would delete
+ * the primitive. Equally, an album card's tracks all belong to the artist
+ * whose card sits elsewhere on the feed, and both are worth having.
  *
- * So redundancy is measured on the only thing that is actually the same — the
- * tracks each card would hand over. Containment rather than Jaccard, because a
- * fifteen-track set sitting entirely inside a lane card is redundant with it
- * even though the two sets are nothing alike in size.
- *
- * When two cards collide, the one that survives is the one whose aperture
- * explains the material most precisely. An album says more than the artist who
- * made it; an artist says more than the lane they sit in; anything singular
- * says more than a pile of songs.
+ * So overlap only opens the question. The answer comes from comparing what the
+ * two cards actually assert: what kind of thing each is about, whether either
+ * applied a selection rule, what claim its caption makes, how much each
+ * delivers, which sources vouch for it, and what ties it to the viewer's own
+ * library. Cards differing on at least two of those are answering different
+ * questions and both stay. Cards differing on fewer are the same
+ * recommendation written twice, and the one whose aperture explains the
+ * material least precisely goes.
  */
 
 /** Most specific first. The tiebreak is ranking score. */
 const APERTURE_ORDER: Record<CardSubjectType, number> = {
   ALBUM: 0, ARTIST: 1, SUBGENRE: 2, GENRE: 3, SONG_SET: 4,
 };
-
 export interface RedundancyPair {
   keptSubject: string;
   keptType: CardSubjectType;
@@ -35,10 +34,20 @@ export interface RedundancyPair {
   resolvedBy: "aperture" | "score";
 }
 
+/** Two overlapping cards that were both kept, and why. */
+export interface CoexistingPair {
+  a: string;
+  b: string;
+  shared: number;
+  containment: number;
+  distinct: string[];
+}
+
 export interface RedundancyResult {
   kept: Candidate[];
   dropped: { candidate: Candidate; against: Candidate; shared: number; containment: number }[];
   pairs: RedundancyPair[];
+  coexisting: CoexistingPair[];
 }
 
 const subjectLabel = (c: Candidate): string => {
@@ -47,9 +56,47 @@ const subjectLabel = (c: Candidate): string => {
     : s.type === "Artist" ? s.artist
     : s.type === "Subgenre" ? s.subgenre
     : s.type === "Genre" ? s.genre
-    : s.type === "Songs" ? s.label
+    : s.type === "Songs" ? s.title
     : "";
 };
+
+const selectionRuleOf = (c: Candidate) =>
+  (c.groupingReason.kind === "SELECTED"
+    ? `${c.groupingReason.rule.id}:${c.groupingReason.rule.threshold}`
+    : null);
+
+/**
+ * What two overlapping cards genuinely say differently.
+ *
+ * Each facet is one thing a reader would notice as a different reason to look.
+ * Card type alone is never enough — a SONG_SET that is only a truncation of
+ * the lane card differs in type and in nothing else, which is exactly the pair
+ * that has to collapse.
+ */
+function distinctFacets(a: Candidate, b: Candidate): string[] {
+  const facets: string[] = [];
+  if (a.cardType !== b.cardType) facets.push("subject type");
+
+  const ruleA = selectionRuleOf(a);
+  const ruleB = selectionRuleOf(b);
+  if (ruleA !== ruleB) facets.push(ruleA && ruleB ? "selection rule" : "one selects, one does not");
+
+  if (a.winningClaim?.claimType !== b.winningClaim?.claimType) facets.push("claim");
+
+  const hi = Math.max(a.deliverableCount, b.deliverableCount);
+  const lo = Math.max(1, Math.min(a.deliverableCount, b.deliverableCount));
+  if (hi / lo >= REDUNDANCY.materialCountRatio) facets.push("how much it delivers");
+
+  if (a.anchor?.type !== b.anchor?.type || a.anchor?.entityId !== b.anchor?.entityId) {
+    facets.push("recipient anchor");
+  }
+
+  const sa = new Set(a.sourceFriendIds);
+  const sb = new Set(b.sourceFriendIds);
+  if (sa.size !== sb.size || [...sa].some((x) => !sb.has(x))) facets.push("source evidence");
+
+  return facets;
+}
 
 /**
  * Which of two colliding cards explains the material better.
@@ -79,6 +126,7 @@ export function resolveRedundancy(ranked: Candidate[]): RedundancyResult {
   const keptIdx: number[] = [];
   const dropped: RedundancyResult["dropped"] = [];
   const pairs: RedundancyPair[] = [];
+  const coexisting: CoexistingPair[] = [];
   const alive: boolean[] = ranked.map(() => true);
   const deliverables = ranked.map((c) => new Set(c.deliverableIds ?? []));
 
@@ -103,6 +151,18 @@ export function resolveRedundancy(ranked: Candidate[]): RedundancyResult {
       const containment = shared / Math.min(mine.size, deliverables[j].size);
       if (shared < REDUNDANCY.minShared || containment < REDUNDANCY.containment) continue;
       const other = ranked[j];
+
+      // Overlap opened the question; the propositions answer it.
+      const facets = distinctFacets(c, other);
+      if (facets.length >= REDUNDANCY.minDistinctFacets) {
+        coexisting.push({
+          a: `${c.cardType} ${subjectLabel(c)}`,
+          b: `${other.cardType} ${subjectLabel(other)}`,
+          shared, containment, distinct: facets,
+        });
+        continue;
+      }
+
       const pref = prefer(c, other);
       const record: RedundancyPair = {
         keptSubject: "", keptType: "ALBUM", droppedSubject: "", droppedType: "ALBUM",
@@ -139,5 +199,5 @@ export function resolveRedundancy(ranked: Candidate[]): RedundancyResult {
     keptIdx.push(i);
   }
 
-  return { kept: kept.filter((c, n) => alive[keptIdx[n]]), dropped, pairs };
+  return { kept: kept.filter((c, n) => alive[keptIdx[n]]), dropped, pairs, coexisting };
 }

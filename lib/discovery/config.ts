@@ -103,7 +103,35 @@ export const ARTIST_GAP = {
   missingSaturation: 15,
 };
 
-export const CONSENSUS_SET = { minSourcesPerTrack: 2 };
+/**
+ * The curated-set primitive.
+ *
+ * A SONG_SET is a scope plus a selection rule. The rule here is the strongest
+ * consensus the evidence will support: the highest number of independent
+ * holders for which the scope still contains a full set. The floor is the
+ * absolute one — agreement between fewer than three people is not agreement —
+ * and it is always strictly above MIN_SOURCES_PER_TRACK, so a selected set can
+ * never be the same material as the area card it sits inside.
+ *
+ * Deriving the threshold rather than fixing it is what makes this mean the
+ * same thing at any scale. With four sources it lands at three; with four
+ * hundred it lands wherever a dozen tracks still clear it. The rule does not
+ * change, only the amount of evidence available to it.
+ */
+export const CONSENSUS_SET = {
+  /** Never below this, whatever the scale. */
+  minHolders: MIN_INDEPENDENT_SOURCES,
+  /**
+   * A selection has to select. Above this share of its scope's corroborated
+   * inventory the set is not an entry point into an area — it is the area,
+   * and the taxonomy card already says so. Observed sets land at 0.03-0.04,
+   * so the line sits nowhere near live data.
+   */
+  maxShareOfScope: 0.5,
+  /** Tracks the viewer must already hold for a scope to anchor a set. */
+  minOwnedInLane: 3,
+  minOwnedInGenre: 20,
+};
 
 export const ALBUM_OBSERVED = {
   minObserved: 6,
@@ -181,12 +209,19 @@ export const MULTI_SOURCE_SET = {
  * concentration counts as explained.
  */
 export const APERTURE = {
+  /**
+   * When one album or artist explains a selected set well enough to become
+   * the card instead.
+   *
+   * Subgenre and genre are deliberately absent. A curated set drawn from one
+   * lane is not the lane's card — that was the overcorrection that deleted the
+   * primitive. Album and artist stay because they are more specific apertures
+   * than a set of songs, not less: fifteen tracks that are all one record are
+   * that record.
+   */
   dominantShare: 0.6,
-  dominantGenreShare: 0.85,
   minAlbumTracks: 4,
   minArtistTracks: 4,
-  minLaneTracks: 8,
-  minGenreTracks: 12,
 };
 
 // ── Cross-card redundancy ───────────────────────────────────────────────────
@@ -200,11 +235,27 @@ export const APERTURE = {
  * entirely contained in a three-hundred-track lane is redundant with it even
  * though the two sets are nothing alike in size.
  */
+/**
+ * Two cards are the same recommendation when they make the same claim about
+ * the same material — not merely when they share tracks.
+ *
+ * Containment is the trigger, never the verdict. A curated fifteen-track set
+ * is expected to sit inside the area it was drawn from; that is what an entry
+ * point is. So overlap only opens the question, and the answer comes from
+ * comparing the propositions: subject type, selection rule, claim, how much
+ * each delivers, which sources vouch, and what anchors it to the viewer. Cards
+ * differing in at least two of those are answering different questions and
+ * both stay.
+ */
 export const REDUNDANCY = {
-  /** Containment at or above this makes the weaker aperture redundant. */
+  /** Overlap, as a share of the smaller card, that opens the question. */
   containment: 0.6,
   /** Below this many shared tracks, overlap is coincidence rather than a fact. */
   minShared: 4,
+  /** Facets that must differ for two overlapping cards to both survive. */
+  minDistinctFacets: 2,
+  /** Deliverable counts differ materially at this ratio or beyond. */
+  materialCountRatio: 2,
 };
 
 // ── Lifecycle ───────────────────────────────────────────────────────────────

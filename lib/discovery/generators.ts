@@ -1,4 +1,5 @@
 import * as CFG from "./config";
+import { label } from "./display";
 import {
   assertMissing, coverageOf, friendRef, setId, UNKNOWN_LANE,
   type DiscoveryIndex,
@@ -156,7 +157,7 @@ const artistGap: GeneratorSpec = {
         generator: "ARTIST_GAP",
         subject: { type: "Artist", artist: u.artist },
         subjectKey: `Artist:${u.artist}`,
-        groupingReason: { kind: "TAXONOMIC", entity: "ARTIST", key: u.artist },
+        groupingReason: { kind: "AREA", entity: "ARTIST", key: u.artist },
         setType: "artistGap", setKey: u.artist,
         expression: `(A_${u.artist} ∩ F_all) − U, |A ∩ U| = ${owned}`,
         members: bounded,
@@ -206,7 +207,7 @@ const artistAbsentInLane: GeneratorSpec = {
         generator: "ARTIST_ABSENT_IN_LANE",
         subject: { type: "Artist", artist: u.artist },
         subjectKey: `Artist:${u.artist}`,
-        groupingReason: { kind: "TAXONOMIC", entity: "ARTIST", key: u.artist },
+        groupingReason: { kind: "AREA", entity: "ARTIST", key: u.artist },
         setType: "artistAbsent", setKey: u.artist,
         expression: `A_${u.artist} ∩ F_all, A ∩ U = ∅, |S_${dominant[0]} ∩ U| = ${ownedInLane}`,
         members: bounded,
@@ -255,7 +256,7 @@ const albumGapTrue: GeneratorSpec = {
         generator: "ALBUM_GAP_TRUE",
         subject: { type: "Album", artist: a.artist, album: a.title },
         subjectKey: `Album:${a.albumId}`,
-        groupingReason: { kind: "TAXONOMIC", entity: "ALBUM", key: a.albumId },
+        groupingReason: { kind: "AREA", entity: "ALBUM", key: a.albumId },
         setType: "albumGapTrue", setKey: a.albumId,
         expression: `AL_${a.albumId} − U   (${a.ownedPositions}/${a.totalTracks} held)`,
         members: a.missing,
@@ -290,7 +291,7 @@ const albumAsUnit: GeneratorSpec = {
         generator: "ALBUM_AS_UNIT",
         subject: { type: "Album", artist: a.artist, album: a.title },
         subjectKey: `Album:${a.albumId}`,
-        groupingReason: { kind: "TAXONOMIC", entity: "ALBUM", key: a.albumId },
+        groupingReason: { kind: "AREA", entity: "ALBUM", key: a.albumId },
         setType: "albumUnit", setKey: a.albumId,
         expression: `AL_${a.albumId} ∩ F_all, AL ∩ U = ∅, |A_${a.artist} ∩ U| = ${ownedByArtist}`,
         members: members.slice(0, CFG.DELIVERABLE_MAX),
@@ -329,7 +330,7 @@ const subgenreGap: GeneratorSpec = {
         generator: "SUBGENRE_GAP",
         subject: { type: "Subgenre", subgenre: lane.subgenre },
         subjectKey: `Subgenre:${lane.subgenre}`,
-        groupingReason: { kind: "TAXONOMIC", entity: "SUBGENRE", key: lane.subgenre },
+        groupingReason: { kind: "AREA", entity: "SUBGENRE", key: lane.subgenre },
         setType: "laneVoid", setKey: `gap:${lane.subgenre}`,
         expression: `(F_all ∩ S_${lane.subgenre}) − U, |S ∩ U| = ${owned}`,
         members: bounded,
@@ -370,7 +371,7 @@ const missingChild: GeneratorSpec = {
         generator: "MISSING_CHILD",
         subject: { type: "Subgenre", subgenre: lane.subgenre },
         subjectKey: `Subgenre:${lane.subgenre}`,
-        groupingReason: { kind: "TAXONOMIC", entity: "SUBGENRE", key: lane.subgenre },
+        groupingReason: { kind: "AREA", entity: "SUBGENRE", key: lane.subgenre },
         setType: "childVoid", setKey: `child:${lane.subgenre}`,
         expression: `(F_all ∩ S_${lane.subgenre}) − U, S ∩ U = ∅, |G_${lane.world} ∩ U| = ${ownedInParent}`,
         members: bounded,
@@ -393,48 +394,151 @@ const missingChild: GeneratorSpec = {
 
 // ── SONG_SET ────────────────────────────────────────────────────────────────
 
+const spellOut = ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
+const spell = (n: number) => (n <= 10 ? spellOut[n] : String(n));
+
 /**
- * Consensus delivered as a set rather than as single tracks.
+ * The strongest consensus a scope will support.
  *
- * Tracks several sources agree on, grouped by a lane the viewer already
- * occupies so the set has a reason to be in front of them. This is what
- * replaces the per-track consensus cards: the same evidence, at an aperture a
- * reader can act on.
+ * Not a fixed number of holders. The rule is "the most agreement available
+ * here that still fills a set", so the threshold is the highest holder count
+ * for which the scope still contains at least a full set's worth of tracks.
+ * That is the same rule at four sources and at four hundred; only the number
+ * it resolves to changes, which is exactly the property a threshold hardcoded
+ * at three would lose.
+ *
+ * It never drops to the generic corroboration floor. A set selected at the
+ * same bar every other card already clears would not be a selection — it would
+ * be the top of the area, which is the card the area already has.
  */
-const consensusInLane: GeneratorSpec = {
-  id: "CONSENSUS_IN_LANE",
-  mechanism: "Tracks several sources agree on, inside a lane the viewer occupies.",
+function strongestThreshold(
+  index: DiscoveryIndex, pool: string[], universe: number,
+): { k: number; qualifying: string[] } | null {
+  const holdersOf = (id: string) => index.holders.get(id)?.length ?? 0;
+  let best: { k: number; qualifying: string[] } | null = null;
+  for (let k = CFG.CONSENSUS_SET.minHolders; k <= universe; k++) {
+    const qualifying = pool.filter((id) => holdersOf(id) >= k);
+    if (qualifying.length < SONG_SET_MIN) break;
+    best = { k, qualifying };
+  }
+  return best;
+}
+
+/**
+ * A curated entry point into an area the viewer is already in.
+ *
+ * The area card answers "what am I missing?" — a whole lane or genre of it.
+ * This answers the next question: of everything in there, which dozen should
+ * you start with, and why those. The reason is external and auditable — this
+ * many independent people kept each one — and it is strictly stronger than the
+ * bar every other card clears, so the set is never a truncation of the area.
+ *
+ * The scope is the most specific one that supports the rule. A lane where the
+ * evidence is dense enough, a genre where it is not. At four sources no single
+ * lane holds a dozen tracks that three people independently kept, so these
+ * come out genre-scoped and span many lanes and artists; as sources are added
+ * the same rule tightens onto lanes without changing meaning.
+ */
+const consensusSet: GeneratorSpec = {
+  id: "CONSENSUS_SET",
+  mechanism: "The tracks in an area the viewer occupies that the most sources independently kept.",
   run: (index) => {
     const out: Candidate[] = [];
+    const universe = Math.max(index.eligibleSourceUniverse, index.friends.length);
+
+    interface Scope {
+      entity: "SUBGENRE" | "GENRE";
+      key: string;
+      world: string;
+      gap: string[];
+      owned: number;
+      anchor: RecipientAnchor;
+    }
+    const scopes: Scope[] = [];
+
+    // Most specific first: a lane the viewer is in, then the genre around it.
     for (const lane of index.lanes.values()) {
       const owned = index.viewerByLane.get(lane.subgenre) ?? 0;
-      if (owned < CFG.LANE.minOwnedForPresent) continue;
-      const strong = lane.gap
-        .filter((id) => (index.holders.get(id)?.length ?? 0) >= CFG.CONSENSUS_SET.minSourcesPerTrack)
+      if (owned < CFG.CONSENSUS_SET.minOwnedInLane) continue;
+      scopes.push({
+        entity: "SUBGENRE", key: lane.subgenre, world: lane.world, gap: lane.gap, owned,
+        anchor: anchorOf("SUBGENRE_PRESENT", lane.subgenre, lane.subgenre, owned),
+      });
+    }
+    for (const w of index.worlds.values()) {
+      const owned = index.viewerByWorld.get(w.world) ?? 0;
+      if (owned < CFG.CONSENSUS_SET.minOwnedInGenre) continue;
+      scopes.push({
+        entity: "GENRE", key: w.world, world: w.world, gap: w.gap, owned,
+        anchor: anchorOf("PARENT_GENRE_PRESENT", w.world, w.world, owned),
+      });
+    }
+
+    for (const scope of scopes) {
+      // The area's own inventory, at the bar every card clears. The
+      // denominator the selection has to be materially smaller than.
+      const inventory = corroborated(index, scope.gap);
+      if (inventory.length < SONG_SET_MIN) continue;
+
+      const found = strongestThreshold(index, scope.gap, universe);
+      if (!found) continue;
+      const share = found.qualifying.length / inventory.length;
+      if (share > CFG.CONSENSUS_SET.maxShareOfScope) continue;
+
+      const members = found.qualifying
+        .slice()
         .sort((a, b) => (index.holders.get(b)?.length ?? 0) - (index.holders.get(a)?.length ?? 0)
-          || (index.meta.get(a)?.name ?? "").localeCompare(index.meta.get(b)?.name ?? ""));
-      if (strong.length < SONG_SET_MIN) continue;
-      const members = strong.slice(0, SONG_SET_MAX);
+          || (index.meta.get(a)?.name ?? "").localeCompare(index.meta.get(b)?.name ?? ""))
+        .slice(0, SONG_SET_MAX);
+
+      const scopeLabel = label(scope.key);
+      const setKey = `consensus:${scope.entity}:${scope.key}`;
+      // Scope plus rule, so the card cannot be read as the area's own card.
+      const title = `${scopeLabel} — Held by ${found.k}+ Friends`;
+      const description = `saved by at least ${spell(found.k)} of your friends independently`;
 
       out.push(build(index, {
-        generator: "CONSENSUS_IN_LANE",
-        subject: { type: "Songs", label: lane.subgenre, discoverySetId: "" },
-        subjectKey: `Songs:consensus:${lane.subgenre}`,
-        // Every track here shares one lane. That is a taxonomic reason, so the
-        // aperture stage turns this into the lane's own card rather than a
-        // second card called "<lane> songs" standing beside it.
-        groupingReason: { kind: "TAXONOMIC", entity: "SUBGENRE", key: lane.subgenre },
-        setType: "kOfN", setKey: `consensus:${lane.subgenre}`,
-        expression: `{ t ∈ (F_all ∩ S_${lane.subgenre}) − U : |holders(t)| ≥ ${CFG.CONSENSUS_SET.minSourcesPerTrack} }`,
+        generator: "CONSENSUS_SET",
+        subject: { type: "Songs", title, scope: scope.key, discoverySetId: "" },
+        subjectKey: `Songs:${setKey}`,
+        groupingReason: {
+          kind: "SELECTED",
+          scope: { entity: scope.entity, key: scope.key },
+          rule: {
+            id: "MIN_INDEPENDENT_HOLDERS",
+            threshold: found.k,
+            qualifying: found.qualifying.length,
+            scopeInventory: inventory.length,
+            description,
+          },
+          key: setKey,
+        },
+        setType: "kOfN", setKey,
+        expression: `{ t ∈ (F_all ∩ ${scope.entity === "GENRE" ? "G" : "S"}_${scope.key}) − U : |holders(t)| ≥ ${found.k} }`,
         members,
-        anchor: anchorOf("SUBGENRE_PRESENT", lane.subgenre, lane.subgenre, owned),
+        anchor: scope.anchor,
+        // How far above the generic corroboration floor the rule sits is what
+        // this card is actually about; size and the viewer's own depth follow.
         evidenceStrength: clamp01(
-          0.55 + 0.25 * Math.min(1, members.length / SONG_SET_MAX)
-          + 0.10 * Math.min(1, owned / CFG.LANE.ownedSaturation),
+          0.55
+          + 0.20 * Math.min(1, (found.k - CFG.MIN_SOURCES_PER_TRACK)
+            / Math.max(1, universe - CFG.MIN_SOURCES_PER_TRACK))
+          + 0.15 * Math.min(1, members.length / SONG_SET_MAX)
+          + 0.10 * Math.min(1, scope.owned / CFG.LANE.ownedSaturation),
         ),
-        componentScores: { ownedInLane: owned, deliverable: members.length },
-        reasonCodes: ["ANCHOR=SUBGENRE_PRESENT", `MIN_HOLDERS=${CFG.CONSENSUS_SET.minSourcesPerTrack}`],
-        genre: lane.world, subgenre: lane.subgenre, artist: null, album: null,
+        componentScores: {
+          minHolders: found.k, qualifying: found.qualifying.length,
+          scopeInventory: inventory.length, deliverable: members.length,
+          ownedInScope: scope.owned,
+        },
+        reasonCodes: [
+          `ANCHOR=${scope.anchor.type}`, "SELECTED_SET",
+          `MIN_HOLDERS=${found.k}`, `QUALIFYING=${found.qualifying.length}`,
+          `SCOPE_INVENTORY=${inventory.length}`,
+        ],
+        genre: scope.world,
+        subgenre: scope.entity === "SUBGENRE" ? scope.key : null,
+        artist: null, album: null,
       }));
     }
     return out;
@@ -445,5 +549,5 @@ export const GENERATORS: GeneratorSpec[] = [
   albumGapTrue, albumAsUnit,
   artistGap, artistAbsentInLane,
   subgenreGap, missingChild,
-  consensusInLane,
+  consensusSet,
 ];

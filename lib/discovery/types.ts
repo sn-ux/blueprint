@@ -105,7 +105,16 @@ export type StructuredProposition =
   | { type: "ARTIST_VIA_LANE"; artist: string; lane: string; ownedInLane: number; deliverable: number; names: string[] }
   | { type: "LANE_MORE"; lane: string; owned: number; deliverable: number; names: string[] }
   | { type: "LANE_VIA_PARENT"; parent: string; lane: string; ownedInParent: number; deliverable: number }
-  | { type: "LANE_CONSENSUS"; lane: string; owned: number; deliverable: number; names: string[] };
+  /**
+   * A curated set: the area, the rule that picked these tracks out of it, and
+   * the evidence. All three are required — the middle one is what separates
+   * this from the area's own card.
+   */
+  | {
+      type: "SET_CONSENSUS"; scope: string; scopeIsGenre: boolean;
+      owned: number; deliverable: number; minHolders: number;
+      qualifying: number; names: string[];
+    };
 
 export type ClaimType = StructuredProposition["type"];
 
@@ -207,24 +216,53 @@ export const SONG_SET_MAX = 15;
 /**
  * Why a set of tracks is one set.
  *
- * This is the question a SONG_SET card has to answer before it may exist. If
- * the answer is "they are all on one album", "all by one artist", "all in one
- * lane" or "all in one genre", then the singular entity is the clearer
- * aperture and the card is that entity — a set of fifteen Hip Hop tracks is a
- * Hip Hop card, not a card called "Hip Hop songs" sitting beside one.
+ * There are two different product jobs here and conflating them is what put
+ * "Hip Hop songs" next to "Hip Hop" on the feed.
  *
- * STRUCTURAL is reserved for relationships that no single entity can express:
- * the same combination of independent sources holding the same material, a
- * miss that spans artists and lanes. It must be factual and derivable from
- * structured data — never a mood, a theme or a cluster.
+ * An AREA card answers "what am I missing?" — its whole proposition is that a
+ * region of music exists and the viewer is short of it. The subject is the
+ * region itself: an album, an artist, a lane, a genre.
+ *
+ * A SELECTED set answers a different question: "which twelve to fifteen
+ * tracks should I start with, and why these?" Sharing a genre is not what
+ * makes such a set; a scope plus a further selection rule is. The rule has to
+ * be factual and auditable — held by at least this many independent sources,
+ * the intersection of these named libraries — and it has to actually select,
+ * which is why the qualifying set is measured against the inventory of the
+ * scope it was drawn from. It is never a mood, a theme or a cluster.
+ *
+ * Both may exist over the same taxonomy. Taxonomic concentration disqualifies
+ * nothing: a landscape and an entry point into it are different cards.
  */
+export type SelectionRuleId = "MIN_INDEPENDENT_HOLDERS";
+
+export type ScopeEntity = "ALBUM" | "ARTIST" | "SUBGENRE" | "GENRE";
+
+export interface SelectionRule {
+  id: SelectionRuleId;
+  /** The bar itself — how many independent sources a track needed. */
+  threshold: number;
+  /** How many tracks in the scope clear it. */
+  qualifying: number;
+  /** The scope's own corroborated inventory, so selectivity is measurable. */
+  scopeInventory: number;
+  /** Rendered for captions: "saved by at least three of your friends". */
+  description: string;
+}
+
 export type GroupingReason =
-  | { kind: "TAXONOMIC"; entity: "ALBUM" | "ARTIST" | "SUBGENRE" | "GENRE"; key: string }
-  | { kind: "STRUCTURAL"; relation: "SOURCE_COMBINATION"; key: string; description: string };
+  | { kind: "AREA"; entity: ScopeEntity; key: string }
+  | {
+      kind: "SELECTED";
+      scope: { entity: ScopeEntity; key: string };
+      rule: SelectionRule;
+      /** Stable identity of the set, independent of the current threshold. */
+      key: string;
+    };
 
 export type Subject =
   | { type: "Song"; spotifyId: string; name: string; artist: string; album: string | null }
-  | { type: "Songs"; label: string; discoverySetId: string }
+  | { type: "Songs"; title: string; scope: string; discoverySetId: string }
   | { type: "Album"; artist: string; album: string }
   | { type: "Artist"; artist: string }
   | { type: "Subgenre"; subgenre: string }
@@ -237,7 +275,7 @@ export type GeneratorId =
   | "ARTIST_ABSENT_IN_LANE"
   | "SUBGENRE_GAP"
   | "MISSING_CHILD"
-  | "CONSENSUS_IN_LANE";
+  | "CONSENSUS_SET";
 
 export interface Candidate {
   id: string;

@@ -6,7 +6,7 @@
  */
 import { PrismaClient } from "@prisma/client";
 import { concentrationOf } from "../lib/discovery/aperture.ts";
-import { APERTURE, REDUNDANCY } from "../lib/discovery/config.ts";
+import { APERTURE, CONSENSUS_SET, REDUNDANCY } from "../lib/discovery/config.ts";
 import { buildFeed, deliverablesOf, toFeedCard } from "../lib/discovery/feed.ts";
 import { SONG_SET_MAX, SONG_SET_MIN } from "../lib/discovery/types.ts";
 
@@ -27,7 +27,7 @@ await prisma.$disconnect();
 
 const t0 = Date.now();
 const result = await buildFeed(userId, 30);
-const { index, feed, all, rejected, redundancy } = result;
+const { index, feed, all, rejected, redundancy, coexisting } = result;
 const ms = Date.now() - t0;
 
 let pass = 0, fail = 0;
@@ -43,37 +43,62 @@ console.log(`eligible universe ${all.length} cards\n`);
 
 // ── SECTION 1 · SONG_SET aperture ──────────────────────────────────────────
 console.log("═══ SECTION 1 — SONG_SET APERTURE ═══");
-console.log(`dominantShare ${APERTURE.dominantShare}  dominantGenreShare ${APERTURE.dominantGenreShare}`);
+console.log(`album/artist dominance ${APERTURE.dominantShare}   selection must be <= ${CONSENSUS_SET.maxShareOfScope} of its scope`
+  + `   holder floor ${CONSENSUS_SET.minHolders}`);
 const setCandidates = rejected.filter((r) => r.stage === "aperture");
 const songSets = all.filter((c) => c.cardType === "SONG_SET");
+const emitted = all.filter((c) => c.generator === "CONSENSUS_SET");
+const collapsed = rejected.filter((r) => r.generator === "CONSENSUS_SET" && r.stage !== "aperture");
 
-// Every candidate a generator emitted as a multi-track set, and where it went.
-const resolvedSets = all.filter((c) => c.generator === "CONSENSUS_IN_LANE");
-const collapsedSets = rejected.filter((r) => r.stage === "collapse" && r.generator === "CONSENSUS_IN_LANE");
-console.log(`\nmulti-track sets emitted by generators: ${resolvedSets.length + collapsedSets.length + setCandidates.length}`);
-for (const c of resolvedSets) {
+console.log(`\nCONSENSUS_SET emitted ${emitted.length + setCandidates.filter((r) => r.generator === "CONSENSUS_SET").length + collapsed.length}, surviving as SONG_SET: ${songSets.length}`);
+for (const c of emitted) {
+  const g = c.groupingReason;
   const k = c.concentration ?? concentrationOf(index, c.deliverableIds ?? []);
-  console.log(`  ${(c.recommendationKey ?? "").slice(0, 10)}  "${c.subject.type === "Subgenre" ? c.subject.subgenre : c.subjectKey}"`);
-  console.log(`      generator ${c.generator}  delivers ${c.deliverableCount}  grouping ${c.groupingReason.kind}/${c.groupingReason.entity ?? c.groupingReason.relation}`);
-  console.log(`      concentration  album ${pct(k.album)}  artist ${pct(k.artist)}  subgenre ${pct(k.subgenre)}  genre ${pct(k.genre)}`);
-  console.log(`      survives as SONG_SET: no → ${c.cardType}   (${c.apertureNote})`);
+  const holders = (c.deliverableIds ?? []).map((id) => index.holders.get(id)?.length ?? 0);
+  const avg = holders.reduce((a, b) => a + b, 0) / Math.max(1, holders.length);
+  const lanes = new Set((c.deliverableIds ?? []).map((id) => index.meta.get(id)?.subgenre));
+  const artists = new Set((c.deliverableIds ?? []).map((id) => index.meta.get(id)?.artist));
+  console.log(`  ${(c.recommendationKey ?? "").slice(0, 10)}  "${c.subject.title}"   [${c.cardType}]`);
+  console.log(`      scope ${g.scope.entity} ${g.scope.key}   broad corroborated inventory ${g.rule.scopeInventory}   qualifying ${g.rule.qualifying}   delivers ${c.deliverableCount}`);
+  console.log(`      rule ${g.rule.id} threshold ${g.rule.threshold}   holders min ${Math.min(...holders)} avg ${avg.toFixed(2)} max ${Math.max(...holders)}`);
+  console.log(`      spans ${lanes.size} lanes, ${artists.size} artists   concentration album ${pct(k.album)} artist ${pct(k.artist)} subgenre ${pct(k.subgenre)} genre ${pct(k.genre)}`);
+  console.log(`      anchor ${c.anchor.type} "${c.anchor.entityName}" owned=${c.anchor.ownedCount}`);
+  console.log(`      caption  ${c.caption}`);
+  const area = all.find((x) => (x.cardType === "SUBGENRE" || x.cardType === "GENRE")
+    && (x.subject.type === "Subgenre" ? x.subject.subgenre : x.subject.type === "Genre" ? x.subject.genre : "") === g.scope.key);
+  if (area) {
+    const shared = (c.deliverableIds ?? []).filter((id) => (area.deliverableIds ?? []).includes(id)).length;
+    console.log(`      area card  ${area.caption}`);
+    console.log(`      overlap with it: ${shared}/${c.deliverableCount}`);
+  } else {
+    console.log(`      area card  none on the feed for ${g.scope.key}`);
+  }
+  console.log(`      decision  SONG_SET${area ? " and the area card, both" : ""}   (${c.apertureNote})`);
 }
-for (const r of collapsedSets) {
-  console.log(`  ${r.subjectKey}`);
-  console.log(`      generator ${r.generator}  grouping TAXONOMIC/SUBGENRE`);
-  console.log(`      survives as SONG_SET: no → SUBGENRE, then folded into the lane's own card (${r.detail})`);
-}
-for (const r of setCandidates) console.log(`  ${r.generator} ${r.subjectKey} → dropped (${r.detail})`);
-check("no SONG_SET survives on a taxonomic grouping reason",
-  songSets.every((c) => c.groupingReason.kind === "STRUCTURAL"),
+for (const r of setCandidates) console.log(`  ${r.generator} ${r.subjectKey} → no card (${r.detail})`);
+for (const r of collapsed) console.log(`  ${r.subjectKey} → dropped at ${r.stage} (${r.detail})`);
+
+check("every SONG_SET carries a selection rule, not just a scope",
+  songSets.every((c) => c.groupingReason.kind === "SELECTED"
+    && c.groupingReason.rule.threshold > 2),
   `${songSets.length} SONG_SET in the universe`);
+check("every SONG_SET is materially smaller than the area it was drawn from",
+  songSets.every((c) => c.groupingReason.kind === "SELECTED"
+    && c.deliverableCount < c.groupingReason.rule.scopeInventory / 2),
+  songSets.map((c) => c.groupingReason.kind === "SELECTED"
+    ? `${c.deliverableCount} of ${c.groupingReason.rule.scopeInventory}` : "").join(", "));
 
 console.log("\n── cross-card redundancy ──");
 console.log(`containment >= ${REDUNDANCY.containment}, shared >= ${REDUNDANCY.minShared}`);
-if (redundancy.length === 0) console.log("  no high-overlap card pairs");
+if (redundancy.length === 0) console.log("  collapsed: none");
 for (const p of redundancy) {
-  console.log(`  [${p.keptType}] ${p.keptSubject}  ←  dropped [${p.droppedType}] ${p.droppedSubject}`
+  console.log(`  collapsed  [${p.keptType}] ${p.keptSubject}  ←  [${p.droppedType}] ${p.droppedSubject}`
     + `   shared ${p.shared} (${pct(p.containment)}), resolved by ${p.resolvedBy}`);
+}
+console.log(`  overlapping pairs kept as distinct propositions: ${coexisting.length}`);
+for (const p of coexisting.slice(0, 12)) {
+  console.log(`    ${p.a}  ∥  ${p.b}   shared ${p.shared} (${pct(p.containment)})`);
+  console.log(`      differ on: ${p.distinct.join(", ")}`);
 }
 
 // ── SECTION 3 · inventory ──────────────────────────────────────────────────

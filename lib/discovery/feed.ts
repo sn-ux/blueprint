@@ -110,7 +110,10 @@ function titleOf(c: Candidate): { title: string; byline: string } {
     // Taxonomy keys are identity; this is the one place they become readable.
     case "Subgenre": return { title: label(s.subgenre), byline: "" };
     case "Genre": return { title: label(s.genre), byline: "" };
-    case "Songs": return { title: label(s.label), byline: "" };
+    // Scope plus selection rule, already rendered by the generator: a
+    // curated set must not carry the bare taxonomy name, which would read as
+    // the area's own card.
+    case "Songs": return { title: s.title, byline: "" };
     default: return { title: "", byline: "" };
   }
 }

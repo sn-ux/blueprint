@@ -1,6 +1,6 @@
 import { isAllowedCardType, resolveAperture } from "./aperture";
 import { stampIdentity } from "./identity";
-import { resolveRedundancy, type RedundancyPair } from "./redundancy";
+import { resolveRedundancy, type CoexistingPair, type RedundancyPair } from "./redundancy";
 import * as CFG from "./config";
 import { attentionValue, ATTENTION_FLOOR, buildClaims, CLAIM_FLOOR, promisedCount } from "./claims";
 import { ES_FLOOR, GENERATORS } from "./generators";
@@ -39,6 +39,8 @@ export interface EngineResult {
   byGenerator: Map<GeneratorId, number>;
   /** Cross-card collisions and how each was resolved. */
   redundancy: RedundancyPair[];
+  /** Overlapping cards that both survived, and what they say differently. */
+  coexisting: CoexistingPair[];
 }
 
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
@@ -303,7 +305,7 @@ export function runEngine(input: EngineInput, opts: EngineOptions = {}): EngineR
   // Two candidates can survive everything above and still hand the reader the
   // same tracks at different zoom levels. Measured on deliverable overlap, and
   // resolved toward the aperture that explains the material most precisely.
-  const { kept, dropped, pairs } = resolveRedundancy(all);
+  const { kept, dropped, pairs, coexisting } = resolveRedundancy(all);
   for (const d of dropped) {
     rejected.push({
       stage: "redundancy", reasonCode: "REDUNDANT_WITH_BETTER_APERTURE",
@@ -327,7 +329,7 @@ export function runEngine(input: EngineInput, opts: EngineOptions = {}): EngineR
   const feed = compose(kept, feedSize, lambda);
   feed.forEach((c, i) => { c.feedRank = i + 1; });
 
-  return { index, all: kept, feed, rejected, byGenerator, redundancy: pairs };
+  return { index, all: kept, feed, rejected, byGenerator, redundancy: pairs, coexisting };
 }
 
 // ── Diversification ─────────────────────────────────────────────────────────
@@ -399,7 +401,7 @@ export function compose(
       if (c.artist) counts.artist.set(c.artist, (counts.artist.get(c.artist) ?? 0) + 1);
       if (c.genre) counts.genre.set(c.genre, (counts.genre.get(c.genre) ?? 0) + 1);
       if (c.subgenre) counts.subgenre.set(c.subgenre, (counts.subgenre.get(c.subgenre) ?? 0) + 1);
-      if (c.subject.type !== "Song") counts.set += 1;
+      if (c.cardType === "SONG_SET") counts.set += 1;
     }
     const last = chosen[chosen.length - 1];
     const first = chosen.length === 0;
@@ -414,7 +416,7 @@ export function compose(
         // Two identical sentence shapes in a row is the most visible tell that
         // a feed was generated, so this relaxes only after the caps have.
         if (c.winningClaim?.claimType === last.winningClaim?.claimType) return false;
-        if (c.subject.type !== "Song" && last.subject.type !== "Song") return false;
+        if (c.cardType === "SONG_SET" && last.cardType === "SONG_SET") return false;
       }
       if (!caps) return true;
       if ((counts.generator.get(c.generator) ?? 0) >= caps.generator) return false;
@@ -423,7 +425,7 @@ export function compose(
       if (c.artist && (counts.artist.get(c.artist) ?? 0) >= caps.artist) return false;
       if (c.genre && (counts.genre.get(c.genre) ?? 0) >= caps.genre) return false;
       if (c.subgenre && (counts.subgenre.get(c.subgenre) ?? 0) >= caps.subgenre) return false;
-      if (c.subject.type !== "Song" && counts.set >= caps.set) return false;
+      if (c.cardType === "SONG_SET" && counts.set >= caps.set) return false;
       return true;
     };
 

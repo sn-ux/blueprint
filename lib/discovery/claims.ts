@@ -31,7 +31,7 @@ export const ATTENTION_BASE: Record<ClaimType, number> = {
   // An exact remainder on a record already half-held is the sharpest of these.
   ALBUM_COMPLETION: 0.80,
   ARTIST_MORE: 0.70,
-  LANE_CONSENSUS: 0.65,
+  SET_CONSENSUS: 0.65,
   ALBUM_VIA_ARTIST: 0.60,
   ARTIST_VIA_LANE: 0.55,
   LANE_VIA_PARENT: 0.55,
@@ -98,8 +98,16 @@ export function enumerateClaims(_index: DiscoveryIndex, c: Candidate): Structure
         type: "LANE_VIA_PARENT", parent: a.entityName, lane: c.subgenre ?? "",
         ownedInParent: a.ownedCount, deliverable: n,
       }];
-    case "CONSENSUS_IN_LANE":
-      return [{ type: "LANE_CONSENSUS", lane: a.entityName, owned: a.ownedCount, deliverable: n, names }];
+    case "CONSENSUS_SET": {
+      const g = c.groupingReason;
+      if (g.kind !== "SELECTED") return [];
+      return [{
+        type: "SET_CONSENSUS",
+        scope: g.scope.key, scopeIsGenre: g.scope.entity === "GENRE",
+        owned: a.ownedCount, deliverable: n,
+        minHolders: g.rule.threshold, qualifying: g.rule.qualifying, names,
+      }];
+    }
     default:
       return [];
   }
@@ -113,6 +121,8 @@ export function promisedCount(p: StructuredProposition): number {
 // ── Templates ───────────────────────────────────────────────────────────────
 
 const words = ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
+/** Thousands separators only. A template may format a number, never change it. */
+const num = (n: number) => n.toLocaleString("en-US");
 const spell = (n: number) => (n <= 10 ? words[n] : String(n));
 const Spell = (n: number) => { const w = spell(n); return w[0].toUpperCase() + w.slice(1); };
 
@@ -131,7 +141,7 @@ const TEMPLATES: Template[] = [
     id: "album-complete-1", claimType: "ALBUM_COMPLETION",
     render: (p) => {
       const q = p as P<"ALBUM_COMPLETION">;
-      return `You have ${q.owned} of the ${q.total} tracks on ${q.album}. Your friends have the other ${spell(q.residue)}.`;
+      return `You have ${num(q.owned)} of the ${q.total} tracks on ${q.album}. Your friends have the other ${spell(q.residue)}.`;
     },
   },
   {
@@ -148,7 +158,7 @@ const TEMPLATES: Template[] = [
     id: "album-via-artist-1", claimType: "ALBUM_VIA_ARTIST",
     render: (p) => {
       const q = p as P<"ALBUM_VIA_ARTIST">;
-      return `You already have ${q.ownedByArtist} tracks by ${q.artist} but nothing from ${q.album}. Your friends have ${q.deliverable}.`;
+      return `You already have ${num(q.ownedByArtist)} tracks by ${q.artist} but nothing from ${q.album}. Your friends have ${q.deliverable}.`;
     },
   },
 
@@ -156,14 +166,14 @@ const TEMPLATES: Template[] = [
     id: "artist-more-1", claimType: "ARTIST_MORE",
     render: (p) => {
       const q = p as P<"ARTIST_MORE">;
-      return `You already have ${q.owned} ${q.owned === 1 ? "track" : "tracks"} by ${q.artist}. Your friends have ${q.deliverable} more you don't.`;
+      return `You already have ${num(q.owned)} ${q.owned === 1 ? "track" : "tracks"} by ${q.artist}. Your friends have ${q.deliverable} more you don't.`;
     },
   },
   {
     id: "artist-more-2", claimType: "ARTIST_MORE",
     render: (p) => {
       const q = p as P<"ARTIST_MORE">;
-      return `${q.artist} is already in your library — ${q.owned} tracks. Your friends kept ${q.deliverable} more.`;
+      return `${q.artist} is already in your library — ${num(q.owned)} tracks. Your friends kept ${q.deliverable} more.`;
     },
   },
 
@@ -171,7 +181,7 @@ const TEMPLATES: Template[] = [
     id: "artist-via-lane-1", claimType: "ARTIST_VIA_LANE",
     render: (p) => {
       const q = p as P<"ARTIST_VIA_LANE">;
-      return `You already have ${q.ownedInLane} ${label(q.lane)} tracks. Your friends have ${q.deliverable} by ${q.artist} you haven't saved.`;
+      return `You already have ${num(q.ownedInLane)} ${label(q.lane)} tracks. Your friends have ${q.deliverable} by ${q.artist} you haven't saved.`;
     },
   },
 
@@ -186,7 +196,7 @@ const TEMPLATES: Template[] = [
     id: "lane-more-2", claimType: "LANE_MORE",
     render: (p) => {
       const q = p as P<"LANE_MORE">;
-      return `${q.owned} ${label(q.lane)} tracks in your library, and ${q.deliverable} more your friends kept.`;
+      return `${num(q.owned)} ${label(q.lane)} tracks in your library, and ${q.deliverable} more your friends kept.`;
     },
   },
 
@@ -205,18 +215,22 @@ const TEMPLATES: Template[] = [
     },
   },
 
+  // A curated set states three things: why the area is relevant to the
+  // viewer, why these particular tracks were chosen out of it, and who
+  // vouches for them. Dropping the middle clause would turn it back into the
+  // area's own card.
   {
-    id: "lane-consensus-1", claimType: "LANE_CONSENSUS",
+    id: "set-consensus-1", claimType: "SET_CONSENSUS",
     render: (p) => {
-      const q = p as P<"LANE_CONSENSUS">;
-      return `You already have ${label(q.lane)}. Your friends agree on ${q.deliverable} tracks here you don't have.`;
+      const q = p as P<"SET_CONSENSUS">;
+      return `You already have ${num(q.owned)} ${label(q.scope)} tracks. These ${q.deliverable} are saved by at least ${spell(q.minHolders)} of your friends, and none are in your library.`;
     },
   },
   {
-    id: "lane-consensus-2", claimType: "LANE_CONSENSUS",
+    id: "set-consensus-2", claimType: "SET_CONSENSUS",
     render: (p) => {
-      const q = p as P<"LANE_CONSENSUS">;
-      return `${q.deliverable} ${label(q.lane)} tracks more than one of your friends kept, and none of them are yours.`;
+      const q = p as P<"SET_CONSENSUS">;
+      return `${num(q.owned)} ${label(q.scope)} tracks in your library, and none of these ${q.deliverable} — which ${spell(q.minHolders)} of your friends each kept independently.`;
     },
   },
 ];
@@ -246,7 +260,7 @@ function exceptionalnessOf(p: StructuredProposition): number {
   switch (p.type) {
     case "ALBUM_COMPLETION": return Math.max(0.6, 0.95 - 0.08 * p.residue);
     case "ARTIST_MORE": return 0.7;
-    case "LANE_CONSENSUS": return 0.65;
+    case "SET_CONSENSUS": return 0.65;
     case "LANE_VIA_PARENT": return 0.6;
     case "ALBUM_VIA_ARTIST": return 0.6;
     case "ARTIST_VIA_LANE": return 0.55;
