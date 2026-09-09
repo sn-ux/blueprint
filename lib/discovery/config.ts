@@ -273,25 +273,36 @@ export const LIFECYCLE = {
   unseenBoost: 0.12,
   /** The material behind a previously-seen proposition genuinely changed. */
   materialChangeBoost: 0.10,
-  /** Per impression, up to the cap. Seeing is not disliking. */
+  /**
+   * Impressions are a ranking signal and nothing else.
+   *
+   * However many times a card has scrolled past, it stays eligible. Seeing is
+   * not deciding: a reader who reads the whole feed has made no judgement
+   * about any of it, and withholding valid recommendations on that basis is
+   * how the stream emptied itself. So repeat exposure buys a progressively
+   * larger ranking penalty — enough that anything unseen naturally sits ahead
+   * of it, and enough that once unseen material runs out the familiar cards
+   * come back on their own rather than through an escape hatch.
+   *
+   * Two terms, because they say different things. How many times a card has
+   * been seen is a lasting fact about it; how lately it was seen fades, which
+   * is what lets a card the reader passed weeks ago rise again this morning.
+   */
   impressionPenalty: 0.04,
   impressionPenaltyMax: 0.20,
+  /** Applied in full immediately after a sighting, then decaying. */
+  recentImpressionPenalty: 0.10,
+  impressionRecencyHalfLifeHours: 24,
   /** Opening is evidence the viewer already investigated it. */
   openPenalty: 0.10,
   openPenaltyMax: 0.30,
   /**
-   * How many times a card may pass through the viewport before it rests.
+   * How long a card rests after being opened.
    *
-   * One sighting must not gate it. A reader who scrolls the whole feed once
-   * would otherwise rest the entire inventory in a single sitting and open the
-   * app to nothing — which is exactly what happened. The first impression buys
-   * a ranking penalty and nothing more; a card seen twice without ever being
-   * opened is one the reader has now passed over deliberately, and that is
-   * what earns a rest.
+   * Opening is the one ordinary interaction strong enough to withhold a card:
+   * the reader went and looked at the tracks. There is deliberately no
+   * equivalent for impressions.
    */
-  impressionsBeforeRest: 2,
-  /** How long a card rests after being passed over, and after being opened. */
-  impressionCooldownHours: 20,
   openCooldownHours: 96,
   /** A dismissal stands until the proposition itself changes. */
   dismissCooldownDays: 180,
@@ -310,13 +321,14 @@ export const LIFECYCLE = {
    */
   pageWindowMultiple: 3,
   /**
-   * The floor below which resting cards are brought back.
+   * A defensive floor, not a working mechanism.
    *
-   * Resting expresses a preference for fresher material, never a promise that
-   * something valid will be withheld. So when lifecycle suppression would
-   * leave the stream shorter than this, the longest-rested cards return —
-   * carrying their accumulated penalties, so they sort behind anything
-   * genuinely new. Dismissed and resolved cards are never revived: those are
+   * Since impressions no longer withhold anything, the only cards that rest
+   * are ones the reader opened, and a stream cannot normally be emptied by
+   * reading it. This exists for the case where it somehow is: the
+   * longest-rested cards return, carrying their penalties so they sort behind
+   * anything new. It should almost never fire, and the validation asserts as
+   * much. Dismissed and resolved cards are never revived — those are
    * decisions, not rests.
    *
    * Expressed in pages so it scales with the feed rather than with any

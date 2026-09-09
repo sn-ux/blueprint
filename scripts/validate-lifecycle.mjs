@@ -10,6 +10,8 @@ import { prisma } from "../lib/prisma.ts";
 import { LIFECYCLE } from "../lib/discovery/config.ts";
 import { recordEvents } from "../lib/recommendations/events.ts";
 import { cardDetail, feedPage, startSession } from "../lib/recommendations/session.ts";
+import { evaluate } from "../lib/discovery/lifecycle.ts";
+import { buildFeed } from "../lib/discovery/feed.ts";
 
 const arg = (f, d) => { const i = process.argv.indexOf(f); return i > -1 ? process.argv[i + 1] : d; };
 const userId = arg("--user", "cmown82yw0000l404njt51be8");
@@ -25,6 +27,15 @@ const saved = await prisma.recommendationExposure.findMany({ where: { userId } }
 const savedSessions = await prisma.recommendationFeedSession.findMany({ where: { userId }, select: { id: true } });
 await prisma.recommendationExposure.deleteMany({ where: { userId } });
 
+/**
+ * Puts the viewer back exactly as they were found.
+ *
+ * The checks below deliberately force states the product cannot reach on its
+ * own — every card resting, impression counts advanced by hand. None of that
+ * may survive the run: a developer's next device test would inherit it and
+ * look like a regression, which is precisely how this script once left a real
+ * viewer with two thirds of their feed asleep.
+ */
 async function restore() {
   await prisma.recommendationExposure.deleteMany({ where: { userId } });
   if (saved.length) {
@@ -35,7 +46,15 @@ async function restore() {
   await prisma.recommendationFeedSession.deleteMany({
     where: { userId, id: { notIn: savedSessions.map((s) => s.id) } },
   });
+  // Belt and braces: no rest may outlive the run except one a real open made.
+  const leaked = await prisma.recommendationExposure.count({
+    where: { userId, cooldownUntil: { gt: new Date() }, openCount: 0,
+             dismissedAt: null, actedOnAt: null },
+  });
+  if (leaked > 0) throw new Error(`restore left ${leaked} forced rests behind`);
 }
+
+const result = await buildFeed(userId, 0);
 
 try {
   // ── SECTION 5 · pagination ───────────────────────────────────────────────
@@ -232,13 +251,13 @@ try {
   });
   check("opening is recorded separately from an impression",
     openRow.openCount === 1 && seenRow.openCount === 0 && seenRow.impressionCount === 1);
-  check("an opened card rests longer than a seen one",
-    openRow.cooldownUntil > seenRow.cooldownUntil,
-    `${LIFECYCLE.openCooldownHours}h vs ${LIFECYCLE.impressionCooldownHours}h`);
+  check("only opening produces a rest; an impression never does",
+    openRow.cooldownUntil !== null && seenRow.cooldownUntil === null,
+    `opened rests ${LIFECYCLE.openCooldownHours}h; seen rests not at all`);
 
-  check("a card passed over twice does rest",
-    suppressed.get(untouchedKey) === "COOLING",
-    `${(await prisma.recommendationExposure.findUnique({ where: { userId_recommendationKey: { userId, recommendationKey: untouchedKey } } })).impressionCount} impressions`);
+  check("a card passed over twice is still eligible",
+    !suppressed.has(untouchedKey) && rank.has(untouchedKey),
+    `${(await prisma.recommendationExposure.findUnique({ where: { userId_recommendationKey: { userId, recommendationKey: untouchedKey } } })).impressionCount} impressions, rank ${rank.get(untouchedKey)}`);
 
   // ── Once the rests expire, seen material has to fall behind unseen ───────
   //
@@ -278,11 +297,75 @@ try {
   check("a heavily-seen card is still eligible, never removed",
     fiveTimes !== undefined);
 
-  // Suppression must never be able to empty the stream. The worst case is a
-  // reader who has scrolled every card twice: the whole universe resting.
-  for (let pass = 0; pass < 2; pass++) {
-    await recordEvents(userId, fresh.stored.map((s2) => ({ key: s2.card.id, type: "IMPRESSION", version: s2.card.version })));
-  }
+  // ── Reading the whole feed, repeatedly, must cost nothing but position ────
+  // One real pass through the write path, proving it records no rest, then the
+  // counts are advanced directly: what is under test here is how repeated
+  // exposure is *evaluated*, and the event path itself is already covered
+  // above. Three hundred sequential upserts to prove the same thing is only a
+  // slower way to prove it.
+  await recordEvents(userId, fresh.stored.map((s2) => ({ key: s2.card.id, type: "IMPRESSION", version: s2.card.version })));
+  // Rows an earlier step deliberately back-dated are not rests; only a
+  // cooldown in the future withholds anything.
+  const restsWritten = await prisma.recommendationExposure.count({
+    where: { userId, cooldownUntil: { gt: new Date() }, openCount: 0,
+             dismissedAt: null, actedOnAt: null },
+  });
+  check("recording an impression never writes a rest",
+    restsWritten === 0, `${restsWritten} rests written across ${fresh.stored.length} impressions`);
+  await prisma.recommendationExposure.updateMany({
+    where: { userId }, data: { impressionCount: 8, lastShownAt: new Date() },
+  });
+  const sweep = await startSession(userId, false);
+  const swept = await prisma.recommendationExposure.aggregate({
+    where: { userId }, _max: { impressionCount: true },
+  });
+  const openedRows = await prisma.recommendationExposure.findMany({
+    where: { userId, openCount: { gt: 0 } }, select: { recommendationKey: true },
+  });
+  const openedKeys = new Set(openedRows.map((r) => r.recommendationKey));
+  const restingNotOpened = sweep.suppressed
+    .filter((x) => x.status === "COOLING" && !openedKeys.has(x.key)).length;
+  // The only things allowed to be missing are decisions and the opened card.
+  const wrongly = sweep.suppressed.filter((x) =>
+    x.status !== "DISMISSED" && x.status !== "ACTED_ON" && !openedKeys.has(x.key));
+  check("reading the entire feed repeatedly withholds nothing",
+    wrongly.length === 0,
+    `${sweep.stored.length} of ${fresh.stored.length} eligible after ${swept._max.impressionCount} passes;`
+    + ` suppressed only ${sweep.suppressed.map((x) => x.status).join(", ") || "nothing"}`);
+  check("no card is ever resting from impressions, however many",
+    restingNotOpened === 0, `${restingNotOpened} resting without having been opened`);
+  check("the defensive floor did not have to fire",
+    !sweep.stored.some((s2) => s2.lifecycle.status === "REVIVED"));
+
+  // ── Repeat exposure has to cost position, monotonically ──────────────────
+  //
+  // Evaluated directly rather than through a session, so the ladder measures
+  // the rule itself instead of whatever state the steps above left behind.
+  const ladderCard = fresh.stored[0];
+  const subject = result.all.find((c) => c.recommendationKey === ladderCard.card.id);
+  const at = (impressionCount, hoursAgo = 0) => evaluate(subject, impressionCount === null ? undefined : {
+    recommendationKey: subject.recommendationKey,
+    impressionCount, openCount: 0,
+    firstShownAt: new Date(), lastShownAt: new Date(Date.now() - hoursAgo * 3_600_000),
+    lastOpenedAt: null, dismissedAt: null, actedOnAt: null, cooldownUntil: null,
+    lastUnderlyingVersion: subject.underlyingVersion,
+  }, new Date());
+
+  const ladder = [["unseen", at(null)], ["seen 1x", at(1)], ["seen 2x", at(2)],
+    ["seen 4x", at(4)], ["seen 8x", at(8)]];
+  console.log(`  exposure ladder: ${ladder.map(([l, v]) => `${l} ${v.score.toFixed(3)}`).join("  >  ")}`);
+  check("each further impression lowers the score",
+    ladder.every(([, v], i) => i === 0 || v.score < ladder[i - 1][1].score));
+  check("no number of impressions ever makes a card ineligible",
+    ladder.every(([, v]) => v.eligible), `8x → ${at(8).status}`);
+
+  const longAgo = at(4, 14 * 24), justNow = at(4, 0);
+  check("a card seen long ago outranks the same card seen this morning",
+    longAgo.score > justNow.score,
+    `${longAgo.score.toFixed(3)} vs ${justNow.score.toFixed(3)}`);
+
+  // The defensive floor. Impressions can no longer produce this state, so it
+  // is forced here to prove the invariant still holds if anything ever does.
   await prisma.recommendationExposure.updateMany({
     where: { userId }, data: { cooldownUntil: new Date(Date.now() + 86_400_000) },
   });

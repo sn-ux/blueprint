@@ -103,10 +103,18 @@ export function evaluate(
     return { status: "ACTED_ON", eligible: false, score: 0, parts };
   }
 
+  // How many times it has been seen — a lasting fact.
   parts.impressions = -Math.min(
     LIFECYCLE.impressionPenaltyMax,
     LIFECYCLE.impressionPenalty * state.impressionCount,
   );
+  // How lately — a fading one, so material passed over weeks ago rises again
+  // while material passed over this morning stays down.
+  if (state.lastShownAt) {
+    const elapsed = hours(now.getTime() - state.lastShownAt.getTime());
+    const decay = Math.pow(0.5, elapsed / LIFECYCLE.impressionRecencyHalfLifeHours);
+    parts.recentlyShown = -LIFECYCLE.recentImpressionPenalty * decay;
+  }
   parts.opens = -Math.min(
     LIFECYCLE.openPenaltyMax,
     LIFECYCLE.openPenalty * state.openCount,
@@ -136,19 +144,15 @@ export function evaluate(
 /**
  * When a card should rest until, given what just happened to it.
  *
- * `impressions` is the count *after* this event. A first sighting returns
- * null: it costs the card ranking priority through the penalty above, but it
- * does not withhold it. Anything else would let one pass through the feed
- * silence the whole inventory.
+ * An impression never returns a rest, however many have accumulated. Seeing a
+ * card is a ranking signal — it is scored above, and that is the whole of its
+ * effect. Only opening, dismissing and resolving are decisions strong enough
+ * to withhold a valid recommendation.
  */
 export function cooldownFor(
-  event: "IMPRESSION" | "OPEN" | "DISMISS" | "ACTION",
-  now: Date,
-  impressions = 0,
+  event: "IMPRESSION" | "OPEN" | "DISMISS" | "ACTION", now: Date,
 ): Date | null {
-  if (event === "IMPRESSION" && impressions < LIFECYCLE.impressionsBeforeRest) return null;
   const h = event === "OPEN" ? LIFECYCLE.openCooldownHours
-    : event === "IMPRESSION" ? LIFECYCLE.impressionCooldownHours
     : event === "DISMISS" ? LIFECYCLE.dismissCooldownDays * 24
     : null;
   return h === null ? null : new Date(now.getTime() + h * 3_600_000);
