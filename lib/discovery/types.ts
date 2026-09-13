@@ -30,13 +30,6 @@ export interface TrackRow {
   albumType?: string | null;
   /** Spotify's album release date. Precision varies; only the year is used. */
   releaseDate?: string | null;
-  /**
-   * When the owner saved it to Liked Songs, as Spotify reported it.
-   *
-   * Null for rows imported before this was captured and for playlist-only
-   * tracks. Every consumer treats null as "not known", never as "old".
-   */
-  savedAt?: Date | string | null;
 }
 
 export interface PersonRow {
@@ -466,23 +459,6 @@ export interface Candidate {
   /** How far this sits from what the viewer already holds, and its band. */
   discoveryDistance?: number;
   distanceBand?: "NEAR" | "MID" | "FAR";
-  /**
-   * Whether the viewer holds anything inside this card's own subject.
-   *
-   * NEW when they hold none of it, ADJACENT when they hold some. Set
-   * containment and nothing more — see lib/discovery/novelty.ts. Read by the
-   * composer to pace a reading; never a gate.
-   */
-  novelty?: "NEW" | "ADJACENT";
-  /**
-   * How lately the viewer saved anything in the set this card hangs off, and
-   * how much of the card's page is artists they already hold a lot of. Both
-   * are facts about one library, kept out of the anchored base score.
-   */
-  anchorRecency?: number;
-  artistFamiliarity?: number;
-  recencyBonus?: number;
-  familiarArtistPenalty?: number;
 
   /** Lifecycle placement, kept strictly apart from recommendation quality. */
   lifecycleScore?: number;

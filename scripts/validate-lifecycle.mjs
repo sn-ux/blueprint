@@ -111,22 +111,8 @@ try {
     `${distinct.size} distinct over ${seen.length} shown`);
   check("the stream does not end while material remains",
     last.hasMore === true && last.nextCursor !== null && last.caughtUp === false);
-  /**
-   * Reachability is a share of what exists, not a remembered count.
-   *
-   * This asserted "more than 300", which was the universe's size when it was
-   * written. The track floor now suppresses every non-album card whose page
-   * would show fewer than a dozen songs, so the universe is deliberately
-   * smaller — and a fixed number would report that as a regression when it is
-   * the rule working. What has to hold is that scrolling reaches essentially
-   * all of whatever the engine produced.
-   */
-  const universe = (await import("../lib/discovery/engine.ts"))
-    .runEngine({ viewerId: userId, ...(await (await import("../lib/discovery/corpus.ts")).loadCorpus()) },
-      { feedSize: 1 }).all.length;
   check("the whole generated universe is reachable by scrolling",
-    distinct.size >= universe * 0.9,
-    `${distinct.size} of ${universe} propositions reached`);
+    distinct.size > 300, `${distinct.size} distinct propositions reached`);
 
   // Quality must not collapse monotonically as the reader keeps scrolling.
   console.log("\n  per-page composition:");

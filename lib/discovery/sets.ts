@@ -195,19 +195,6 @@ export interface DiscoveryIndex {
   viewerByWorld: Map<string, number>;
   /** Recordings the viewer holds, by work rather than by pressing. */
   viewerWorks: Set<string>;
-  /**
-   * When the viewer last saved anything in each set, where Spotify said so.
-   *
-   * Milliseconds, and only over rows that actually carry a date — a set whose
-   * tracks all predate the save-date capture is simply absent from these maps
-   * rather than being given a time it never had.
-   */
-  viewerSavedAtByArtist: Map<string, number>;
-  viewerSavedAtByAlbumId: Map<string, number>;
-  viewerSavedAtByLane: Map<string, number>;
-  viewerSavedAtByWorld: Map<string, number>;
-  /** Whether the viewer's library carries any save dates at all. */
-  viewerHasSaveDates: boolean;
   /** Authoritative album identity per track, for the subject/deliverable gate. */
   albumIdOf: Map<string, string>;
 }
@@ -269,17 +256,7 @@ export function buildIndex(input: EngineInput): DiscoveryIndex {
   const viewerByLane = new Map<string, number>();
   const viewerByWorld = new Map<string, number>();
   const viewerWorks = new Set<string>();
-  const viewerSavedAtByArtist = new Map<string, number>();
-  const viewerSavedAtByAlbumId = new Map<string, number>();
-  const viewerSavedAtByLane = new Map<string, number>();
-  const viewerSavedAtByWorld = new Map<string, number>();
-  let viewerHasSaveDates = false;
   const bump = <K,>(m: Map<K, number>, k: K) => m.set(k, (m.get(k) ?? 0) + 1);
-  /** The most recent save in a set, over the rows that carry a date. */
-  const latest = <K,>(m: Map<K, number>, k: K, at: number) => {
-    const seen = m.get(k);
-    if (seen === undefined || at > seen) m.set(k, at);
-  };
   for (const t of tracks) {
     if (t.userId !== viewerId) continue;
     bump(viewerByArtist, t.artist);
@@ -288,14 +265,6 @@ export function buildIndex(input: EngineInput): DiscoveryIndex {
     const sub = (t.blueprintSubgenre ?? "").trim();
     if (sub && sub !== UNKNOWN_LANE) bump(viewerByLane, sub);
     viewerWorks.add(workKeyOf(t.name, t.artist));
-
-    const saved = t.savedAt ? new Date(t.savedAt).getTime() : NaN;
-    if (!Number.isFinite(saved)) continue;
-    viewerHasSaveDates = true;
-    latest(viewerSavedAtByArtist, t.artist, saved);
-    if (t.albumId) latest(viewerSavedAtByAlbumId, t.albumId, saved);
-    latest(viewerSavedAtByWorld, t.blueprintWorld, saved);
-    if (sub && sub !== UNKNOWN_LANE) latest(viewerSavedAtByLane, sub, saved);
   }
 
   // ── D = F_all − U, and who holds each member ──────────────────────────────
@@ -504,8 +473,6 @@ export function buildIndex(input: EngineInput): DiscoveryIndex {
     authAlbums, authCoveredTitleKeys,
     sourcesInWorld, sourcesInLane, eligibleSourceUniverse: friends.length,
     viewerByArtist, viewerByAlbumId, viewerByLane, viewerByWorld, viewerWorks, albumIdOf,
-    viewerSavedAtByArtist, viewerSavedAtByAlbumId, viewerSavedAtByLane, viewerSavedAtByWorld,
-    viewerHasSaveDates,
   };
 }
 

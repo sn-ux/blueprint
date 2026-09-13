@@ -57,63 +57,6 @@ export const BANDS = {
 // ── Ranking ─────────────────────────────────────────────────────────────────
 
 export const RANK_WEIGHTS = { evidence: 0.65, attention: 0.35 };
-
-/**
- * How recently the viewer saved the library material a card hangs off.
- *
- * Spotify stamps every Liked Song with when it was saved, and what somebody
- * added last month is a livelier part of their library than what they added
- * in 2019. So a card anchored to recently-saved material is lifted. It is a
- * bonus and never a penalty: a library imported before `savedAt` was captured
- * has no dates, every card scores zero here, and the ordering is exactly what
- * it was. Nothing infers a date that was not given.
- *
- * `halfLifeDays` is the only shape decision — a save is worth half as much
- * every six months, so this year's saves lead, last year's still count, and
- * five-year-old saves are ~0.03 rather than zero.
- */
-export const RECENCY = {
-  weight: 0.12,
-  halfLifeDays: 180,
-};
-
-/**
- * How much a card is set back for being about an artist the viewer already
- * holds a lot of.
- *
- * A track missing from a well-represented artist is weak evidence of a
- * discovery: the person has very likely already met that artist's catalogue
- * and left these particular tracks unsaved. It is still a fact about set
- * membership — how many tracks by this artist are in the library — and never
- * a claim about taste, and it is a ranking cost rather than a gate, so a
- * genuinely strong catalogue gap can still surface.
- *
- * `from` is where the setback starts and `saturation` where it is full, so an
- * artist held once costs nothing and an artist held twenty times costs all of
- * `max`. Measured over the card's own deliverable tracks, so a set assembled
- * entirely from artists already in the library pays it in full.
- */
-export const FAMILIAR_ARTIST = {
-  max: 0.30,
-  from: 3,
-  saturation: 20,
-};
-
-/**
- * The floor under how many tracks a card's page may show.
- *
- * A recommendation that opens onto four songs is not a discovery, it is a
- * fragment. Applied after every exclusion and de-duplication, so it counts
- * what the reader will actually get rather than what the set held before the
- * library was subtracted from it.
- *
- * An album is the one exemption, and structurally rather than by preference:
- * a record is a fixed object with its own length, and an album card's page is
- * the missing part of that record — not a list assembled to a target size.
- * Every other card type is a list, and a list needs a dozen.
- */
-export const MIN_DELIVERABLE = 12;
-export const MIN_DELIVERABLE_EXEMPT: readonly string[] = ["ALBUM"];
 export const TIE_BREAK_MAX = 0.02;
 export const TIE_BREAK_SINGLETON = 0.01;
 export const CORROBORATION_PER_GENERATOR = 0.04;
@@ -570,55 +513,6 @@ export const FEED = {
     /** Tracks by bridging artists at which the bridge is as firm as it gets. */
     bridgeSaturation: 40,
     bridgeCredit: 0.3,
-  },
-  /**
-   * How the reading is paced between new ground and adjacent ground.
-   *
-   * A card is NEW when the viewer holds nothing at all inside its subject —
-   * no track by that artist, none of that record, nothing in that lane — and
-   * ADJACENT when they hold some of it. Both are set-membership facts; there
-   * is no profile and no similarity behind either.
-   *
-   * The opening seven slots follow `pattern` exactly, and the rest of the
-   * reading holds the same proportion. `offPattern` is what a card of the
-   * wrong class pays for a slot, which makes this a preference like every
-   * other composition rule: a much better ADJACENT card still takes a NEW
-   * slot, and no weak card is invented to fill one.
-   */
-  novelty: {
-    pattern: ["NEW", "NEW", "ADJACENT", "NEW", "NEW", "NEW", "ADJACENT"] as const,
-    /** The share of NEW the reading settles at once the pattern is spent. */
-    target: 0.72,
-    /** How far the running share may drift before the penalty applies. */
-    tolerance: 0.03,
-    /**
-     * What a card of the wrong class pays for a slot.
-     *
-     * Deliberately smaller than the lifecycle separation between an unseen
-     * card and one already shown (unseenBoost plus the impression penalties,
-     * so roughly 0.2 upwards). If this exceeded that, a card the reader had
-     * already scrolled past would outrank fresh material purely for being the
-     * right class, which is the lifecycle rule inverted.
-     */
-    offPattern: 0.18,
-    /**
-     * How much of the distance setback a new card is spared in a slot asking
-     * for new ground.
-     *
-     * The distance ramp and this pattern measure the same widening from
-     * opposite ends: the ramp holds far material back near the top, while the
-     * pattern asks for exactly that in slots one, two, four, five and six.
-     * Shouting the ramp down with a bigger penalty would have cost more than
-     * the whole lifecycle scale, so instead the setback is waived where the
-     * leap is the point. Outside those slots the ramp applies in full, and
-     * the opener penalty still keeps a whole genre off the first slot.
-     *
-     * Waiving rather than reducing costs nothing in lifecycle terms, because
-     * it applies to a class of card and not to how often one has been seen:
-     * two cards of the same class are still separated by exactly the
-     * lifecycle scale, whichever slot they are competing for.
-     */
-    distanceRelief: 0,
   },
   similarity: {
     generator: 0.30,

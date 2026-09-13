@@ -61,14 +61,6 @@ type NormalizedTrack = {
   discNumber:       number | null;
   albumType:        string | null;
   artists:       { id: string; name: string }[];
-  /**
-   * `added_at` from the Liked Songs page this track arrived on.
-   *
-   * Only Liked Songs carry one. A track that appears solely in an owned
-   * playlist stays null rather than borrowing the playlist's add date — the
-   * two are different events and only the first is a save.
-   */
-  savedAt:       string | null;
 };
 
 export interface ImportResult {
@@ -157,9 +149,8 @@ async function spotifyGet(
   }
 }
 
-function normalizeTrack(t: RawTrack, savedAt: string | null = null): NormalizedTrack {
+function normalizeTrack(t: RawTrack): NormalizedTrack {
   return {
-    savedAt,
     id:            t.id,
     name:          t.name,
     previewUrl:    t.preview_url ?? null,
@@ -251,8 +242,7 @@ export async function runLikedSongsImport(userId: string): Promise<ImportResult>
       for (const item of res.data.items ?? []) {
         const t: RawTrack | null = item.track ?? null;
         if (isValidTrack(t) && !trackMap.has(t.id)) {
-          // Spotify's own timestamp for the save, kept as it was given.
-          trackMap.set(t.id, normalizeTrack(t, item.added_at ?? null));
+          trackMap.set(t.id, normalizeTrack(t));
         }
         likedSongsFetched++;
       }
@@ -309,10 +299,7 @@ export async function runLikedSongsImport(userId: string): Promise<ImportResult>
         ownedPlaylistTracksFetched++;
         const t: RawTrack | null = item.track ?? null;
         if (isValidTrack(t) && !trackMap.has(t.id)) {
-          // No save date. This item's `added_at` is when the track was put in
-          // a playlist, which is a different event from saving it, and the
-          // fields mask above does not even request it.
-          trackMap.set(t.id, normalizeTrack(t, null));
+          trackMap.set(t.id, normalizeTrack(t));
         }
       }
       url = res.data.next ?? null;
@@ -362,10 +349,6 @@ export async function runLikedSongsImport(userId: string): Promise<ImportResult>
             releaseDate: t.releaseDate, releaseDatePrecision: t.releaseDatePrecision,
             albumId: t.albumId, albumTotalTracks: t.albumTotalTracks,
             trackNumber: t.trackNumber, discNumber: t.discNumber, albumType: t.albumType,
-            // Only written when Spotify gave one, so a re-import that reaches a
-            // track through a playlist cannot erase the save date a Liked
-            // Songs page already established.
-            ...(t.savedAt ? { savedAt: new Date(t.savedAt) } : {}),
             rawGenre, blueprintWorld, blueprintSubgenre },
           create: { userId, spotifyId: t.id, name: t.name, artist: firstArtist.name,
             album: t.albumName, imageUrl: t.albumImageUrl, previewUrl: t.previewUrl,
@@ -373,7 +356,6 @@ export async function runLikedSongsImport(userId: string): Promise<ImportResult>
             releaseDate: t.releaseDate, releaseDatePrecision: t.releaseDatePrecision,
             albumId: t.albumId, albumTotalTracks: t.albumTotalTracks,
             trackNumber: t.trackNumber, discNumber: t.discNumber, albumType: t.albumType,
-            savedAt: t.savedAt ? new Date(t.savedAt) : null,
             rawGenre, blueprintWorld, blueprintSubgenre },
         });
       })

@@ -84,12 +84,6 @@ export interface FeedCard {
   /** How far this sits from what the viewer already holds. */
   distanceBand: "NEAR" | "MID" | "FAR";
   /**
-   * Whether the viewer holds anything inside this card's subject: NEW when
-   * they hold none of it, ADJACENT when they hold some. Set containment, and
-   * what the reading is paced on.
-   */
-  novelty: "NEW" | "ADJACENT";
-  /**
    * What this card is about, as a key that is the same for every viewer.
    *
    * "artist:<spotify id>", "album:<spotify id>", "subgenre:<canonical>",
@@ -273,7 +267,6 @@ export function toFeedCard(index: DiscoveryIndex, c: Candidate, previewLimit = 4
     recipientContext: contextOf(c),
     detailExplanation: c.winningClaim?.detailText ?? c.caption ?? "",
     distanceBand: c.distanceBand ?? "NEAR",
-    novelty: c.novelty ?? "ADJACENT",
     subjectKey: subjectIdentity(index, c),
     sources: c.sourceFriendIds.map((id) => personOf(index, id)),
     deliverableCount: all.length,
