@@ -121,8 +121,6 @@ function friendsOf(ref: Reference, wk: string, viewerId: string): string[] {
  */
 function rank(ref: Reference, p: Profile, works: Iterable<string>): { tracks: string[]; holders: Holder[]; evidence: number } {
   const scored: { wk: string; n: number }[] = [];
-  const per = new Map<string, number>();
-  let evidence = 0;
   for (const wk of new Set(works)) {
     // The one invariant the product rests on, enforced in the single place
     // every family passes through rather than seven times over.
@@ -136,14 +134,25 @@ function rank(ref: Reference, p: Profile, works: Iterable<string>): { tracks: st
     const fr = friendsOf(ref, wk, p.userId);
     if (fr.length === 0) continue;
     scored.push({ wk, n: fr.length });
+  }
+  scored.sort((a, b) => b.n - a.n || a.wk.localeCompare(b.wk));
+
+  // Count the holders over what the card actually hands over, not over
+  // everything that qualified before the cap. Counting the wider set put
+  // "Chris the most, with forty-five" on a card containing thirty tracks —
+  // every number on a card has to describe the same set of recordings.
+  const kept = scored.slice(0, MAX_TRACKS).map((x) => x.wk);
+  const per = new Map<string, number>();
+  let evidence = 0;
+  for (const wk of kept) {
+    const fr = friendsOf(ref, wk, p.userId);
     evidence += fr.length;
     for (const u of fr) per.set(u, (per.get(u) ?? 0) + 1);
   }
-  scored.sort((a, b) => b.n - a.n || a.wk.localeCompare(b.wk));
   const holders = [...per.entries()]
     .map(([uid, count]) => ({ uid, count }))
-    .sort((a, b) => b.count - a.count);
-  return { tracks: scored.slice(0, MAX_TRACKS).map((x) => x.wk), holders, evidence };
+    .sort((a, b) => b.count - a.count || a.uid.localeCompare(b.uid));
+  return { tracks: kept, holders, evidence };
 }
 
 /**
@@ -321,7 +330,7 @@ function newInYourLane(ref: Reference, p: Profile): Candidate[] {
       connection: { kind: "LANE_DEPTH", key: lane, label: lane, yours },
       facts: { artist: a.name, lane, yoursInLane: yours, available: tracks.length,
                friends: deep.length, deepest: holders[0]?.count ?? 0,
-               expected: +lambda.toFixed(2), bits: +bits.toFixed(1) },
+               expected: Math.round(lambda), bits: +bits.toFixed(1) },
       score: scoreOf("NEW_IN_YOUR_LANE", "LANE_DEPTH", evidence, deep.length) * (1 + Math.min(1, bits / 12)),
       footprint: tracks,
     });
