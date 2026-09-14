@@ -197,4 +197,5 @@ export function observeFor(
 }
 
 export { buildReference, buildProfile };
+export { workKeyOf } from "./reference";
 export type { Reference, Profile, Candidate };

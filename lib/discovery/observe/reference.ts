@@ -15,24 +15,59 @@
 import type { TrackRow } from "../types";
 
 /**
+ * Markers that mean a different performance, not a different pressing.
+ *
+ * A remaster, a mono mix and a single version are the same recording reissued;
+ * a live take, a remix and an acoustic version are not. Stripping all of them
+ * alike merged "Aerodynamic" with "Aerodynamic - Daft Punk Remix" and three
+ * separate live performances of the Grateful Dead's "Jam" into one recording,
+ * and then credited two people with sharing a track neither had — a hundred
+ * and seventy-six times.
+ */
+const PERFORMANCE = /\b(live|remix|acoustic|demo|instrumental|cover|reprise|unplugged|session|rehearsal|karaoke)\b/gi;
+
+/** Reduce to letters and digits; empty means the name had none. */
+const alnum = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "");
+
+/**
  * A recording's name, stripped to what makes it that recording.
  *
- * Parentheses and brackets go, and so does everything from a featuring credit
- * or a remaster note onwards. Without the second part, "LOVE." and "LOVE.
- * FEAT. ZACARI." are two different songs, and a collector's edition of a
- * record somebody already owns comes back as ten discoveries.
+ * Parentheses, brackets, featured credits and trailing reissue notes go, since
+ * none of them changes which performance this is. What does change it is kept
+ * and folded into the key, so a live take and the studio version stay two
+ * things.
  */
-export const normText = (s: string) =>
-  s.toLowerCase()
+export const normText = (raw: string): string => {
+  const markers = [...new Set((raw.match(PERFORMANCE) ?? []).map((m) => m.toLowerCase()))].sort();
+  const base = raw
+    .toLowerCase()
     .replace(/\(.*?\)|\[.*?\]/g, " ")
-    .split(/\s+-\s+|\bfeat\.?\b|\bft\.?\b|\bwith\b/)[0]
-    .replace(/[^a-z0-9]+/g, "").trim();
+    .split(/\s+-\s+|\bfeat\.?\b|\bft\.?\b|\bwith\b/)[0];
+  const core = alnum(base);
+  /**
+   * A name written entirely outside the Latin alphabet reduces to nothing, and
+   * every such name then shares one identity. Seventeen artists — Japanese,
+   * Cyrillic, Arabic, Thai — were being treated as a single artist with
+   * forty-seven tracks. Where there is nothing left, keep the original.
+   */
+  const stem = core || raw.toLowerCase().replace(/\s+/g, "") || "unnamed";
+  return markers.length ? `${stem}#${markers.join(",")}` : stem;
+};
 
-/** Recording identity. A Spotify id names a pressing; this names the song. */
+/**
+ * Artist identity. Performance markers are meaningless in a name, so this uses
+ * the plain reduction with the same fallback for names that carry no Latin
+ * characters at all.
+ */
+export const artistKeyOf = (artist: string): string =>
+  alnum(artist) || artist.toLowerCase().replace(/\s+/g, "") || "unnamed";
+
+/**
+ * Recording identity. A Spotify id names a pressing; this names the song —
+ * the same performance by the same artist, however it was later packaged.
+ */
 export const workKeyOf = (name: string, artist: string) =>
-  `${normText(name)}|${normText(artist)}`;
-
-export const artistKeyOf = (artist: string) => normText(artist);
+  `${normText(name)}\u0001${artistKeyOf(artist)}`;
 
 export const yearOf = (t: { releaseDate?: string | null }): number | null => {
   const m = /^(\d{4})/.exec(t.releaseDate ?? "");
@@ -205,19 +240,43 @@ export function buildReference(input: TrackRow[]): Reference {
    * by whichever row happened to be indexed first. A card duly reported that a
    * listener shared forty-four of somebody's forty tracks.
    *
-   * The vote is the commonest tag, ties broken alphabetically so the answer
-   * does not depend on the order rows came back from the database. Everything
-   * downstream — lane sizes, per-person depth, the profile — reads this one
-   * value, so the counts on a card cannot disagree with each other.
+   * The vote is the commonest tag. A tie goes to whichever lane is larger
+   * across the whole corpus, then alphabetically — because with two rows and
+   * one vote each, "alphabetically" meant a recording tagged uk r&b by one
+   * person and french rap by another became french rap on the strength of the
+   * letter f. Everything downstream — lane sizes, per-person depth, the
+   * profile, and after the backfill the sphere and search too — reads this one
+   * value, so no two screens can disagree about where a track lives.
    */
+  /**
+   * An absent classification never outvotes a real one. The importer writes
+   * "unknown" when it could not place a track, and it is the largest bucket in
+   * the corpus — so a size tie-break handed it the win and moved City Of Stars
+   * out of musicals and into nothing.
+   */
+  const unclassified = (sg: string) =>
+    ["unknown", "other", "", "n/a", "misc"].includes(sg.toLowerCase().trim());
+
+  const laneSize = new Map<string, number>();
+  for (const v of votes.values()) for (const [sg, n] of v) laneSize.set(sg, (laneSize.get(sg) ?? 0) + n);
   for (const [wk, w] of ref.works) {
     const v = votes.get(wk);
     if (!v) continue;
-    let best = w.subgenre, bestN = -1;
-    for (const [sg, n] of [...v.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-      if (n > bestN) { bestN = n; best = sg; }
+    const named = [...v.entries()].filter(([sg]) => !unclassified(sg));
+    const ballot = named.length ? named : [...v.entries()];
+    let best = w.subgenre, bestN = -1, bestSize = -1;
+    for (const [sg, n] of ballot) {
+      const size = laneSize.get(sg) ?? 0;
+      if (n > bestN
+        || (n === bestN && size > bestSize)
+        || (n === bestN && size === bestSize && sg.localeCompare(best) < 0)) {
+        bestN = n; bestSize = size; best = sg;
+      }
     }
     w.subgenre = best;
+    // The world follows the lane, so the two can never point apart.
+    const world = ref.subgenreWorld.get(best);
+    if (world) w.world = world;
   }
 
   for (const [wk, w] of ref.works) {

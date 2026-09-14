@@ -215,6 +215,20 @@ function worth(relevance: number, shown: number, subjectSize: number): number {
   return relevance * (shown / size);
 }
 
+/**
+ * How many actual records an artist made, as far as this corpus knows.
+ *
+ * `a.albums` is keyed by every album id their tracks appear on, which includes
+ * singles and compilations — so a caption reading "across the N records of
+ * theirs anyone here owns" printed 29 for Kendrick Lamar where 18 is the
+ * number of albums. Four hundred and twenty-three artists were affected.
+ */
+function recordCount(ref: Reference, a: { albums: Map<string, Set<string>> }): number {
+  let n = 0;
+  for (const aid of a.albums.keys()) if (ref.albums.get(aid)?.albumType === "album") n++;
+  return n;
+}
+
 /** Measured once per corpus and reused for every viewer of it. */
 const RATES = new WeakMap<Reference, Rates>();
 export function ratesFor(ref: Reference): Rates {
@@ -364,7 +378,7 @@ function deeperOnAnArtist(ref: Reference, p: Profile): Candidate[] {
       tracks, holders, evidence, available,
       connection: { kind: "ARTIST_HELD", key: ak, label: a.name, yours: held.size },
       facts: { artist: a.name, yours: held.size, available,
-               deepest: holders[0]?.count ?? 0, records: a.albums.size },
+               deepest: holders[0]?.count ?? 0, records: recordCount(ref, a) },
       relevance,
       discovery: tracks.length / Math.max(tracks.length, a.works.size),
       subjectSize: a.works.size,

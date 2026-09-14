@@ -27,16 +27,20 @@ export const UNKNOWN_LANE = "unknown";
  * to be wrong: presenting something the viewer already has as a discovery
  * costs more than withholding a version of it.
  */
-export function workKeyOf(name: string, artist: string): string {
-  const base = name
-    .toLowerCase()
-    .replace(/\s*[([].*$/, "")
-    .replace(/\s+-\s+.*$/, "")
-    .replace(/[^a-z0-9 ]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-  return `${base}␟${artist.toLowerCase().trim()}`;
-}
+/**
+ * Recording identity — the one definition, re-exported.
+ *
+ * There used to be two. This file had its own, stripping everything after a
+ * bracket or a dash and keeping spaces; the observation engine had another,
+ * folding performance markers into the key and falling back for names written
+ * outside the Latin alphabet. Notes, /api/me/artists and /api/unheard used
+ * this one while every card used the other, so the same recording carried two
+ * identities depending on which screen you were looking at — and a note
+ * written against a track from a card was keyed differently from the same
+ * track everywhere else.
+ */
+import { workKeyOf } from "./observe/reference";
+export { workKeyOf };
 
 export interface TrackMeta {
   spotifyId: string;
