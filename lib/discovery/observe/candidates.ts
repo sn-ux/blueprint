@@ -57,6 +57,23 @@ export interface Candidate {
   /** Corroboration carried by the payload, in friend-tracks. */
   evidence: number;
   /**
+   * Expected tracks kept, from the measured curves. Evidence that the music is
+   * relevant — not, on its own, a reason to show it.
+   */
+  relevance: number;
+  /**
+   * The share of its bounded subject this card opens.
+   *
+   * Every card is about something with a known size: a record has an
+   * authoritative track count, an artist has a catalogue, a friend's lane has
+   * a size. Sixteen tracks of a nineteen-track record is most of that record.
+   * Thirty tracks of an artist with a hundred and sixty-three is a sample of
+   * them, and showing it expands nothing — the artist was already visible.
+   */
+  discovery: number;
+  /** How large the bounded subject is, for the discovery share. */
+  subjectSize: number;
+  /**
    * How many qualifying recordings there are in total, before the card is
    * trimmed to what a page can show.
    *
@@ -127,6 +144,31 @@ function albumArtist(ref: Reference, aid: string): string {
   return arts.size >= VARIOUS_ARTISTS_AT ? "Various artists" : alb.artist;
 }
 
+/**
+ * What a card is worth: relevance, weighted by how much of its subject it opens.
+ *
+ * Expected-keeps alone makes the mathematically correct move an endless supply
+ * of the artists somebody already has most of — thirty more Kanye tracks to a
+ * listener with eighty-nine of them scores beautifully and expands nothing.
+ * Relevance answers "would I be into this". It cannot also answer "is this
+ * worth showing me", and using it for both is what produced that feed.
+ *
+ * Discovery is the second question, and it is structural rather than tuned:
+ * the share of a bounded thing that becomes available. A record has an
+ * authoritative track count, an artist has a catalogue, a friend's lane has a
+ * size — so "sixteen of this record's nineteen tracks" is 0.84 of it and
+ * "thirty of this artist's hundred and sixty-three" is 0.18 of them. No
+ * penalty is applied to anybody; large subjects simply cannot be opened by one
+ * card, which is the true fact about them.
+ *
+ * The product rewards both: a card has to be music the listener would keep AND
+ * have to meaningfully open the thing it is about.
+ */
+function worth(relevance: number, shown: number, subjectSize: number): number {
+  const size = Math.max(shown, subjectSize);
+  return relevance * (shown / size);
+}
+
 /** Measured once per corpus and reused for every viewer of it. */
 const RATES = new WeakMap<Reference, Rates>();
 export function ratesFor(ref: Reference): Rates {
@@ -154,7 +196,7 @@ function friendsOf(ref: Reference, wk: string, viewerId: string): string[] {
  */
 function rank(
   ref: Reference, p: Profile, works: Iterable<string>,
-): { tracks: string[]; holders: Holder[]; evidence: number; available: number; score: number } {
+): { tracks: string[]; holders: Holder[]; evidence: number; available: number; relevance: number } {
   const rates = ratesFor(ref);
   const scored: { wk: string; n: number; pr: number }[] = [];
   for (const wk of new Set(works)) {
@@ -189,14 +231,8 @@ function rank(
   // every number on a card has to describe the same set of recordings.
   const top = scored.slice(0, MAX_TRACKS);
   const kept = top.map((x) => x.wk);
-  /**
-   * The card's worth, in expected tracks kept.
-   *
-   * A real quantity with a unit rather than a blend of weights, summed over
-   * what the card actually shows — so thirty lane tracks at a third do not
-   * outrank sixteen tracks off a record somebody already owns half of.
-   */
-  const score = top.reduce((a, x) => a + x.pr, 0);
+  /** Expected tracks kept, over what the card actually shows. */
+  const relevance = top.reduce((a, x) => a + x.pr, 0);
   const per = new Map<string, number>();
   let evidence = 0;
   for (const wk of kept) {
@@ -207,7 +243,7 @@ function rank(
   const holders = [...per.entries()]
     .map(([uid, count]) => ({ uid, count }))
     .sort((a, b) => b.count - a.count || a.uid.localeCompare(b.uid));
-  return { tracks: kept, holders, evidence, available: scored.length, score };
+  return { tracks: kept, holders, evidence, available: scored.length, relevance };
 }
 
 
@@ -226,7 +262,7 @@ function finishTheRecord(ref: Reference, p: Profile): Candidate[] {
     if (!alb || alb.albumType !== "album") continue;
     if (alb.totalTracks > MAX_ALBUM_TRACKS) continue;
     const missing = [...alb.works].filter((wk) => !p.works.has(wk));
-    const { tracks, holders, evidence, available, score } = rank(ref, p, missing);
+    const { tracks, holders, evidence, available, relevance } = rank(ref, p, missing);
     if (tracks.length < MIN_TRACKS) continue;
     out.push({
       family: "FINISH_THE_RECORD",
@@ -237,7 +273,10 @@ function finishTheRecord(ref: Reference, p: Profile): Candidate[] {
       facts: { album: alb.name, artist: albumArtist(ref, aid), yours: held.size,
                total: alb.totalTracks, available,
                deepest: holders[0]?.count ?? 0 },
-      score,
+      relevance,
+      discovery: tracks.length / Math.max(tracks.length, alb.totalTracks),
+      subjectSize: alb.totalTracks,
+      score: worth(relevance, tracks.length, alb.totalTracks),
       footprint: [...tracks, ...held],
     });
   }
@@ -253,7 +292,7 @@ function deeperOnAnArtist(ref: Reference, p: Profile): Candidate[] {
     const a = ref.artists.get(ak);
     if (!a) continue;
     const missing = [...a.works].filter((wk) => !p.works.has(wk));
-    const { tracks, holders, evidence, available, score } = rank(ref, p, missing);
+    const { tracks, holders, evidence, available, relevance } = rank(ref, p, missing);
     if (tracks.length < MIN_TRACKS) continue;
     out.push({
       family: "DEEPER_ON_AN_ARTIST",
@@ -263,7 +302,10 @@ function deeperOnAnArtist(ref: Reference, p: Profile): Candidate[] {
       connection: { kind: "ARTIST_HELD", key: ak, label: a.name, yours: held.size },
       facts: { artist: a.name, yours: held.size, available,
                deepest: holders[0]?.count ?? 0, records: a.albums.size },
-      score,
+      relevance,
+      discovery: tracks.length / Math.max(tracks.length, a.works.size),
+      subjectSize: a.works.size,
+      score: worth(relevance, tracks.length, a.works.size),
       footprint: [...tracks, ...held],
     });
   }
@@ -298,7 +340,7 @@ function theRecordYouSkipped(ref: Reference, p: Profile): Candidate[] {
         if (k) makers.add(k);
       }
       if (makers.size >= VARIOUS_ARTISTS_AT) continue;
-      const { tracks, holders, evidence, available, score } = rank(ref, p, wks);
+      const { tracks, holders, evidence, available, relevance } = rank(ref, p, wks);
       if (tracks.length < MIN_TRACKS) continue;
       out.push({
         family: "THE_RECORD_YOU_SKIPPED",
@@ -309,7 +351,10 @@ function theRecordYouSkipped(ref: Reference, p: Profile): Candidate[] {
         facts: { album: alb.name, artist: a.name, yoursByArtist: held.size,
                  total: alb.totalTracks, available,
                  deepest: holders[0]?.count ?? 0, year: alb.year ?? 0 },
-        score,
+        relevance,
+        discovery: tracks.length / Math.max(tracks.length, alb.totalTracks),
+        subjectSize: alb.totalTracks,
+        score: worth(relevance, tracks.length, alb.totalTracks),
         footprint: [...tracks, ...held],
       });
     }
@@ -343,7 +388,7 @@ function newInYourLane(ref: Reference, p: Profile): Candidate[] {
     const yours = p.bySubgenre.get(lane)?.size ?? 0;
     if (yours < MIN_LANE_DEPTH) continue;
 
-    const { tracks, holders, evidence, available, score } = rank(ref, p, a.works);
+    const { tracks, holders, evidence, available, relevance } = rank(ref, p, a.works);
     if (tracks.length < MIN_TRACKS) continue;
     const deep = holders.filter((h) => h.count >= 2);
     if (deep.length < MIN_FRIENDS_FOR_LANE) continue;
@@ -369,7 +414,10 @@ function newInYourLane(ref: Reference, p: Profile): Candidate[] {
       facts: { artist: a.name, lane, yoursInLane: yours, available,
                friends: deep.length, deepest: holders[0]?.count ?? 0,
                expected: Math.round(lambda), bits: +bits.toFixed(1) },
-      score,
+      relevance,
+      discovery: tracks.length / Math.max(tracks.length, a.works.size),
+      subjectSize: a.works.size,
+      score: worth(relevance, tracks.length, a.works.size),
       footprint: tracks,
     });
   }
@@ -402,7 +450,7 @@ function whatTheyHave(ref: Reference, p: Profile): Candidate[] {
         if (p.works.has(wk)) { shared++; continue; }
         theirs.push(wk);
       }
-      const { tracks, holders, evidence, available, score } = rank(ref, p, theirs);
+      const { tracks, holders, evidence, available, relevance } = rank(ref, p, theirs);
       if (tracks.length < MIN_TRACKS) continue;
       out.push({
         family: "WHAT_THEY_HAVE",
@@ -412,7 +460,10 @@ function whatTheyHave(ref: Reference, p: Profile): Candidate[] {
         connection: { kind: "PERSON", key: uid, label: sg, yours: mine.size },
         facts: { lane: sg, other: uid, yours: mine.size, theirs: theirN,
                  shared, available },
-        score,
+        relevance,
+        discovery: tracks.length / Math.max(tracks.length, theirN),
+        subjectSize: theirN,
+        score: worth(relevance, tracks.length, theirN),
         footprint: tracks,
       });
     }
@@ -440,7 +491,7 @@ function theyAllKeepIt(ref: Reference, p: Profile): Candidate[] {
       if (p.works.has(wk)) continue;
       if (friendsOf(ref, wk, p.userId).length >= minFriends) agreed.push(wk);
     }
-    const { tracks, holders, evidence, available, score } = rank(ref, p, agreed);
+    const { tracks, holders, evidence, available, relevance } = rank(ref, p, agreed);
     if (tracks.length < MIN_TRACKS) continue;
     out.push({
       family: "THEY_ALL_KEEP_IT",
@@ -450,7 +501,10 @@ function theyAllKeepIt(ref: Reference, p: Profile): Candidate[] {
       connection: { kind: "LANE_DEPTH", key: sg, label: sg, yours: mine.size },
       facts: { lane: sg, yours: mine.size, available,
                minFriends, friends: holders.length },
-      score,
+      relevance,
+      discovery: tracks.length / Math.max(tracks.length, available),
+      subjectSize: available,
+      score: worth(relevance, tracks.length, available),
       footprint: tracks,
     });
   }
@@ -482,7 +536,9 @@ function sinceYouStopped(ref: Reference, p: Profile): Candidate[] {
       for (const wk of wks) if (!p.works.has(wk)) later.push(wk);
     }
     if (latest - cutoff < 3) continue;
-    const { tracks, holders, evidence, available, score } = rank(ref, p, later);
+    let sinceSize = 0;
+    for (const [y, wks] of a.years) if (y > cutoff + 1) sinceSize += wks.size;
+    const { tracks, holders, evidence, available, relevance } = rank(ref, p, later);
     if (tracks.length < MIN_TRACKS) continue;
     out.push({
       family: "SINCE_YOU_STOPPED",
@@ -493,7 +549,10 @@ function sinceYouStopped(ref: Reference, p: Profile): Candidate[] {
       facts: { artist: a.name, yours: held.size, lastYear: cutoff,
                latestYear: latest, available,
                deepest: holders[0]?.count ?? 0 },
-      score,
+      relevance,
+      discovery: tracks.length / Math.max(tracks.length, sinceSize),
+      subjectSize: sinceSize,
+      score: worth(relevance, tracks.length, sinceSize),
       footprint: [...tracks, ...held],
     });
   }
