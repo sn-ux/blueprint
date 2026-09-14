@@ -54,6 +54,16 @@ export interface Rendered {
   detail: string;
 }
 
+/**
+ * Names come from the card's holders and from nowhere else.
+ *
+ * Three templates used to read a user id out of `facts` and look it up
+ * separately, which is how a card could say "Chris is the only person here
+ * with Common" while rendering Chris's avatar and Sahaj's: the sentence was
+ * built from one rule and the avatars from another. There is now one list, it
+ * is the card's evidence, and a caption that wants a person has to take them
+ * from it.
+ */
 export function render(c: Candidate, nameOf: (id: string) => string): Rendered {
   const f = c.facts as Record<string, never> & Record<string, number & string>;
   const n = (k: string) => Number(f[k]);
@@ -69,6 +79,8 @@ export function render(c: Candidate, nameOf: (id: string) => string): Rendered {
    * there are more than it can hold. Saying "thirty" when a friend has four
    * hundred is not a rounding, it is the wrong fact.
    */
+  /** The one person this card is about, where it is about one. */
+  const solo = c.holders.length === 1 ? shortName(nameOf(c.holders[0].uid)) : who;
   const count = c.available;
   const shown = c.tracks.length;
   const trimmed = count > shown ? ` The ${shown} strongest are here.` : "";
@@ -112,12 +124,12 @@ export function render(c: Candidate, nameOf: (id: string) => string): Rendered {
       return {
         title: s("artist"),
         byline: `from ${who}`,
-        caption: `${who} ${bothOrAll(nFriends)} ${verb(nFriends, "has", "have")} ${s("artist")}. You have ${plural(n("yoursInLane"), "track")} of ${s("lane")} and nothing of theirs.`,
+        caption: `${who} ${verb(nFriends, "has", "each have")} ${s("artist")}. You have ${plural(n("yoursInLane"), "track")} of ${s("lane")} and nothing of theirs.`,
         detail: `${who} arrived at ${s("artist")} separately, and ${has} ${plural(count, "recording")} you do not${leader}.${trimmed} That work sits in ${s("lane")}, where your own library runs to ${plural(n("yoursInLane"), "track")} — deep enough that this is a name you might have expected to meet by now, and have not.`,
       };
 
     case "WHAT_THEY_HAVE": {
-      const them = shortName(nameOf(s("other")));
+      const them = solo;
       return {
         title: s("lane"),
         byline: `from ${them}`,
@@ -130,7 +142,7 @@ export function render(c: Candidate, nameOf: (id: string) => string): Rendered {
       return {
         title: s("lane"),
         byline: `agreed on by ${who}`,
-        caption: `${who} ${bothOrAll(nFriends)} saved these ${plural(count, "track")} of ${s("lane")} on their own. You have none of them.`,
+        caption: `${who} each saved these ${plural(count, "track")} of ${s("lane")} on their own. You have none of them.`,
         detail: `Every one of these ${plural(count, "recording")} sits in ${plural(nFriends, "library")} here — ${who} — and in none of yours. You already have ${plural(n("yours"), "track")} of ${s("lane")}. Nobody compared notes; this is where several people landed independently.`,
       };
 
@@ -175,7 +187,7 @@ export function render(c: Candidate, nameOf: (id: string) => string): Rendered {
       };
 
     case "ONLY_ONE_FRIEND_HAS_IT": {
-      const them = shortName(nameOf(s("other")));
+      const them = solo;
       return {
         title: s("artist"),
         byline: `only ${them} has them`,
@@ -193,7 +205,7 @@ export function render(c: Candidate, nameOf: (id: string) => string): Rendered {
       };
 
     case "A_SCENE_YOU_TOUCHED": {
-      const them = shortName(nameOf(s("other")));
+      const them = solo;
       return {
         title: s("lane"),
         byline: `${them} lives here`,

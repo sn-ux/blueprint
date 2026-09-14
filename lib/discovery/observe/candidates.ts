@@ -240,8 +240,19 @@ function friendsOf(ref: Reference, wk: string, viewerId: string): string[] {
  * ratings, so "three of them kept this" is the strongest statement available
  * about a track and it is not pretending to be more than that.
  */
+/**
+ * Build a payload and the people it came from — one set, not two.
+ *
+ * `only` names the card's evidence set. When a card's sentence is about one
+ * person, the tracks must be that person's and the holders must be that
+ * person, or the card ends up describing one set of libraries while the screen
+ * renders another. That is exactly what happened: a card claiming Chris was
+ * the only person here with Common showed Chris's icon and Sahaj's, because
+ * the claim came from one rule and the icons were recomputed from every holder
+ * of every track in the payload.
+ */
 function rank(
-  ref: Reference, p: Profile, works: Iterable<string>,
+  ref: Reference, p: Profile, works: Iterable<string>, only?: Set<string>,
 ): { tracks: string[]; holders: Holder[]; evidence: number; available: number; relevance: number } {
   const rates = ratesFor(ref);
   const scored: { wk: string; n: number; pr: number }[] = [];
@@ -255,7 +266,8 @@ function rank(
     // own from the original, and four hundred and eighty-seven of a listener's
     // own tracks were being handed back to them as discoveries.
     if (p.works.has(wk)) continue;
-    const fr = friendsOf(ref, wk, p.userId);
+    const all = friendsOf(ref, wk, p.userId);
+    const fr = only ? all.filter((u) => only.has(u)) : all;
     if (fr.length === 0) continue;
     const w = ref.works.get(wk)!;
     // What the corpus says about somebody in this listener's position: how
@@ -282,7 +294,12 @@ function rank(
   const per = new Map<string, number>();
   let evidence = 0;
   for (const wk of kept) {
-    const fr = friendsOf(ref, wk, p.userId);
+    // The same restriction as above. Applying it only to the scoring pass and
+    // not to this one was the whole of the Common bug: the payload was one
+    // person's, and the holder list — which becomes the card's sentence, its
+    // sources and its avatars — was rebuilt from every holder of every track.
+    const all = friendsOf(ref, wk, p.userId);
+    const fr = only ? all.filter((u) => only.has(u)) : all;
     evidence += fr.length;
     for (const u of fr) per.set(u, (per.get(u) ?? 0) + 1);
   }
@@ -496,8 +513,9 @@ function whatTheyHave(ref: Reference, p: Profile): Candidate[] {
         if (p.works.has(wk)) { shared++; continue; }
         theirs.push(wk);
       }
-      const { tracks, holders, evidence, available, relevance } = rank(ref, p, theirs);
-      if (tracks.length < MIN_TRACKS) continue;
+      const { tracks, holders, evidence, available, relevance } =
+        rank(ref, p, theirs, new Set([uid]));
+      if (tracks.length < MIN_TRACKS || holders.length !== 1) continue;
       out.push({
         family: "WHAT_THEY_HAVE",
         key: `theirs:${sg}:${uid}`,
@@ -784,15 +802,20 @@ function onlyOneFriendHasIt(ref: Reference, p: Profile): Candidate[] {
   const out: Candidate[] = [];
   for (const [ak, a] of ref.artists) {
     if (p.byArtist.has(ak)) continue;
-    const deep = [...a.worksByUser.entries()].filter(([u, st]) => u !== p.userId && st.size >= 5);
-    if (deep.length !== 1) continue;
+    // Sole means sole. The gate used to ask for exactly one friend holding
+    // five or more, which let a second friend hold four and still be called
+    // nobody — and then have their icon on the card.
+    const anyHolder = [...a.worksByUser.entries()].filter(([u]) => u !== p.userId);
+    if (anyHolder.length !== 1 || anyHolder[0][1].size < 5) continue;
+    const deep = anyHolder;
     let lane = "", laneN = 0;
     for (const [sg, n] of a.subgenres) if (n > laneN) { laneN = n; lane = sg; }
     if (!classified(lane)) continue;
     const yours = p.bySubgenre.get(lane)?.size ?? 0;
     if (yours < MIN_LANE_DEPTH) continue;
-    const { tracks, holders, evidence, available, relevance } = rank(ref, p, a.works);
-    if (tracks.length < MIN_TRACKS) continue;
+    const { tracks, holders, evidence, available, relevance } =
+      rank(ref, p, a.works, new Set([deep[0][0]]));
+    if (tracks.length < MIN_TRACKS || holders.length !== 1) continue;
     out.push({
       family: "ONLY_ONE_FRIEND_HAS_IT",
       key: `sole:${ak}`,
@@ -822,6 +845,11 @@ function everyoneButYou(ref: Reference, p: Profile): Candidate[] {
     if (holdersDeep.length < friends) continue;
     const { tracks, holders, evidence, available, relevance } = rank(ref, p, a.works);
     if (tracks.length < MIN_TRACKS) continue;
+    // The claim has to be true of the card's own evidence, not of a set
+    // computed before ranking. A friend whose tracks all fall outside the
+    // thirty this card can show drops out of the holders, and then "every
+    // other library here" describes three of four.
+    if (holders.length !== friends) continue;
     let lane = "", laneN = 0;
     for (const [sg, n] of a.subgenres) if (n > laneN) { laneN = n; lane = sg; }
     out.push({
@@ -861,8 +889,9 @@ function aSceneYouTouched(ref: Reference, p: Profile): Candidate[] {
       if (n > depth) { depth = n; deepest = uid; }
     }
     if (depth < 40) continue;
-    const { tracks, holders, evidence, available, relevance } = rank(ref, p, pool);
-    if (tracks.length < MIN_TRACKS + 2) continue;
+    const { tracks, holders, evidence, available, relevance } =
+      rank(ref, p, pool, new Set([deepest]));
+    if (tracks.length < MIN_TRACKS + 2 || holders.length !== 1) continue;
     out.push({
       family: "A_SCENE_YOU_TOUCHED",
       key: `scene:${sg}`,

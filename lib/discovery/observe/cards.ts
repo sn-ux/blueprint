@@ -20,14 +20,23 @@ const CARD_TYPE: Record<string, CardSubjectType> = {
 const spotifyUrl = (id: string | null) =>
   (id ? `https://open.spotify.com/track/${id}` : null);
 
+/**
+ * One track, carrying only the people this card claims as its evidence.
+ *
+ * A track's holders and a card's holders are not the same thing. The detail
+ * page draws a row per track with the friends who keep it, and reading those
+ * from the corpus put people on the screen the card had never mentioned — the
+ * same mismatch as the avatars, one level down.
+ */
 function trackOf(
   ref: Reference, wk: string, viewerId: string, people: Map<string, PersonRow>,
+  evidence: Set<string>,
 ): FeedTrack | null {
   const w = ref.works.get(wk);
   if (!w) return null;
   const friends: FeedPerson[] = [];
   for (const h of w.holders) {
-    if (h === viewerId) continue;
+    if (h === viewerId || !evidence.has(h)) continue;
     const p = people.get(h);
     friends.push({ id: h, name: p?.name ?? null, image: p?.image ?? null });
   }
@@ -84,8 +93,9 @@ export function toFeedCard(
 ): FeedCard {
   const nameOf = (id: string) => people.get(id)?.name ?? "someone here";
   const r = render(c, nameOf);
+  const evidence = new Set(c.holders.map((h) => h.uid));
   const tracks = c.tracks
-    .map((wk) => trackOf(ref, wk, viewerId, people))
+    .map((wk) => trackOf(ref, wk, viewerId, people, evidence))
     .filter((t): t is FeedTrack => t !== null);
 
   let lo: number | null = null, hi: number | null = null;
