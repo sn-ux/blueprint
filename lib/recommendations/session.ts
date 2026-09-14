@@ -5,6 +5,17 @@ import { buildFeed, toFeedCard, type FeedCard, type FeedPerson, type FeedTrack }
 import { evaluate, type ExposureState, type LifecycleStatus } from "@/lib/discovery/lifecycle";
 import { MAX_DEPTH } from "@/lib/discovery/tiers";
 import type { Candidate } from "@/lib/discovery/types";
+import { buildObservationCards } from "@/lib/discovery/observe/feed";
+
+/**
+ * Which generator fills the feed.
+ *
+ * The previous engine stays in the tree and stays runnable — it is the
+ * baseline every comparison in docs/card-generation-algorithm.md is measured
+ * against, and a one-line switch back is worth more than a tidy deletion.
+ */
+const USE_OBSERVATION_ENGINE = process.env.BLUEPRINT_ENGINE !== "legacy";
+
 
 /**
  * The feed as a persistent stream.
@@ -88,6 +99,86 @@ export interface SessionBuild {
 }
 
 /**
+ * The observation engine's session.
+ *
+ * Generation has already ordered the reservoir — strongest first, families and
+ * subjects spaced over a rolling window — so this does not reorder it. It
+ * removes what the reader has dismissed, opened or resolved, lifts what they
+ * have never seen above what they have, and freezes the result. Preserving
+ * generation order is the point: the quality gradient the feed depends on was
+ * built there, and a second sort would flatten it.
+ */
+async function startObservationSession(
+  viewerId: string, persist: boolean,
+): Promise<SessionBuild | null> {
+  const built = await buildObservationCards(viewerId, {});
+  if (!built) return null;
+
+  const now = new Date();
+  const exposures = await exposuresOf(viewerId);
+  const unseen: StoredCard[] = [];
+  const seen: { stored: StoredCard; score: number }[] = [];
+  const resting: { stored: StoredCard; until: number; score: number }[] = [];
+  const suppressed: SessionBuild["suppressed"] = [];
+
+  for (const { card, deliverableIds, meta } of built.cards) {
+    const shim = {
+      rankingScore: meta.bits,
+      underlyingVersion: card.version,
+    } as unknown as Candidate;
+    const v = evaluate(shim, exposures.get(card.id), now);
+    const stored: StoredCard = {
+      card, deliverableIds,
+      lifecycle: { status: v.status, score: v.score },
+      depth: meta.tier === "TOP" ? 0 : meta.tier === "HIGH" ? 1 : 2,
+    };
+    if (!v.eligible) {
+      if (v.revivable) resting.push({ stored, until: v.restingUntil?.getTime() ?? 0, score: v.score });
+      else suppressed.push({ key: card.id, status: v.status });
+      continue;
+    }
+    if (v.status === "UNSEEN") unseen.push(stored);
+    else seen.push({ stored, score: v.score });
+  }
+
+  // Seen cards keep their generation order relative to each other; they simply
+  // sit behind everything unseen.
+  const ordered: StoredCard[] = [...unseen, ...seen.map((x) => x.stored)];
+
+  // Resting must never mean an empty stream — the same rule the legacy path
+  // uses, and for the same reason.
+  const floor = CFG.LIFECYCLE.minEligiblePages * CFG.LIFECYCLE.pageSize;
+  if (ordered.length < floor && resting.length > 0) {
+    resting.sort((a, b) => a.until - b.until || b.score - a.score);
+    for (const r of resting) {
+      if (ordered.length >= floor) { suppressed.push({ key: r.stored.card.id, status: "COOLING" }); continue; }
+      ordered.push({ ...r.stored, resurfaced: true });
+    }
+  } else {
+    for (const r of resting) suppressed.push({ key: r.stored.card.id, status: "COOLING" });
+  }
+
+  ordered.forEach((s, i) => { s.card.rank = i + 1; });
+  console.log(
+    `[observe] ${viewerId} raw ${built.counts.raw} → valid ${built.counts.valid}`
+    + ` → distinct ${built.counts.distinct} → feed ${ordered.length}`
+    + ` (TOP ${built.counts.top} HIGH ${built.counts.high})`,
+  );
+
+  if (!persist) return { sessionId: "", stored: ordered, suppressed };
+  const session = await prisma.recommendationFeedSession.create({
+    data: {
+      userId: viewerId,
+      expiresAt: new Date(now.getTime() + CFG.LIFECYCLE.sessionTtlMinutes * 60_000),
+      depth: 0,
+      cards: ordered as unknown as object,
+    },
+    select: { id: true },
+  });
+  return { sessionId: session.id, stored: ordered, suppressed };
+}
+
+/**
  * Evaluates the whole universe and freezes one reading order.
  *
  * Quality gates ran in the engine; everything arriving here is already
@@ -95,6 +186,7 @@ export interface SessionBuild {
  * touching it.
  */
 export async function startSession(viewerId: string, persist = true): Promise<SessionBuild | null> {
+  if (USE_OBSERVATION_ENGINE) return startObservationSession(viewerId, persist);
   const result = await buildFeed(viewerId, 0, 0);
   if (!result) return null;
 
@@ -229,7 +321,13 @@ async function extendSession(
   const now = new Date();
 
   // ── Deeper generation ────────────────────────────────────────────────────
-  if (depth < MAX_DEPTH) {
+  //
+  // The observation engine has no bands. It hands over its whole reservoir at
+  // the start of a session — one to two hundred cards for a real library — so
+  // there is nothing deeper to generate, and calling the legacy generator here
+  // would splice its cards into an observation feed. Reaching the end of the
+  // reservoir falls through to resurfacing, which is the correct behaviour.
+  if (!USE_OBSERVATION_ENGINE && depth < MAX_DEPTH) {
     const nextDepth = depth + 1;
     const result = await buildFeed(viewerId, 0, nextDepth);
     if (result) {

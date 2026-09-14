@@ -39,14 +39,29 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "No library imported yet" }, { status: 404 });
   }
 
+  /**
+   * Which generator served this request, said plainly.
+   *
+   * Temporary, and deliberately loud. The observation engine was invisible on
+   * a phone for a while purely because it had never been deployed, and no log
+   * line anywhere said which generator was answering.
+   */
+  const engine = process.env.BLUEPRINT_ENGINE === "legacy" ? "LEGACY" : "OBSERVATION";
+  const head = page.cards.slice(0, 5);
   console.log(
-    `[recs] ${viewer.id} page ${page.cards.length}/${page.total}`
-    + ` (${cursor ? "cursor" : "new session"}) in ${Date.now() - t0}ms`,
+    `\n=== BLUEPRINT CARD ENGINE: ${engine} ===`
+    + `\nUSER: ${viewer.id}`
+    + `\nGENERATED: ${page.total} (page ${page.cards.length}, ${cursor ? "cursor" : "new session"}, ${Date.now() - t0}ms)`
+    + `\nFIRST 5 FAMILIES: ${head.map((c) => c.generator).join(", ")}`
+    + `\nFIRST 5 HEADLINES:\n${head.map((c, i) => `  ${i + 1}. ${c.title} — ${c.caption}`).join("\n")}`
+    + `\n=== END ===\n`,
   );
 
   return NextResponse.json(
     {
       generatedAt: new Date().toISOString(),
+      /** Temporary: which generator produced these. Read by the mobile log. */
+      engine,
       cards: page.cards,
       nextCursor: page.nextCursor,
       hasMore: page.hasMore,
