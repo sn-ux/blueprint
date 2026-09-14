@@ -17,7 +17,7 @@
  * cap: the requirement is that a run of near-identical cards not happen, not
  * that a family be rationed.
  */
-import { findAll, type Candidate, type FamilyId } from "./candidates";
+import { findAll, specificityOf, type Candidate, type FamilyId } from "./candidates";
 import { artistKeyOf } from "./reference";
 import { buildProfile, type Profile } from "./profile";
 import { buildReference, type Reference } from "./reference";
@@ -95,7 +95,10 @@ export function observe(
   // The same record can arrive as both a remainder and a whole; the same
   // artist as both depth and a skipped record. Where two candidates hand over
   // substantially the same recordings, the stronger reason survives.
-  const sorted = [...raw].sort((a, b) => b.score - a.score);
+  // Score first; where two cards are the same music they tie exactly, and the
+  // sharper reason takes it.
+  const sorted = [...raw].sort((a, b) =>
+    b.score - a.score || specificityOf(b.family) - specificityOf(a.family));
   const kept: (Candidate & { band: Band })[] = [];
   const seenSubject = new Set<string>();
   const seenTracks: Set<string>[] = [];

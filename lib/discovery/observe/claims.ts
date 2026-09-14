@@ -142,6 +142,74 @@ export function render(c: Candidate, nameOf: (id: string) => string): Rendered {
         detail: `The most recent recording by ${s("artist")} in your library came out in ${n("lastYear")}, out of ${plural(n("yours"), "you have", "you have")} in all. ${who} ${has} ${plural(count, "track")} released after that, the latest in ${n("latestYear")}${leader}.${trimmed} Release dates rather than save dates — this is where their catalogue stops in your library, not when you stopped listening.`,
       };
 
+    case "YOU_HAVE_THE_HITS":
+      return {
+        title: s("album"),
+        byline: s("artist"),
+        caption: `The ${plural(n("yours"), "track")} you have from this record ${is(n("yours"))} the ${n("yours") === 1 ? "one" : "ones"} everybody keeps. ${who} ${has} the other ${count}.`,
+        detail: `Rank the ${plural(n("total"), "track")} on ${s("album")} by how many people here keep them, and everything in your library sits at the top of that list — the ${n("yours")} that reached everyone. ${who} ${has} ${plural(count, "of the rest")}.${trimmed} This is the record behind the singles.`,
+      };
+
+    case "BEFORE_YOU_ARRIVED":
+      return {
+        title: s("artist"),
+        byline: `before ${n("arrived")}, from ${who}`,
+        caption: `Your ${s("artist")} starts at ${n("arrived")}. ${who} ${has} ${plural(count, "track")} from before that, going back to ${n("earliest")}.`,
+        detail: `Nothing by ${s("artist")} in your library predates ${n("arrived")}, though their work here runs back to ${n("earliest")}. ${who} ${has} ${plural(count, "recording")} from those earlier years${leader}.${trimmed} You came in partway through.`,
+      };
+
+    case "ONE_RECORD_LEFT":
+      return {
+        title: s("album"),
+        byline: s("artist"),
+        caption: `You have every record by ${s("artist")} except this one. ${who} ${has} ${count} of it.`,
+        detail: `Of the ${plural(n("records"), "record")} by ${s("artist")} anyone here holds, yours is the only library missing ${s("album")}${n("year") ? `, from ${n("year")}` : ""} — you have ${plural(n("yours"), "track")} by them and not one from it. ${who} ${has} ${plural(count, "track")} from the record.${trimmed}`,
+      };
+
+    case "GUEST_ON_YOUR_RECORDS":
+      return {
+        title: s("artist"),
+        byline: `already on ${plural(n("appearances"), "track")} of yours`,
+        caption: `${s("artist")} is on ${plural(n("appearances"), "track")} you already have. You have nothing else by them. ${who} ${has} ${count}.`,
+        detail: `${s("artist")} appears on ${plural(n("appearances"), "recording")} you already keep — ${s("example")} among them — and nothing else of theirs is in your library. ${who} ${has} ${plural(count, "track")} of it${leader}.${trimmed}`,
+      };
+
+    case "ONLY_ONE_FRIEND_HAS_IT": {
+      const them = shortName(nameOf(s("other")));
+      return {
+        title: s("artist"),
+        byline: `only ${them} has them`,
+        caption: `${them} is the only person here with ${s("artist")} — ${plural(n("theirDepth"), "track")}. You have ${plural(n("yoursInLane"), "track")} of ${s("lane")}.`,
+        detail: `Nobody else here holds ${s("artist")} at all. ${them} has ${plural(n("theirDepth"), "recording")}, which is not a passing interest, and their work sits in ${s("lane")} where your own library runs to ${plural(n("yoursInLane"), "track")}.${trimmed} One person went a long way into this and you have never been.`,
+      };
+    }
+
+    case "EVERYONE_BUT_YOU":
+      return {
+        title: s("artist"),
+        byline: `all ${n("friends")} of them`,
+        caption: `${who} all have ${s("artist")}. You are the only one here who does not.`,
+        detail: `${who} — every other library here — keep ${s("artist")}, and yours does not. ${count} of their recordings are ones you do not have${leader}.${trimmed} Their work sits in ${s("lane")}.`,
+      };
+
+    case "A_SCENE_YOU_TOUCHED": {
+      const them = shortName(nameOf(s("other")));
+      return {
+        title: s("lane"),
+        byline: `${them} lives here`,
+        caption: `You have ${plural(n("yours"), "track")} of ${s("lane")}. ${them} has ${n("theirDepth")}.`,
+        detail: `${s("lane")} is a door your library has open by ${plural(n("yours"), "track")} and no further. ${them} keeps ${n("theirDepth")} of it.${trimmed} You have been in the room; nobody has shown you round it.`,
+      };
+    }
+
+    case "A_YEAR_IN_YOUR_LANE":
+      return {
+        title: `${s("lane")}, ${n("year")}`,
+        byline: `from ${who}`,
+        caption: `You keep ${plural(n("yours"), "track")} of ${s("lane")} and ${n("mine") === 0 ? "nothing at all" : "one track"} from ${n("year")}. ${who} ${has} ${count}.`,
+        detail: `Your ${s("lane")} runs to ${plural(n("yours"), "track")}, and ${n("mine") === 0 ? "none of them comes" : "one of them comes"} from ${n("year")}. ${who} between them ${has} ${plural(count, "recording")} from that year in the lane${leader}.${trimmed} A single year of something you otherwise live in.`,
+      };
+
     default:
       return { title: c.subject.label, byline: "", caption: "", detail: "" };
   }

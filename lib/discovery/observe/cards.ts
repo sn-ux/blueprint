@@ -62,10 +62,12 @@ function contextOf(c: Candidate, nameOf: (id: string) => string) {
     ARTIST_HELD: `From ${c.connection.label} in your library`,
     LANE_DEPTH: `From ${c.connection.label} in your library`,
     PERSON: `From ${nameOf(c.connection.key)}'s library`,
+    GUEST_ON_HELD: `${c.connection.label} is on records in your library`,
   };
   const anchorType: Record<Candidate["connection"]["kind"], string> = {
     ALBUM_STARTED: "ALBUM_PARTIAL", ARTIST_HELD: "ARTIST_PRESENT",
     LANE_DEPTH: "SUBGENRE_PRESENT", PERSON: "SUBGENRE_PRESENT",
+    GUEST_ON_HELD: "ARTIST_PRESENT",
   };
   return {
     anchorType: anchorType[c.connection.kind],
