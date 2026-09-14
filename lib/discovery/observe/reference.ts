@@ -14,8 +14,19 @@
  */
 import type { TrackRow } from "../types";
 
+/**
+ * A recording's name, stripped to what makes it that recording.
+ *
+ * Parentheses and brackets go, and so does everything from a featuring credit
+ * or a remaster note onwards. Without the second part, "LOVE." and "LOVE.
+ * FEAT. ZACARI." are two different songs, and a collector's edition of a
+ * record somebody already owns comes back as ten discoveries.
+ */
 export const normText = (s: string) =>
-  s.toLowerCase().replace(/\(.*?\)|\[.*?\]/g, " ").replace(/[^a-z0-9]+/g, "").trim();
+  s.toLowerCase()
+    .replace(/\(.*?\)|\[.*?\]/g, " ")
+    .split(/\s+-\s+|\bfeat\.?\b|\bft\.?\b|\bwith\b/)[0]
+    .replace(/[^a-z0-9]+/g, "").trim();
 
 /** Recording identity. A Spotify id names a pressing; this names the song. */
 export const workKeyOf = (name: string, artist: string) =>

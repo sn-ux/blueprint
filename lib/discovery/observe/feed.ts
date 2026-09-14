@@ -20,15 +20,16 @@ import { toFeedCard } from "./cards";
 import { observe, type ObserveOptions } from "./observe";
 import { buildProfile } from "./profile";
 import { buildReference } from "./reference";
-import type { Observation } from "./types";
+import type { Candidate } from "./candidates";
+import type { Band } from "./observe";
 
 export interface ObservationCard {
   card: FeedCard;
   deliverableIds: string[];
-  /** Kept server-side: bits, tier, family, jackknife. Never sent to a client. */
+  /** Kept server-side. Never sent to a client. */
   meta: {
-    family: string; bits: number; jackknife: number;
-    tier: string; refQuality: string; payload: "DISCOVER" | "REFLECT";
+    family: string; score: number; band: Band;
+    friends: number; connection: string; tracks: number;
   };
 }
 
@@ -43,15 +44,15 @@ export async function buildObservationCards(
   const result = observe(ref, profile, opts);
 
   const byId = new Map<string, PersonRow>(people.map((p) => [p.id, p]));
-  const cards = result.observations.map((ob: Observation, i: number) => ({
-    card: toFeedCard(ref, ob, viewerId, byId, i + 1),
-    deliverableIds: ob.payload.works
+  const cards = result.candidates.map((c: Candidate & { band: Band }, i: number) => ({
+    card: toFeedCard(ref, c, viewerId, byId, i + 1),
+    deliverableIds: c.tracks
       .map((wk) => ref.works.get(wk)?.row.spotifyId)
       .filter((x): x is string => !!x),
     meta: {
-      family: ob.family, bits: +ob.bits.toFixed(2),
-      jackknife: +ob.bitsJackknife.toFixed(2), tier: ob.tier ?? "VALID",
-      refQuality: ob.refQuality, payload: ob.payload.kind,
+      family: c.family, score: +c.score.toFixed(2), band: c.band,
+      friends: c.holders.length, connection: c.connection.kind,
+      tracks: c.tracks.length,
     },
   }));
   return { cards, counts: result.counts };

@@ -123,14 +123,14 @@ async function startObservationSession(
 
   for (const { card, deliverableIds, meta } of built.cards) {
     const shim = {
-      rankingScore: meta.bits,
+      rankingScore: meta.score,
       underlyingVersion: card.version,
     } as unknown as Candidate;
     const v = evaluate(shim, exposures.get(card.id), now);
     const stored: StoredCard = {
       card, deliverableIds,
       lifecycle: { status: v.status, score: v.score },
-      depth: meta.tier === "TOP" ? 0 : meta.tier === "HIGH" ? 1 : 2,
+      depth: meta.band === "EXCEPTIONAL" ? 0 : meta.band === "STRONG" ? 1 : 2,
     };
     if (!v.eligible) {
       if (v.revivable) resting.push({ stored, until: v.restingUntil?.getTime() ?? 0, score: v.score });
@@ -160,9 +160,10 @@ async function startObservationSession(
 
   ordered.forEach((s, i) => { s.card.rank = i + 1; });
   console.log(
-    `[observe] ${viewerId} raw ${built.counts.raw} → valid ${built.counts.valid}`
-    + ` → distinct ${built.counts.distinct} → feed ${ordered.length}`
-    + ` (TOP ${built.counts.top} HIGH ${built.counts.high})`,
+    `[friends] ${viewerId} raw ${built.counts.raw} → distinct ${built.counts.distinct}`
+    + ` → feed ${ordered.length}, ${built.counts.friendTracks} friend tracks`
+    + ` (EXCEPTIONAL ${built.counts.exceptional} STRONG ${built.counts.strong}`
+    + ` SOLID ${built.counts.solid})`,
   );
 
   if (!persist) return { sessionId: "", stored: ordered, suppressed };

@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
    * a phone for a while purely because it had never been deployed, and no log
    * line anywhere said which generator was answering.
    */
-  const engine = process.env.BLUEPRINT_ENGINE === "legacy" ? "LEGACY" : "OBSERVATION";
+  const engine = process.env.BLUEPRINT_ENGINE === "legacy" ? "LEGACY" : "FRIENDS";
   const head = page.cards.slice(0, 5);
   console.log(
     `\n=== BLUEPRINT CARD ENGINE: ${engine} ===`
