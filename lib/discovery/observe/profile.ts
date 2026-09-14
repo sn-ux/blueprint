@@ -42,8 +42,12 @@ export function buildProfile(userId: string, tracks: TrackRow[], ref: Reference)
     const ak = artistKeyOf(t.artist);
     p.works.add(wk);
     push(p.byArtist, ak, wk);
-    push(p.bySubgenre, t.blueprintSubgenre, wk);
-    push(p.byWorld, t.blueprintWorld, wk);
+    // The lane a recording belongs to is decided once in the reference, by
+    // majority vote across every row of it. Reading this row's own tag instead
+    // made a listener's lane depth disagree with the index's view of it.
+    const w = ref.works.get(wk);
+    push(p.bySubgenre, w?.subgenre ?? t.blueprintSubgenre, wk);
+    push(p.byWorld, w?.world ?? t.blueprintWorld, wk);
     if (t.albumId) push(p.byAlbum, t.albumId, wk);
     const y = yearOf(t);
     if (y !== null) {

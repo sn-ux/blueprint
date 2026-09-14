@@ -103,17 +103,33 @@ export interface Reference {
   albumHabit: Map<string, { deep: number; albums: number }>;
   /** Corpus rows per decade, per user, for the library-level era null. */
   decadeRows: Map<number, Tally>;
+  /** Recordings of each album held by each user. Needed to measure holding rates. */
+  albumWorksByUser: Map<string, Map<string, number>>;
 }
 
-export function buildReference(tracks: TrackRow[]): Reference {
+export function buildReference(input: TrackRow[]): Reference {
+  /**
+   * Read the rows in a fixed order.
+   *
+   * The corpus query has no ORDER BY, so Postgres returns rows in whatever
+   * order it likes, and several values here are first-seen-wins: a recording's
+   * world, its album, an album's title and track count. That made the engine
+   * quietly non-deterministic — the same listener's card reported sharing 406
+   * tracks on one run and 240 on the next. Sorting costs one pass over forty
+   * thousand rows and makes every number reproducible.
+   */
+  const tracks = [...input].sort((a, b) =>
+    a.spotifyId.localeCompare(b.spotifyId) || a.userId.localeCompare(b.userId));
   const ref: Reference = {
     users: [], size: tally(), works: new Map(), artists: new Map(), albums: new Map(),
     subgenreRows: new Map(), subgenreWorld: new Map(), subgenreWorks: new Map(),
-    decadeRows: new Map(),
+    decadeRows: new Map(), albumWorksByUser: new Map(),
     worldRows: new Map(), worldSubRows: new Map(), subgenreWorksByUser: new Map(),
     albumHabit: new Map(),
   };
   const seenUsers = new Set<string>();
+  /** Every row's opinion of which lane a recording belongs to. */
+  const votes = new Map<string, Map<string, number>>();
 
   for (const t of tracks) {
     const uid = t.userId;
@@ -166,11 +182,10 @@ export function buildReference(tracks: TrackRow[]): Reference {
       ab.add(wk);
     }
 
-    let sr = ref.subgenreRows.get(sg); if (!sr) { sr = tally(); ref.subgenreRows.set(sg, sr); }
-    bump(sr, uid);
-    ref.subgenreWorld.set(sg, world);
-    let sw = ref.subgenreWorks.get(sg); if (!sw) { sw = new Set(); ref.subgenreWorks.set(sg, sw); }
-    sw.add(wk);
+    // Lane membership is decided once, after every row has voted — see below.
+    let v = votes.get(wk);
+    if (!v) { v = new Map(); votes.set(wk, v); }
+    v.set(sg, (v.get(sg) ?? 0) + 1);
 
     if (y !== null) {
       const d = Math.floor(y / 10) * 10;
@@ -178,18 +193,60 @@ export function buildReference(tracks: TrackRow[]): Reference {
       bump(dr, uid);
     }
 
-    let wr = ref.worldRows.get(world); if (!wr) { wr = tally(); ref.worldRows.set(world, wr); }
-    bump(wr, uid);
-    let ws = ref.worldSubRows.get(world); if (!ws) { ws = new Map(); ref.worldSubRows.set(world, ws); }
-    let wss = ws.get(sg); if (!wss) { wss = tally(); ws.set(sg, wss); }
-    bump(wss, uid);
   }
 
-  // Distinct recordings per (subgenre, user) — the base each person samples from.
+  /**
+   * One lane per recording, decided by majority vote across every row of it.
+   *
+   * Two people can have the same song classified differently — the importer
+   * tags each row from the artist's genres at the time, and those move. Left
+   * alone it produced two disagreeing definitions of "the works in this lane":
+   * one that admitted a recording if any row named the lane, and one that went
+   * by whichever row happened to be indexed first. A card duly reported that a
+   * listener shared forty-four of somebody's forty tracks.
+   *
+   * The vote is the commonest tag, ties broken alphabetically so the answer
+   * does not depend on the order rows came back from the database. Everything
+   * downstream — lane sizes, per-person depth, the profile — reads this one
+   * value, so the counts on a card cannot disagree with each other.
+   */
   for (const [wk, w] of ref.works) {
-    let m = ref.subgenreWorksByUser.get(w.subgenre);
-    if (!m) { m = new Map(); ref.subgenreWorksByUser.set(w.subgenre, m); }
+    const v = votes.get(wk);
+    if (!v) continue;
+    let best = w.subgenre, bestN = -1;
+    for (const [sg, n] of [...v.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+      if (n > bestN) { bestN = n; best = sg; }
+    }
+    w.subgenre = best;
+  }
+
+  for (const [wk, w] of ref.works) {
+    if (!w.albumId) continue;
+    let m = ref.albumWorksByUser.get(w.albumId);
+    if (!m) { m = new Map(); ref.albumWorksByUser.set(w.albumId, m); }
     for (const uid of w.holders) m.set(uid, (m.get(uid) ?? 0) + 1);
+  }
+
+  // Lane and world indexes, all from that one canonical value. Counted in
+  // distinct recordings rather than rows, so two pressings of a song are one
+  // thing everywhere.
+  for (const [wk, w] of ref.works) {
+    const sg = w.subgenre;
+    ref.subgenreWorld.set(sg, w.world);
+    let sw = ref.subgenreWorks.get(sg); if (!sw) { sw = new Set(); ref.subgenreWorks.set(sg, sw); }
+    sw.add(wk);
+    let m = ref.subgenreWorksByUser.get(sg);
+    if (!m) { m = new Map(); ref.subgenreWorksByUser.set(sg, m); }
+
+    let sr = ref.subgenreRows.get(sg); if (!sr) { sr = tally(); ref.subgenreRows.set(sg, sr); }
+    let wr = ref.worldRows.get(w.world); if (!wr) { wr = tally(); ref.worldRows.set(w.world, wr); }
+    let ws = ref.worldSubRows.get(w.world); if (!ws) { ws = new Map(); ref.worldSubRows.set(w.world, ws); }
+    let wss = ws.get(sg); if (!wss) { wss = tally(); ws.set(sg, wss); }
+
+    for (const uid of w.holders) {
+      m.set(uid, (m.get(uid) ?? 0) + 1);
+      bump(sr, uid); bump(wr, uid); bump(wss, uid);
+    }
   }
 
   // Album-keeping habit, per user: how often do they hold half a record or more.

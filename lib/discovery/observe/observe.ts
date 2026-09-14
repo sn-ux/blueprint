@@ -49,7 +49,7 @@ export interface ObserveResult {
 }
 
 const DEFAULTS = {
-  minTracks: 4, redundancy: 0.35, window: 10, familyPerWindow: 3, limit: Infinity,
+  minTracks: 4, redundancy: 0.35, window: 10, familyPerWindow: 2, limit: Infinity,
 };
 
 /**
