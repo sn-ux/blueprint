@@ -225,7 +225,7 @@ export function render(c: Candidate, nameOf: (id: string) => string): Rendered {
     case "A_YEAR_IN_YOUR_LANE":
       return {
         title: `${laneTitle(s("lane"))}, ${n("year")}`,
-        byline: laneInline(s("lane")),
+        byline: "",   // the title already carries the lane and the year
         caption: `You keep ${plural(n("yours"), "track")} of ${laneInline(s("lane"))} and ${n("mine") === 0 ? "nothing at all" : "one track"} from ${n("year")}. ${who} ${has} ${count}.`,
         detail: `Your ${laneInline(s("lane"))} runs to ${plural(n("yours"), "track")}, and ${n("mine") === 0 ? "none of them comes" : "one of them comes"} from ${n("year")}. ${who} between them ${has} ${plural(count, "recording")} from that year in the lane${leader}.${trimmed} A single year of something you otherwise live in.`,
       };
