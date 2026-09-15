@@ -1,5 +1,5 @@
 import { loadCorpus } from "./corpus";
-import { label } from "./display";
+import { label, laneTitle } from "./display";
 import { runEngine } from "./engine";
 import type { DiscoveryIndex } from "./sets";
 import type { Candidate, CardSubjectType, RecipientContext } from "./types";
@@ -171,8 +171,10 @@ function titleOf(c: Candidate): { title: string; byline: string } {
     case "Album": return { title: s.album, byline: s.artist === s.album ? "" : s.artist };
     case "Artist": return { title: s.artist, byline: "" };
     // Taxonomy keys are identity; this is the one place they become readable.
-    case "Subgenre": return { title: label(s.subgenre), byline: "" };
-    case "Genre": return { title: label(s.genre), byline: "" };
+    // Sentence case, through the same helper the observation engine uses, so
+    // switching BLUEPRINT_ENGINE back cannot reintroduce Title Case titles.
+    case "Subgenre": return { title: laneTitle(s.subgenre), byline: "" };
+    case "Genre": return { title: laneTitle(s.genre), byline: "" };
     // Scope plus selection rule, already rendered by the generator: a
     // curated set must not carry the bare taxonomy name, which would read as
     // the area's own card.

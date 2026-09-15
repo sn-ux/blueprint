@@ -10,9 +10,11 @@ import { loadCorpus } from "../lib/discovery/corpus.ts";
 import { observe, buildReference, buildProfile } from "../lib/discovery/observe/observe.ts";
 import { render } from "../lib/discovery/observe/claims.ts";
 import { prisma } from "../lib/prisma.ts";
+import { laneTitle } from "../lib/discovery/display.ts";
 const { people, tracks } = await loadCorpus();
 const nameOf=id=>people.find(p=>p.id===id)?.name??id.slice(0,6);
 const short=(x)=>x.includes(' ')?x.split(' ')[0]:x;
+const byId=new Map(people.map(x=>[x.id,x]));
 const ref = buildReference(tracks);
 const uids=[...new Set(tracks.map(t=>t.userId))];
 const fails={};
@@ -25,6 +27,42 @@ for (const uid of uids) {
     const t = render(c, nameOf);
     const text = `${t.caption} ${t.detail}`;
     const names = c.holders.map(h=>short(nameOf(h.uid)));
+
+    // 0. A TITLE IS THE SUBJECT'S OWN NAME, NEVER COMPOSED WITH A PERSON.
+    //
+    // Checked structurally rather than by looking for names in the string,
+    // because "Chris Joss" is a real artist and a substring search calls that
+    // a social attribution. An album title must be the album's name as Spotify
+    // gave it, an artist title the artist's name, a lane title the lane in
+    // sentence case — so there is no room in a title for anything else.
+    if (c.subject.kind === "album" || c.subject.kind === "artist") {
+      if (t.title !== c.subject.label)
+        note("title is not the subject's own name", `${c.family}: "${t.title}" vs "${c.subject.label}"`);
+      // Spotify's capitalisation must survive untouched.
+      if (t.title !== c.subject.label)
+        note("subject name was recapitalised", `${c.family}: ${t.title}`);
+    } else {
+      const lane = String(c.facts.lane ?? c.subject.label);
+      const expect = laneTitle(lane);
+      if (!t.title.startsWith(expect))
+        note("lane title is not the lane in sentence case", `${c.family}: "${t.title}" expected "${expect}"`);
+      // Sentence case, not Title Case: no capital after the first word unless
+      // the token carries its own (EDM, R&B, French).
+      const tail = t.title.split(/[\s,]+/).slice(1);
+      for (const w of tail) {
+        if (!/^[A-Z][a-z]/.test(w)) continue;
+        if (laneTitle(w.toLowerCase()) === w) continue;   // a proper noun earns it
+        if (/^\d/.test(w)) continue;
+        note("lane title looks Title Cased", `${c.family}: "${t.title}" — "${w}"`);
+      }
+    }
+    // The byline is the subject's metadata, never a person.
+    for (const [pid, pr] of byId) {
+      if (pid === uid) continue;
+      const nm = short(pr.name ?? "");
+      if (nm.length > 2 && new RegExp(`\\b${nm}\\b`).test(t.byline) && !/^[A-Z]/.test(c.subject.label))
+        note("byline names a person", `${c.family}: "${t.byline}"`);
+    }
 
     // 1. "one other"/"N others" must only appear when names are genuinely hidden
     if (/\bone other\b/.test(text) && c.holders.length <= 3) note("says 'one other' with <=3 holders", t.caption);
