@@ -42,6 +42,9 @@ const verb = (n: number, singular: string, plural_: string) => (n === 1 ? singul
 const is = (n: number) => (n === 1 ? "is" : "are");
 /** Two people both do a thing; three or more all do it. */
 const bothOrAll = (n: number) => (n === 2 ? "both" : "all");
+/** "38 soundtrack songs" reads; "38 songs of soundtrack" does not. */
+const laneSongs = (n: number, lane: string) =>
+  `${n} ${laneInline(lane)} ${n === 1 ? "song" : "songs"}`;
 
 /** First names, because these are the listener's friends and not a directory. */
 const shortName = (full: string) => (full.includes(" ") ? full.split(" ")[0] : full);
@@ -91,7 +94,7 @@ export function render(c: Candidate, nameOf: (id: string) => string): Rendered {
   const solo = c.holders.length === 1 ? shortName(nameOf(c.holders[0].uid)) : who;
   const count = c.available;
   const shown = c.tracks.length;
-  const trimmed = count > shown ? ` The ${shown} strongest are here.` : "";
+  const trimmed = count > shown ? ` ${shown} of them are here.` : "";
   const has = verb(nFriends, "has", "have");
 
   /**
@@ -108,32 +111,32 @@ export function render(c: Candidate, nameOf: (id: string) => string): Rendered {
       return {
         title: s("album"),
         byline: s("artist"),
-        caption: `You have ${plural(n("yours"), "track")} from this record. ${who} ${has} ${count} more.`,
-        detail: `${s("album")} runs to ${plural(n("total"), "track")}, and ${n("yours")} of them ${is(n("yours"))} already yours. ${who} ${has} ${count} of the rest${between}${leader}.${trimmed} This is the remainder of a record you have already started.`,
+        caption: `You have ${plural(n("yours"), "song")} from this album. ${who} ${has} ${count} more.`,
+        detail: `This album has ${plural(n("total"), "song")} and ${n("yours")} of them ${is(n("yours"))} yours. ${who} ${has} ${count} of the rest${between}${leader}.${trimmed}`,
       };
 
     case "DEEPER_ON_AN_ARTIST":
       return {
         title: s("artist"),
         byline: "",
-        caption: `You have ${plural(n("yours"), "track")} by ${s("artist")}. ${who} ${has} ${count} more.`,
-        detail: `Your library holds ${plural(n("yours"), "track")} by ${s("artist")}. ${who} ${has}${between} ${plural(count, "other recording")} of theirs${leader}.${trimmed} Across the ${plural(n("records"), "record")} of theirs anyone here owns, this is what has not reached you.`,
+        caption: `You have ${plural(n("yours"), "song")} by ${s("artist")}. ${who} ${has} ${count} more.`,
+        detail: `You have ${plural(n("yours"), "song")} by ${s("artist")}. ${who} ${has} ${plural(count, "song")} of theirs that you do not${leader}.${trimmed}`,
       };
 
     case "THE_RECORD_YOU_SKIPPED":
       return {
         title: s("album"),
         byline: s("artist"),
-        caption: `You have ${plural(n("yoursByArtist"), "track")} by ${s("artist")} and none from this record. ${who} ${has} ${count} of it.`,
-        detail: `Your library holds ${plural(n("yoursByArtist"), "track")} by ${s("artist")}, and not one of them comes from ${s("album")}${n("year") ? `, released in ${n("year")}` : ""}. ${who} ${has} ${plural(count, "track")} from it${leader}.${trimmed} A whole record by someone you already listen to, still unopened.`,
+        caption: `You have ${plural(n("yoursByArtist"), "song")} by ${s("artist")} and none from this album. ${who} ${has} ${count} songs from it.`,
+        detail: `You have ${plural(n("yoursByArtist"), "song")} by ${s("artist")} and nothing from ${s("album")}${n("year") ? `, from ${n("year")}` : ""}. ${who} ${has} ${plural(count, "song")} of it${leader}.${trimmed}`,
       };
 
     case "NEW_IN_YOUR_LANE":
       return {
         title: s("artist"),
         byline: "",
-        caption: `${who} ${verb(nFriends, "has", "each have")} ${s("artist")}. You have ${plural(n("yoursInLane"), "track")} of ${laneInline(s("lane"))} and nothing of theirs.`,
-        detail: `${who} arrived at ${s("artist")} separately, and ${has} ${plural(count, "recording")} you do not${leader}.${trimmed} That work sits in ${laneInline(s("lane"))}, where your own library runs to ${plural(n("yoursInLane"), "track")} — deep enough that this is a name you might have expected to meet by now, and have not.`,
+        caption: `${who} ${verb(nFriends, "has", "all have")} ${s("artist")}. You have ${laneSongs(n("yoursInLane"), s("lane"))} and nothing by them.`,
+        detail: `${who} ${has} ${plural(count, "song")} by ${s("artist")} and you have none. Their music sits in ${laneInline(s("lane"))}, where you have ${plural(n("yoursInLane"), "song")}${leader}.${trimmed}`,
       };
 
     case "WHAT_THEY_HAVE": {
@@ -141,8 +144,14 @@ export function render(c: Candidate, nameOf: (id: string) => string): Rendered {
       return {
         title: laneTitle(s("lane")),
         byline: "",
-        caption: `Of ${them}'s ${plural(n("theirs"), "track")} of ${laneInline(s("lane"))}, you share ${n("shared")}. ${plural(count, "other")} never reached you.`,
-        detail: `You have ${plural(n("yours"), "track")} of ${laneInline(s("lane"))} and ${them} has ${n("theirs")}; ${n("shared")} of them ${is(n("shared"))} the same recording. The same corner of music, found twice over without either of you comparing notes — and ${plural(count, "track")} of ${them}'s that never reached you.${trimmed}`,
+        caption: `${them} has ${laneSongs(n("theirs"), s("lane"))}. You share ${n("shared")} and do not have the other ${count}.`,
+        /**
+         * The friend's number is their whole library in this scene, not what
+         * this card hands over, so the sentence has to say which it is. Left
+         * as "and Ethan has 27." it reads as twenty-seven songs on the card,
+         * which is the shape of over-claiming the checks look for.
+         */
+        detail: `You have ${laneSongs(n("yours"), s("lane"))} and ${them} has ${n("theirs")} of their own. ${n("shared")} of them ${is(n("shared"))} the same song, and ${plural(count, "song")} of ${them}'s ${is(count)} not in your library.${trimmed}`,
       };
     }
 
@@ -150,91 +159,76 @@ export function render(c: Candidate, nameOf: (id: string) => string): Rendered {
       return {
         title: laneTitle(s("lane")),
         byline: "",
-        caption: `${who} each saved these ${plural(count, "track")} of ${laneInline(s("lane"))} on their own. You have none of them.`,
-        detail: `Every one of these ${plural(count, "recording")} sits in ${plural(nFriends, "library")} here — ${who} — and in none of yours. You already have ${plural(n("yours"), "track")} of ${laneInline(s("lane"))}. Nobody compared notes; this is where several people landed independently.`,
+        caption: `${who} each saved these ${laneSongs(count, s("lane"))} separately. You have none of them.`,
+        detail: `These ${plural(count, "song")} ${is(count)} in ${plural(nFriends, "library")} here and in none of yours. You already have ${laneSongs(n("yours"), s("lane"))}.`,
       };
 
     case "SINCE_YOU_STOPPED":
       return {
         title: s("artist"),
         byline: "",
-        caption: `You have nothing by ${s("artist")} after ${n("lastYear")}. ${who} ${has} ${plural(count, "track")} released since.`,
-        detail: `The most recent recording by ${s("artist")} in your library came out in ${n("lastYear")}, out of ${plural(n("yours"), "you have", "you have")} in all. ${who} ${has} ${plural(count, "track")} released after that, the latest in ${n("latestYear")}${leader}.${trimmed} Release dates rather than save dates — this is where their catalogue stops in your library, not when you stopped listening.`,
+        caption: `You have nothing by ${s("artist")} after ${n("lastYear")}. ${who} ${has} ${plural(count, "song")} released since.`,
+        detail: `The newest ${s("artist")} song in your library came out in ${n("lastYear")}. ${who} ${has} ${plural(count, "song")} released after that, the latest in ${n("latestYear")}${leader}.${trimmed} These are release dates, not save dates.`,
       };
 
     case "YOU_HAVE_THE_HITS":
       return {
         title: s("album"),
         byline: s("artist"),
-        caption: `The ${plural(n("yours"), "track")} you have from this record ${is(n("yours"))} the ${n("yours") === 1 ? "one" : "ones"} everybody keeps. ${who} ${has} the other ${count}.`,
-        detail: `Rank the ${plural(n("total"), "track")} on ${s("album")} by how many people here keep them, and everything in your library sits at the top of that list — the ${n("yours")} that reached everyone. ${who} ${has} ${plural(count, "of the rest")}.${trimmed} This is the record behind the singles.`,
+        caption: `The ${plural(n("yours"), "song")} you have from this album ${is(n("yours"))} the ${n("yours") === 1 ? "one" : "ones"} everybody keeps. ${who} ${has} the other ${count}.`,
+        detail: `Of the ${plural(n("total"), "song")} on ${s("album")}, the ones in your library are the ones most people here keep. ${who} ${has} ${plural(count, "song")} of the rest.${trimmed}`,
       };
 
     case "BEFORE_YOU_ARRIVED":
       return {
         title: s("artist"),
         byline: "",
-        caption: `Your ${s("artist")} starts at ${n("arrived")}. ${who} ${has} ${plural(count, "track")} from before that, going back to ${n("earliest")}.`,
-        detail: `Nothing by ${s("artist")} in your library predates ${n("arrived")}, though their work here runs back to ${n("earliest")}. ${who} ${has} ${plural(count, "recording")} from those earlier years${leader}.${trimmed} You came in partway through.`,
+        caption: `Your ${s("artist")} songs all come from ${n("arrived")} on. ${who} ${has} ${plural(count, "song")} from before that, back to ${n("earliest")}.`,
+        detail: `Nothing by ${s("artist")} in your library is older than ${n("arrived")}, though their music here goes back to ${n("earliest")}. ${who} ${has} ${plural(count, "song")} from those years${leader}.${trimmed}`,
       };
 
     /**
-     * Where a record sits in a run you have followed.
-     *
-     * The position is the claim, so the sentence leads with it and the counts
-     * follow. Nothing here says when you stopped listening: it says where
-     * their records stop on your shelf, which is what the dates support.
+     * Where an album sits in a run somebody has followed. The position is the
+     * claim, so the sentence states it and the counts follow.
      */
     case "RECORD_BEFORE_YOURS":
       return {
         title: s("album"),
         byline: s("artist"),
-        caption: `${s("artist")} made this in ${n("year")}, before any of the `
-          + `${plural(n("records"), "record")} of theirs you keep. `
-          + `${who} ${has} ${plural(count, "track")} of it.`,
-        detail: `Your ${s("artist")} starts at ${n("first")}, and this came out `
-          + `in ${n("year")}. ${who} ${has} ${plural(count, "track")} from `
-          + `it.${trimmed}`,
+        caption: `Your ${s("artist")} albums start in ${n("first")}. This one came out in ${n("year")}. ${who} ${has} ${plural(count, "song")} from it.`,
+        detail: `You have ${plural(n("records"), "album")} by ${s("artist")}, the earliest from ${n("first")}. This one is older, from ${n("year")}, and you have none of it. ${who} ${has} ${plural(count, "song")}${leader}.${trimmed}`,
       };
 
     case "RECORD_AFTER_YOURS":
       return {
         title: s("album"),
         byline: s("artist"),
-        caption: `${s("artist")} made this in ${n("year")}, after every `
-          + `${plural(n("records"), "record")} of theirs you keep. `
-          + `${who} ${has} ${plural(count, "track")} of it.`,
-        detail: `Your ${s("artist")} runs to ${n("last")}, and this came out in `
-          + `${n("year")}. ${who} ${has} ${plural(count, "track")} from `
-          + `it.${trimmed}`,
+        caption: `Your ${s("artist")} albums stop at ${n("last")}. This one came out in ${n("year")}. ${who} ${has} ${plural(count, "song")} from it.`,
+        detail: `You have ${plural(n("records"), "album")} by ${s("artist")}, the newest from ${n("last")}. This one came later, in ${n("year")}, and you have none of it. ${who} ${has} ${plural(count, "song")}${leader}.${trimmed}`,
       };
 
     case "RECORD_BETWEEN_YOURS":
       return {
         title: s("album"),
         byline: s("artist"),
-        caption: `This one sits between the ${s("artist")} records you keep, out `
-          + `in ${n("year")}, and you have none of it. ${who} ${has} `
-          + `${plural(count, "track")}.`,
-        detail: `You keep ${s("artist")} from ${n("first")} to ${n("last")} and `
-          + `nothing at all from this one, out in ${n("year")}. ${who} ${has} `
-          + `${plural(count, "track")} of it.${trimmed}`,
+        caption: `You have ${s("artist")} albums from ${n("first")} and ${n("last")}, and nothing from this one in between. ${who} ${has} ${plural(count, "song")} from it.`,
+        detail: `Your ${s("artist")} albums run from ${n("first")} to ${n("last")}. This one came out in ${n("year")}, inside that run, and you have none of it. ${who} ${has} ${plural(count, "song")}${leader}.${trimmed}`,
       };
 
     case "ONE_RECORD_LEFT":
       return {
         title: s("album"),
         byline: s("artist"),
-        caption: `You have every record by ${s("artist")} except this one. ${who} ${has} ${count} of it.`,
-        detail: `Of the ${plural(n("records"), "record")} by ${s("artist")} anyone here holds, yours is the only library missing ${s("album")}${n("year") ? `, from ${n("year")}` : ""} — you have ${plural(n("yours"), "track")} by them and not one from it. ${who} ${has} ${plural(count, "track")} from the record.${trimmed}`,
+        caption: `You have every album by ${s("artist")} except this one. ${who} ${has} ${plural(count, "song")} of it.`,
+        detail: `Of the ${plural(n("records"), "album")} by ${s("artist")} anyone here has, this is the only one missing from your library${n("year") ? `. It came out in ${n("year")}` : ""}. You have ${plural(n("yours"), "song")} by them and none from it. ${who} ${has} ${plural(count, "song")}.${trimmed}`,
       };
 
     case "GUEST_ON_YOUR_RECORDS":
       return {
         title: s("artist"),
         byline: "",
-        caption: `${s("artist")} is on ${plural(n("appearances"), "track")} you already have. You have nothing else by them. ${who} ${has} ${count}.`,
-        detail: `${s("artist")} appears on ${plural(n("appearances"), "recording")} you already keep — ${s("example")} among them — and nothing else of theirs is in your library. ${who} ${has} ${plural(count, "track")} of it${leader}.${trimmed}`,
+        caption: `${s("artist")} is on ${plural(n("appearances"), "song")} you already have, and you have nothing else by them. ${who} ${has} ${count}.`,
+        detail: `${s("artist")} sings on ${plural(n("appearances"), "song")} in your library, ${s("example")} among them, and nothing else of theirs is there. ${who} ${has} ${plural(count, "song")}${leader}.${trimmed}`,
       };
 
     case "ONLY_ONE_FRIEND_HAS_IT": {
@@ -242,8 +236,8 @@ export function render(c: Candidate, nameOf: (id: string) => string): Rendered {
       return {
         title: s("artist"),
         byline: "",
-        caption: `${them} is the only person here with ${s("artist")} — ${plural(n("theirDepth"), "track")}. You have ${plural(n("yoursInLane"), "track")} of ${laneInline(s("lane"))}.`,
-        detail: `Nobody else here holds ${s("artist")} at all. ${them} has ${plural(n("theirDepth"), "recording")}, which is not a passing interest, and their work sits in ${laneInline(s("lane"))} where your own library runs to ${plural(n("yoursInLane"), "track")}.${trimmed} One person went a long way into this and you have never been.`,
+        caption: `${them} is the only person here with ${s("artist")}, and has ${plural(n("theirDepth"), "song")}. You have ${laneSongs(n("yoursInLane"), s("lane"))}.`,
+        detail: `Nobody else here has ${s("artist")}. ${them} has ${plural(n("theirDepth"), "song")} by them, and their music sits in ${laneInline(s("lane"))}, where you have ${plural(n("yoursInLane"), "song")}.${trimmed}`,
       };
     }
 
@@ -251,8 +245,8 @@ export function render(c: Candidate, nameOf: (id: string) => string): Rendered {
       return {
         title: s("artist"),
         byline: "",
-        caption: `${who} all have ${s("artist")}. You are the only one here who does not.`,
-        detail: `${who} — every other library here — keep ${s("artist")}, and yours does not. ${count} of their recordings are ones you do not have${leader}.${trimmed} Their work sits in ${laneInline(s("lane"))}.`,
+        caption: `Everyone here has ${s("artist")} except you.`,
+        detail: `${who} all have ${s("artist")} and you have none. ${plural(count, "song")} of theirs ${is(count)} not in your library${leader}.${trimmed} Their music sits in ${laneInline(s("lane"))}.`,
       };
 
     case "A_SCENE_YOU_TOUCHED": {
@@ -260,8 +254,8 @@ export function render(c: Candidate, nameOf: (id: string) => string): Rendered {
       return {
         title: laneTitle(s("lane")),
         byline: "",
-        caption: `You have ${plural(n("yours"), "track")} of ${laneInline(s("lane"))}. ${them} has ${n("theirDepth")}.`,
-        detail: `${laneInline(s("lane"))} is a door your library has open by ${plural(n("yours"), "track")} and no further. ${them} keeps ${n("theirDepth")} of it.${trimmed} You have been in the room; nobody has shown you round it.`,
+        caption: `You have ${laneSongs(n("yours"), s("lane"))}. ${them} has ${n("theirDepth")}.`,
+        detail: `You have ${laneSongs(n("yours"), s("lane"))} and nothing more. ${them} has ${plural(n("theirDepth"), "song")} of it.${trimmed}`,
       };
     }
 
@@ -269,8 +263,8 @@ export function render(c: Candidate, nameOf: (id: string) => string): Rendered {
       return {
         title: `${laneTitle(s("lane"))}, ${n("year")}`,
         byline: "",   // the title already carries the lane and the year
-        caption: `You keep ${plural(n("yours"), "track")} of ${laneInline(s("lane"))} and ${n("mine") === 0 ? "nothing at all" : "one track"} from ${n("year")}. ${who} ${has} ${count}.`,
-        detail: `Your ${laneInline(s("lane"))} runs to ${plural(n("yours"), "track")}, and ${n("mine") === 0 ? "none of them comes" : "one of them comes"} from ${n("year")}. ${who} between them ${has} ${plural(count, "recording")} from that year in the lane${leader}.${trimmed} A single year of something you otherwise live in.`,
+        caption: `You have ${laneSongs(n("yours"), s("lane"))} and ${n("mine") === 0 ? "none" : "one"} from ${n("year")}. ${who} ${has} ${count}.`,
+        detail: `You have ${laneSongs(n("yours"), s("lane"))}, and ${n("mine") === 0 ? "none of them comes" : "one of them comes"} from ${n("year")}. ${who} ${has} ${plural(count, "song")} from that year${leader}.${trimmed}`,
       };
 
     default:
