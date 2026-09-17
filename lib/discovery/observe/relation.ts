@@ -144,7 +144,23 @@ function settle(
    * dated line, not its place: where anything lacks a year the items are
    * ordered and evenly spaced instead.
    */
-  const items = [...raw].sort(
+  /**
+   * One record, once.
+   *
+   * Every builder can meet the same record under two album ids, and a line
+   * carrying the same cover twice reads as the artist having released it
+   * twice. Same name and same year is the same record, whichever builder
+   * found it; the strongest state wins, because a record the card opens is
+   * what the drawing is for.
+   */
+  const rank = { offered: 0, yours: 1, other: 2 } as const;
+  const once = new Map<string, RelationItem>();
+  for (const i of raw) {
+    const key = `${normText(i.name)}:${i.year ?? "?"}`;
+    const hit = once.get(key);
+    if (!hit || rank[i.state] < rank[hit.state]) once.set(key, i);
+  }
+  const items = [...once.values()].sort(
     (a, b) => (a.year ?? 0) - (b.year ?? 0) || a.id.localeCompare(b.id));
   if (items.length === 0) return null;
 
@@ -199,39 +215,71 @@ function foldEditions(
   offeredAlbums: Set<string>, subject: string | null, own: (aid: string) => boolean,
 ): Record[] {
   const ids = [...albums].filter(own).sort();
-  const firstYear = new Map<string, number>();
-  for (const aid of ids) {
-    const alb = ref.albums.get(aid);
-    if (!alb || alb.year === null || alb.albumType !== "album") continue;
-    const k = normText(alb.name);
-    const at = firstYear.get(k);
-    if (at === undefined || alb.year < at) firstYear.set(k, alb.year);
-  }
-
-
   /**
-   * An edition, not a namesake.
+   * An edition, not a namesake, told apart by what is on the record.
    *
-   * Two albums whose names reduce to the same thing are the same record only
-   * when one of them is written as an edition of it: "Smoke + Mirrors" and
-   * "Smoke + Mirrors (Deluxe)" are one record, and folding them stops a
-   * remaster dragging it twenty years forward. Weezer's Blue, Green and White
-   * albums are all called exactly "Weezer" and are three records; folding
-   * those put 1994, 2001 and 2016 under one cover dated 1994.
+   * Two albums whose names reduce to the same thing are sometimes one record
+   * and sometimes not, and the name cannot say which. Weezer's Blue, Green and
+   * White albums are all called exactly "Weezer" and are three records;
+   * "The Come Up Mixtape Vol. 1" released in 2007 and re-released in 2024 is
+   * one, and drawing it twice put the same cover on the line at two dates.
    *
-   * So a fold needs the raw names to differ, or the years to agree — which is
-   * the duplicate-pressing case it also has to catch.
+   * What separates them is the recordings: a re-release carries the same
+   * songs, a namesake carries different ones. So same-named albums fold only
+   * where the smaller one's recordings are mostly on the larger.
    */
-  const bare = new Map<string, Set<string>>();
+  const sameName = new Map<string, string[]>();
   for (const aid of ids) {
     const alb = ref.albums.get(aid);
     if (!alb) continue;
     const k = normText(alb.name);
-    let names = bare.get(k);
-    if (!names) { names = new Set(); bare.set(k, names); }
-    names.add(alb.name.trim().toLowerCase());
+    let group = sameName.get(k);
+    if (!group) { group = []; sameName.set(k, group); }
+    group.push(aid);
   }
-  const namesakes = (k: string) => (bare.get(k)?.size ?? 0) === 1;
+
+  /** The group this record folds into: itself, plus any re-release of it. */
+  const foldKey = new Map<string, string>();
+  for (const [k, group] of sameName) {
+    const sorted = [...group].sort((a, b) =>
+      (ref.albums.get(b)?.works.size ?? 0) - (ref.albums.get(a)?.works.size ?? 0)
+      || a.localeCompare(b));
+    const roots: string[] = [];
+    for (const aid of sorted) {
+      const alb0 = ref.albums.get(aid);
+      if (!alb0) continue;
+      const mine = alb0.works;
+      const myName = alb0.name.trim().toLowerCase();
+      const root = roots.find((r) => {
+        const alb = ref.albums.get(r);
+        const theirs = alb?.works ?? new Set<string>();
+        /**
+         * The same year, written as an edition of it, or the same songs.
+         *
+         * Three tests because there are three cases, and the year settles most
+         * of them: "The Recession" and "Elephant" each sit in the corpus as
+         * two and three album ids with one name, one artist and one year,
+         * which is one record catalogued twice. "Revolver (Super Deluxe)" is
+         * plainly an edition of "Revolver" though the corpus holds different
+         * tracks from each. "The Come Up Mixtape Vol. 1" re-released under the
+         * identical title carries the same songs.
+         *
+         * What survives all three is the namesake: Weezer's Blue and Green
+         * albums, one name, one artist, different years, different songs.
+         */
+        if ((alb?.year ?? null) === alb0.year) return true;
+        if ((alb?.name.trim().toLowerCase() ?? "") !== myName) return true;
+        const smaller = mine.size <= theirs.size ? mine : theirs;
+        const larger = mine.size <= theirs.size ? theirs : mine;
+        if (smaller.size === 0) return false;
+        let shared = 0;
+        for (const wk of smaller) if (larger.has(wk)) shared++;
+        return shared * 2 >= smaller.size;
+      });
+      if (root) foldKey.set(aid, `${k}:${root}`);
+      else { roots.push(aid); foldKey.set(aid, `${k}:${aid}`); }
+    }
+  }
 
   const out = new Map<string, Record>();
   for (const aid of ids) {
@@ -241,10 +289,8 @@ function foldEditions(
     const isOffered = aid === subject || offeredAlbums.has(aid);
     const isYours = [...works].some((wk) => holds(ref, wk, uid));
 
-    const name = normText(alb.name);
-    const folds = !namesakes(name);
-    const key = folds ? name : `${name}:${alb.year}`;
-    const year = folds ? (firstYear.get(name) ?? alb.year) : alb.year;
+    const key = foldKey.get(aid) ?? `${normText(alb.name)}:${aid}`;
+    const year = alb.year;
     const hit = out.get(key);
     if (!hit) {
       out.set(key, {
@@ -258,6 +304,7 @@ function foldEditions(
     if (isYours && !hit.ids.yours) hit.ids.yours = aid;
     if (isOffered && !hit.ids.offered) hit.ids.offered = aid;
     for (const wk of works) hit.works.add(wk);
+    /** A folded record sits at the earliest year any edition of it carries. */
     hit.year = Math.min(hit.year, year);
     if (works.size > hit.size || (works.size === hit.size && aid < hit.ids.any)) {
       hit.ids.any = aid; hit.name = alb.name; hit.size = works.size;
