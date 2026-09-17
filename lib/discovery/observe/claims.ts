@@ -178,6 +178,49 @@ export function render(c: Candidate, nameOf: (id: string) => string): Rendered {
         detail: `Nothing by ${s("artist")} in your library predates ${n("arrived")}, though their work here runs back to ${n("earliest")}. ${who} ${has} ${plural(count, "recording")} from those earlier years${leader}.${trimmed} You came in partway through.`,
       };
 
+    /**
+     * Where a record sits in a run you have followed.
+     *
+     * The position is the claim, so the sentence leads with it and the counts
+     * follow. Nothing here says when you stopped listening: it says where
+     * their records stop on your shelf, which is what the dates support.
+     */
+    case "RECORD_BEFORE_YOURS":
+      return {
+        title: s("album"),
+        byline: s("artist"),
+        caption: `${s("artist")} made this in ${n("year")}, before any of the `
+          + `${plural(n("records"), "record")} of theirs you keep. `
+          + `${who} ${has} ${plural(count, "track")} of it.`,
+        detail: `Your ${s("artist")} starts at ${n("first")}, and this came out `
+          + `in ${n("year")}. ${who} ${has} ${plural(count, "track")} from `
+          + `it.${trimmed}`,
+      };
+
+    case "RECORD_AFTER_YOURS":
+      return {
+        title: s("album"),
+        byline: s("artist"),
+        caption: `${s("artist")} made this in ${n("year")}, after every `
+          + `${plural(n("records"), "record")} of theirs you keep. `
+          + `${who} ${has} ${plural(count, "track")} of it.`,
+        detail: `Your ${s("artist")} runs to ${n("last")}, and this came out in `
+          + `${n("year")}. ${who} ${has} ${plural(count, "track")} from `
+          + `it.${trimmed}`,
+      };
+
+    case "RECORD_BETWEEN_YOURS":
+      return {
+        title: s("album"),
+        byline: s("artist"),
+        caption: `This one sits between the ${s("artist")} records you keep, out `
+          + `in ${n("year")}, and you have none of it. ${who} ${has} `
+          + `${plural(count, "track")}.`,
+        detail: `You keep ${s("artist")} from ${n("first")} to ${n("last")} and `
+          + `nothing at all from this one, out in ${n("year")}. ${who} ${has} `
+          + `${plural(count, "track")} of it.${trimmed}`,
+      };
+
     case "ONE_RECORD_LEFT":
       return {
         title: s("album"),

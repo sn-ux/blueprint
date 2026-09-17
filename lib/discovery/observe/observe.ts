@@ -17,7 +17,7 @@
  * cap: the requirement is that a run of near-identical cards not happen, not
  * that a family be rationed.
  */
-import { findAll, specificityOf, type Candidate, type FamilyId } from "./candidates";
+import { findAll, specificityOf, tierOf, type Candidate, type FamilyId } from "./candidates";
 import { artistKeyOf } from "./reference";
 import { buildProfile, type Profile } from "./profile";
 import { buildReference, type Reference } from "./reference";
@@ -97,8 +97,18 @@ export function observe(
   // substantially the same recordings, the stronger reason survives.
   // Score first; where two cards are the same music they tie exactly, and the
   // sharper reason takes it.
+  /**
+   * Tier first, then score, then the sharpness of the reason.
+   *
+   * A prioritised family is offered ahead of a better-scoring card of an older
+   * kind. Nothing about the music's own numbers is touched to achieve it, and
+   * repetition control still runs afterwards, so a tier cannot take the whole
+   * first screen.
+   */
   const sorted = [...raw].sort((a, b) =>
-    b.score - a.score || specificityOf(b.family) - specificityOf(a.family));
+    tierOf(b.family) - tierOf(a.family)
+    || b.score - a.score
+    || specificityOf(b.family) - specificityOf(a.family));
   const kept: (Candidate & { band: Band })[] = [];
   const seenSubject = new Set<string>();
   const seenTracks: Set<string>[] = [];

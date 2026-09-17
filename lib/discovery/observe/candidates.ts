@@ -43,7 +43,10 @@ export type FamilyId =
   | "NEW_IN_YOUR_LANE"
   | "WHAT_THEY_HAVE"
   | "THEY_ALL_KEEP_IT"
-  | "SINCE_YOU_STOPPED";
+  | "SINCE_YOU_STOPPED"
+  | "RECORD_BEFORE_YOURS"
+  | "RECORD_AFTER_YOURS"
+  | "RECORD_BETWEEN_YOURS";
 
 /** Why this viewer, stated as something their library contains. */
 export type ConnectionKind =
@@ -106,6 +109,13 @@ const MIN_ALBUM_HELD = 1;
 /** A lane recommendation needs more than one person's enthusiasm. */
 const MIN_FRIENDS_FOR_LANE = 2;
 /**
+ * How much of an artist makes their catalogue a run you have followed.
+ *
+ * Below this, "before the records you like" is describing one record rather
+ * than a shelf.
+ */
+const DISCOGRAPHY_HELD = 5;
+/**
  * And it has to be more agreement than the lane's own base rate predicts.
  *
  * Deliberately low. With four friends the expected number holding any given
@@ -149,6 +159,9 @@ const VARIOUS_ARTISTS_AT = 4;
  * music, so it is not a thumb on the ranking.
  */
 const REASON_SPECIFICITY: Record<FamilyId, number> = {
+  RECORD_BETWEEN_YOURS: 10,
+  RECORD_BEFORE_YOURS: 10,
+  RECORD_AFTER_YOURS: 10,
   ONE_RECORD_LEFT: 9,
   YOU_HAVE_THE_HITS: 8,
   BEFORE_YOU_ARRIVED: 7,
@@ -166,6 +179,22 @@ const REASON_SPECIFICITY: Record<FamilyId, number> = {
   DEEPER_ON_AN_ARTIST: 1,
 };
 export const specificityOf = (f: FamilyId) => REASON_SPECIFICITY[f] ?? 0;
+
+/**
+ * Which families are offered first, before score is consulted.
+ *
+ * Not a weight and not a thumb on the scale of relevance: the ordering asks
+ * for the tier first and for the score within it, so a card of a prioritised
+ * kind comes ahead of a better-scoring card of an older kind without any
+ * number about the music being altered. Repetition control still applies
+ * afterwards, so a tier cannot fill the whole first screen with one family.
+ */
+const TIER: Partial<Record<FamilyId, number>> = {
+  RECORD_BEFORE_YOURS: 1,
+  RECORD_AFTER_YOURS: 1,
+  RECORD_BETWEEN_YOURS: 1,
+};
+export const tierOf = (f: FamilyId) => TIER[f] ?? 0;
 
 /** A guest credit in a track title: "(feat. Ab-Soul)", "ft. Nas". */
 const GUEST_CREDIT = /\b(?:feat|ft)\.?\s+([^)\]]+)/i;
@@ -955,11 +984,85 @@ function aYearInYourLane(ref: Reference, p: Profile): Candidate[] {
   return out;
 }
 
+/**
+ * A record of theirs from before, after, or inside the run you own.
+ *
+ * Three cards, one mechanic: a catalogue you have followed has a shape, and a
+ * record either extends it at one end or fills a hole in the middle. The
+ * middle is the sharpest of the three — a gap between two records you keep is
+ * not something a listener can easily notice about their own shelf — and all
+ * three are placed on the drawing that already exists for a record, which
+ * puts the offered one among yours in date order.
+ *
+ * "The albums you like" is plural on purpose: two dated records of theirs on
+ * the shelf is what makes a before, an after or a between meaningful, and one
+ * is just a record with another record near it.
+ */
+function discographyOrder(ref: Reference, p: Profile): Candidate[] {
+  const out: Candidate[] = [];
+  for (const [ak, held] of p.byArtist) {
+    if (held.size < DISCOGRAPHY_HELD) continue;
+    const a = ref.artists.get(ak);
+    if (!a) continue;
+
+    /** Their records, dated, with whether this listener holds any of each. */
+    const records = new Map<string, { year: number; mine: boolean; works: Set<string> }>();
+    for (const aid of [...a.albums.keys()].sort()) {
+      const alb = ref.albums.get(aid);
+      if (!alb || alb.year === null || alb.albumType !== "album") continue;
+      if (alb.artistKey !== ak || alb.totalTracks > MAX_ALBUM_TRACKS) continue;
+      const works = a.albums.get(aid) ?? new Set<string>();
+      const mine = [...works].some((wk) => p.works.has(wk));
+      const hit = records.get(aid);
+      if (hit) { hit.mine ||= mine; continue; }
+      records.set(aid, { year: alb.year, mine, works });
+    }
+    const mineYears = [...records.values()].filter((r) => r.mine).map((r) => r.year);
+    if (new Set(mineYears).size < 2) continue;
+    const first = Math.min(...mineYears);
+    const last = Math.max(...mineYears);
+
+    for (const [aid, r] of records) {
+      if (r.mine) continue;
+      const family: FamilyId | null =
+        r.year < first ? "RECORD_BEFORE_YOURS"
+        : r.year > last ? "RECORD_AFTER_YOURS"
+        : "RECORD_BETWEEN_YOURS";
+      const alb = ref.albums.get(aid);
+      if (!alb) continue;
+      const { tracks, holders, evidence, available, relevance } =
+        rank(ref, p, r.works);
+      if (tracks.length < MIN_TRACKS) continue;
+      const size = Math.max(alb.totalTracks || 0, r.works.size);
+      out.push({
+        family,
+        key: `${family === "RECORD_BEFORE_YOURS" ? "before"
+               : family === "RECORD_AFTER_YOURS" ? "after" : "between"}:${aid}`,
+        subject: { kind: "album", key: aid, label: alb.name, artist: alb.artist },
+        tracks, holders, evidence, available,
+        connection: { kind: "ARTIST_HELD", key: ak, label: a.name, yours: held.size },
+        facts: {
+          artist: a.name, album: alb.name, year: r.year,
+          yours: held.size, records: new Set(mineYears).size,
+          first, last, available,
+        },
+        relevance,
+        discovery: tracks.length / Math.max(tracks.length, size),
+        subjectSize: size,
+        score: worth(relevance, tracks.length, size),
+        footprint: [...tracks, ...held],
+      });
+    }
+  }
+  return out;
+}
+
 export const FAMILIES = [
   finishTheRecord, deeperOnAnArtist, theRecordYouSkipped,
   newInYourLane, whatTheyHave, theyAllKeepIt, sinceYouStopped,
   youHaveTheHits, beforeYouArrived, oneRecordLeft, guestOnYourRecords,
   onlyOneFriendHasIt, everyoneButYou, aSceneYouTouched, aYearInYourLane,
+  discographyOrder,
 ];
 
 export function findAll(ref: Reference, p: Profile): Candidate[] {
