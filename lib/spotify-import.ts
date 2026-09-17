@@ -61,6 +61,11 @@ type NormalizedTrack = {
   discNumber:       number | null;
   albumType:        string | null;
   artists:       { id: string; name: string }[];
+  /**
+   * Spotify's `added_at` for this track in this library, or null where the
+   * source did not carry one. Never inferred and never the time of the import.
+   */
+  savedAt:       Date | null;
 };
 
 export interface ImportResult {
@@ -165,7 +170,28 @@ function normalizeTrack(t: RawTrack): NormalizedTrack {
     discNumber:       typeof t.disc_number === "number" ? t.disc_number : null,
     albumType:        t.album?.album_type ?? null,
     artists:       t.artists ?? [],
+    savedAt:       null,
   };
+}
+
+/**
+ * The later of two save dates, either of which may be missing.
+ *
+ * A track can arrive from Liked Songs and from a playlist, and the two carry
+ * different dates. The most recent is when it last entered this library, which
+ * is the thing worth knowing.
+ */
+function laterOf(a: Date | null, b: Date | null): Date | null {
+  if (!a) return b;
+  if (!b) return a;
+  return a > b ? a : b;
+}
+
+/** Spotify's `added_at`, or nothing. Never a guess and never now(). */
+function savedAtOf(raw: unknown): Date | null {
+  if (typeof raw !== "string") return null;
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 function isValidTrack(t: RawTrack | null | undefined): t is RawTrack {
@@ -241,8 +267,11 @@ export async function runLikedSongsImport(userId: string): Promise<ImportResult>
       const res = await spotifyGet(url, account);
       for (const item of res.data.items ?? []) {
         const t: RawTrack | null = item.track ?? null;
-        if (isValidTrack(t) && !trackMap.has(t.id)) {
-          trackMap.set(t.id, normalizeTrack(t));
+        if (isValidTrack(t)) {
+          const when = savedAtOf(item.added_at);
+          const seen = trackMap.get(t.id);
+          if (seen) seen.savedAt = laterOf(seen.savedAt, when);
+          else trackMap.set(t.id, { ...normalizeTrack(t), savedAt: when });
         }
         likedSongsFetched++;
       }
@@ -292,14 +321,23 @@ export async function runLikedSongsImport(userId: string): Promise<ImportResult>
 
   for (const playlist of ownedPlaylists) {
     let url: string | null =
-      `https://api.spotify.com/v1/playlists/${playlist.id}/tracks?limit=50&fields=next,items(track(id,name,type,is_local,preview_url,duration_ms,track_number,disc_number,album(id,name,images,release_date,release_date_precision,total_tracks,album_type),artists(id,name)))`;
+      `https://api.spotify.com/v1/playlists/${playlist.id}/tracks?limit=50&fields=next,items(added_at,track(id,name,type,is_local,preview_url,duration_ms,track_number,disc_number,album(id,name,images,release_date,release_date_precision,total_tracks,album_type),artists(id,name)))`;
     while (url) {
       const res = await spotifyGet(url, account);
       for (const item of res.data.items ?? []) {
         ownedPlaylistTracksFetched++;
         const t: RawTrack | null = item.track ?? null;
-        if (isValidTrack(t) && !trackMap.has(t.id)) {
-          trackMap.set(t.id, normalizeTrack(t));
+        if (isValidTrack(t)) {
+          /**
+           * A playlist carries its own added_at, which is when the track
+           * entered that playlist. For a song that is only in a playlist it is
+           * the one save date there is; for one already seen in Liked Songs the
+           * later of the two stands.
+           */
+          const when = savedAtOf(item.added_at);
+          const seen = trackMap.get(t.id);
+          if (seen) seen.savedAt = laterOf(seen.savedAt, when);
+          else trackMap.set(t.id, { ...normalizeTrack(t), savedAt: when });
         }
       }
       url = res.data.next ?? null;
@@ -349,6 +387,7 @@ export async function runLikedSongsImport(userId: string): Promise<ImportResult>
             releaseDate: t.releaseDate, releaseDatePrecision: t.releaseDatePrecision,
             albumId: t.albumId, albumTotalTracks: t.albumTotalTracks,
             trackNumber: t.trackNumber, discNumber: t.discNumber, albumType: t.albumType,
+            savedAt: t.savedAt,
             rawGenre, blueprintWorld, blueprintSubgenre },
           create: { userId, spotifyId: t.id, name: t.name, artist: firstArtist.name,
             album: t.albumName, imageUrl: t.albumImageUrl, previewUrl: t.previewUrl,
@@ -356,6 +395,7 @@ export async function runLikedSongsImport(userId: string): Promise<ImportResult>
             releaseDate: t.releaseDate, releaseDatePrecision: t.releaseDatePrecision,
             albumId: t.albumId, albumTotalTracks: t.albumTotalTracks,
             trackNumber: t.trackNumber, discNumber: t.discNumber, albumType: t.albumType,
+            savedAt: t.savedAt,
             rawGenre, blueprintWorld, blueprintSubgenre },
         });
       })

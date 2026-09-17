@@ -93,6 +93,16 @@ model Track {
   // than fetched per card.
   artistId             String?
   artistImageUrl       String?
+  /**
+   * When Spotify says this person saved it.
+   *
+   * `added_at` on a Liked Songs item, or on a playlist item for a track that
+   * only arrives that way; where both exist the later one wins, because that
+   * is when it last entered their library. Null on any row imported before
+   * this was captured — nothing backfills or infers it, and nothing that reads
+   * it may treat null as old or as new.
+   */
+  savedAt              DateTime?
   rawGenre             String
   blueprintWorld       String
   blueprintSubgenre    String
