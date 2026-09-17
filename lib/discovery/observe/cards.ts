@@ -12,7 +12,7 @@ import type { Band } from "./observe";
 import type { Candidate } from "./candidates";
 import { render } from "./claims";
 import type { Reference } from "./reference";
-import { buildTimeline } from "./timeline";
+import { buildRelation } from "./relation";
 
 const CARD_TYPE: Record<string, CardSubjectType> = {
   album: "ALBUM", artist: "ARTIST", set: "SONG_SET",
@@ -173,6 +173,6 @@ export function toFeedCard(
     previewTracks: tracks.slice(0, previewLimit),
     releaseYearMin: lo,
     releaseYearMax: hi,
-    timeline: buildTimeline(ref, c, viewerId),
+    relation: buildRelation(ref, c, viewerId, people),
   };
 }

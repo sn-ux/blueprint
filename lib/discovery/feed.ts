@@ -1,4 +1,4 @@
-import type { Timeline } from "./observe/timeline";
+import type { Relation } from "./observe/relation";
 import { loadCorpus } from "./corpus";
 import { label, laneTitle } from "./display";
 import { runEngine } from "./engine";
@@ -115,14 +115,15 @@ export interface FeedCard {
   releaseYearMax: number | null;
 
   /**
-   * Where this card's music sits against what the viewer already holds.
+   * The drawing at the foot of the card: how this music touches the library.
    *
-   * Release positions on one axis: the records, artists or years the viewer
-   * keeps from the same set, plus the thing this card is opening, so a gap can
-   * be seen rather than described. Null wherever the data cannot place the
-   * subject honestly, which is most cards.
+   * Artwork the viewer already recognises, arranged in the shape the relation
+   * actually has — a dated line of records, the share of a set they hold, the
+   * records of theirs this person is already on, their corner of a scene — so
+   * that why it is in front of them and where it fits are seen rather than
+   * read.
    */
-  timeline?: Timeline | null;
+  relation?: Relation | null;
 }
 
 const spotifyUrl = (id: string | null) =>
