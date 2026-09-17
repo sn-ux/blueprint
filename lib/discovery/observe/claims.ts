@@ -131,7 +131,7 @@ export function render(c: Candidate, nameOf: (id: string) => string): Rendered {
     case "NEW_IN_YOUR_LANE":
       return {
         title: s("artist"),
-        byline: laneInline(s("lane")),
+        byline: "",
         caption: `${who} ${verb(nFriends, "has", "each have")} ${s("artist")}. You have ${plural(n("yoursInLane"), "track")} of ${laneInline(s("lane"))} and nothing of theirs.`,
         detail: `${who} arrived at ${s("artist")} separately, and ${has} ${plural(count, "recording")} you do not${leader}.${trimmed} That work sits in ${laneInline(s("lane"))}, where your own library runs to ${plural(n("yoursInLane"), "track")} — deep enough that this is a name you might have expected to meet by now, and have not.`,
       };
@@ -157,7 +157,7 @@ export function render(c: Candidate, nameOf: (id: string) => string): Rendered {
     case "SINCE_YOU_STOPPED":
       return {
         title: s("artist"),
-        byline: `since ${n("lastYear")}`,
+        byline: "",
         caption: `You have nothing by ${s("artist")} after ${n("lastYear")}. ${who} ${has} ${plural(count, "track")} released since.`,
         detail: `The most recent recording by ${s("artist")} in your library came out in ${n("lastYear")}, out of ${plural(n("yours"), "you have", "you have")} in all. ${who} ${has} ${plural(count, "track")} released after that, the latest in ${n("latestYear")}${leader}.${trimmed} Release dates rather than save dates — this is where their catalogue stops in your library, not when you stopped listening.`,
       };
@@ -173,7 +173,7 @@ export function render(c: Candidate, nameOf: (id: string) => string): Rendered {
     case "BEFORE_YOU_ARRIVED":
       return {
         title: s("artist"),
-        byline: `before ${n("arrived")}`,
+        byline: "",
         caption: `Your ${s("artist")} starts at ${n("arrived")}. ${who} ${has} ${plural(count, "track")} from before that, going back to ${n("earliest")}.`,
         detail: `Nothing by ${s("artist")} in your library predates ${n("arrived")}, though their work here runs back to ${n("earliest")}. ${who} ${has} ${plural(count, "recording")} from those earlier years${leader}.${trimmed} You came in partway through.`,
       };
@@ -189,7 +189,7 @@ export function render(c: Candidate, nameOf: (id: string) => string): Rendered {
     case "GUEST_ON_YOUR_RECORDS":
       return {
         title: s("artist"),
-        byline: `already on ${plural(n("appearances"), "track")} of yours`,
+        byline: "",
         caption: `${s("artist")} is on ${plural(n("appearances"), "track")} you already have. You have nothing else by them. ${who} ${has} ${count}.`,
         detail: `${s("artist")} appears on ${plural(n("appearances"), "recording")} you already keep — ${s("example")} among them — and nothing else of theirs is in your library. ${who} ${has} ${plural(count, "track")} of it${leader}.${trimmed}`,
       };
@@ -198,7 +198,7 @@ export function render(c: Candidate, nameOf: (id: string) => string): Rendered {
       const them = solo;
       return {
         title: s("artist"),
-        byline: laneInline(s("lane")),
+        byline: "",
         caption: `${them} is the only person here with ${s("artist")} — ${plural(n("theirDepth"), "track")}. You have ${plural(n("yoursInLane"), "track")} of ${laneInline(s("lane"))}.`,
         detail: `Nobody else here holds ${s("artist")} at all. ${them} has ${plural(n("theirDepth"), "recording")}, which is not a passing interest, and their work sits in ${laneInline(s("lane"))} where your own library runs to ${plural(n("yoursInLane"), "track")}.${trimmed} One person went a long way into this and you have never been.`,
       };
@@ -207,7 +207,7 @@ export function render(c: Candidate, nameOf: (id: string) => string): Rendered {
     case "EVERYONE_BUT_YOU":
       return {
         title: s("artist"),
-        byline: laneInline(s("lane")),
+        byline: "",
         caption: `${who} all have ${s("artist")}. You are the only one here who does not.`,
         detail: `${who} — every other library here — keep ${s("artist")}, and yours does not. ${count} of their recordings are ones you do not have${leader}.${trimmed} Their work sits in ${laneInline(s("lane"))}.`,
       };

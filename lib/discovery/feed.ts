@@ -115,6 +115,15 @@ export interface FeedCard {
   releaseYearMax: number | null;
 
   /**
+   * A picture for whoever the byline names, where it names anybody.
+   *
+   * Set on album cards, whose byline is the record's artist. Null elsewhere,
+   * including on artist cards, which carry no byline at all: the line under
+   * the headline was restating what the drawing underneath already shows.
+   */
+  bylineImageUrl?: string | null;
+
+  /**
    * The drawing at the foot of the card: how this music touches the library.
    *
    * Artwork the viewer already recognises, arranged in the shape the relation

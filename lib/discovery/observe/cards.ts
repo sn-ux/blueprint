@@ -76,6 +76,25 @@ function trackOf(
   };
 }
 
+/**
+ * The artist's own picture, for a card whose byline names them.
+ *
+ * An album card reads as the record and then its maker, and a name alone makes
+ * that second line look like metadata. The face beside it makes it a person.
+ * Only album cards carry it: an artist card's subject picture is already the
+ * artist, and its byline is empty.
+ */
+function artistFaceOf(ref: Reference, c: Candidate): string | null {
+  const key = c.subject.kind === "album"
+    ? ref.albums.get(c.subject.key)?.artistKey : null;
+  if (!key) return null;
+  for (const wk of [...(ref.artists.get(key)?.works ?? [])].sort()) {
+    const u = ref.works.get(wk)?.row.artistImageUrl;
+    if (u) return u;
+  }
+  return null;
+}
+
 function imageOf(ref: Reference, c: Candidate, tracks: FeedTrack[]): string | null {
   if (c.subject.kind === "album") {
     for (const wk of ref.albums.get(c.subject.key)?.works ?? []) {
@@ -156,6 +175,7 @@ export function toFeedCard(
     artist: c.subject.kind === "artist" ? c.subject.label : (c.subject.artist ?? null),
     album: c.subject.kind === "album" ? c.subject.label : null,
     subjectImageUrl: imageOf(ref, c, tracks),
+    bylineImageUrl: artistFaceOf(ref, c),
     anchor: {
       type: ctx.anchorType, entityName: ctx.anchorName,
       ownedCount: ctx.ownedCount, specificity: c.score,
