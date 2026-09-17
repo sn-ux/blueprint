@@ -64,6 +64,15 @@ const MAX_ITEMS = 6;
  */
 const MAX_ARTISTS = 5;
 /**
+ * Company, rather than one neighbour.
+ *
+ * Two of the reader's own artists is the least that reads as a scene; below
+ * that the line is a pair of faces and a gap.
+ */
+const MIN_PEERS = 2;
+/** How much of an artist's filed work a lane must be to count as their scene. */
+const MIN_SHARE = 0.3;
+/**
  * Two marks, or there is nothing to read a position against.
  *
  * Two is enough: this record, and the one of theirs you already have, is a
@@ -137,21 +146,44 @@ function laneOfTracks(ref: Reference, c: Candidate): string | null {
 }
 
 /**
- * The scene an artist works in, taken from their whole catalogue.
+ * The scenes an artist works in, narrowest first.
  *
- * Better than the scene of whatever this card happens to be handing over: a
- * fifth of the corpus is untaxonomised, so the majority over one card's dozen
- * recordings is often "unknown" for an artist whose work is plainly filed
- * somewhere. Reading it off everything the corpus holds by them recovers the
- * real scene, and with it the peers to place them among.
+ * An artist's most-used tag is usually their broadest one: Playboi Carti is
+ * filed under rap far more often than under rage rap, so picking the commonest
+ * put him on a line with whoever else the reader keeps in rap — true, and too
+ * loose to feel like a connection. The narrower the scene, the more the artists
+ * either side of him actually resemble him, so his scenes are tried in order of
+ * how much music the corpus has in them and the first with enough company wins.
+ *
+ * Read off the whole catalogue rather than off one card's payload, because a
+ * fifth of the corpus is untaxonomised and the majority over a dozen
+ * recordings is often "unknown" for an artist plainly filed somewhere.
+ *
+ * A lane has to be a real share of the artist's own filed work, not merely
+ * present in it. Counting any lane with a couple of recordings put The Weeknd
+ * in rage rap on the strength of three of his hundred and six, and 21 Savage
+ * in afrobeats on three of a hundred and thirty. A third of what is filed is
+ * the line that separates those from Playboi Carti, every one of whose fifty-two
+ * recordings is rage rap — and it keeps Rapsody in neo soul at two fifths while
+ * dropping the four-per-cent tails underneath it.
+ *
+ * The share is taken over the artist's named lanes only. Four fifths of some
+ * catalogues here are untaxonomised, and measuring against that denominator
+ * would leave nothing qualifying at all.
  */
-function laneOfArtist(ref: Reference, artistKey: string): string | null {
+function lanesOfArtist(ref: Reference, artistKey: string): string[] {
   const a = ref.artists.get(artistKey);
-  if (!a) return null;
-  const best = [...a.subgenres]
-    .filter(([sg]) => !UNNAMED.test(sg))
-    .sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]))[0];
-  return best ? best[0] : null;
+  if (!a) return [];
+  const mine = [...a.subgenres].filter(([sg]) => !UNNAMED.test(sg));
+  if (mine.length === 0) return [];
+  const filed = mine.reduce((n, [, v]) => n + v, 0);
+  const most = Math.max(...mine.map(([, n]) => n));
+  return mine
+    .filter(([, n]) => n === most || n / filed >= MIN_SHARE)
+    .map(([sg]) => sg)
+    .sort((x, y) =>
+      (ref.subgenreWorks.get(x)?.size ?? 0) - (ref.subgenreWorks.get(y)?.size ?? 0)
+      || x.localeCompare(y));
 }
 
 function artistOf(ref: Reference, c: Candidate): string | null {
@@ -719,9 +751,8 @@ export function buildRelation(
    * An artist card is placed in the artist's own scene; anything else is
    * placed in the scene of the music it is handing over.
    */
-  const lane = laneOf(c)
-    ?? (artistKey ? laneOfArtist(ref, artistKey) : null)
-    ?? laneOfTracks(ref, c);
+  const lanes = artistKey ? lanesOfArtist(ref, artistKey) : [];
+  const lane = laneOf(c) ?? lanes[0] ?? laneOfTracks(ref, c);
 
   const shelf = () => artistKey ? catalogue(ref, c, uid, artistKey) : null;
   const shelfAll = () => artistKey ? shelfOfRecordings(ref, c, uid, artistKey) : null;
@@ -753,11 +784,29 @@ export function buildRelation(
     if (!world || !lane || UNNAMED.test(world)) return null;
     return sceneArtists(ref, c, uid, lane, worldWorks(ref, world), laneTitle(world));
   };
+  /** How many of the reader's own artists a drawing managed to put up. */
+  const peers = (r: Relation | null) =>
+    r ? r.items.filter((i) => i.state === "yours").length : 0;
+
+  /**
+   * The narrowest scene with enough company in it.
+   *
+   * Tried smallest first: the first scene that puts somebody either side of the
+   * artist, with a couple of the reader's own around them, is the one drawn. A
+   * scene too thin for this particular reader is passed over however apt its
+   * name, and the search widens through the artist's broader tags and then to
+   * the genre above them.
+   */
   const scene = () => {
-    const here = inLane();
-    if (twoSided(here)) return here;
+    let best: Relation | null = null;
+    for (const l of lanes.length ? lanes : named ? [lane!] : []) {
+      const r = sceneArtists(ref, c, uid, l);
+      if (twoSided(r) && peers(r) >= MIN_PEERS) return r;
+      if (!best && r) best = r;
+    }
     const above = wider();
-    return twoSided(above) ? above : here ?? above;
+    if (twoSided(above) && peers(above) >= MIN_PEERS) return above;
+    return best ?? inLane() ?? above;
   };
   /** The genre above the subgenre, where a subgenre holds no peers at all. */
   const inScene = () => named ? sceneRecords(ref, c, uid, lane!) : null;
