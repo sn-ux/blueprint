@@ -17,7 +17,7 @@
  * cap: the requirement is that a run of near-identical cards not happen, not
  * that a family be rationed.
  */
-import { findAll, specificityOf, type Candidate, type FamilyId } from "./candidates";
+import { findAll, minSongsFor, specificityOf, type Candidate, type FamilyId } from "./candidates";
 import { artistKeyOf } from "./reference";
 import { buildProfile, type Profile } from "./profile";
 import { buildReference, type Reference } from "./reference";
@@ -49,7 +49,7 @@ export interface ObserveResult {
 }
 
 const DEFAULTS = {
-  minTracks: 4, redundancy: 0.35, window: 8, familyPerWindow: 2,
+  minTracks: 1, redundancy: 0.35, window: 8, familyPerWindow: 2,
   /** At most half a window about the same kind of subject. */
   kindPerWindow: 4, limit: Infinity,
 };
@@ -106,7 +106,10 @@ export function observe(
   const seenTracks: Set<string>[] = [];
 
   for (const c of sorted) {
-    if (c.tracks.length < o.minTracks) { bump("too little to open"); continue; }
+    /** Its own floor, or a stricter one a caller asked for. */
+    if (c.tracks.length < Math.max(o.minTracks, minSongsFor(c.subject.kind))) {
+      bump("too little to open"); continue;
+    }
     const sk = `${c.subject.kind}:${c.subject.key}`;
     if (seenSubject.has(sk)) { bump("duplicate subject"); continue; }
     const mine = new Set(c.tracks);

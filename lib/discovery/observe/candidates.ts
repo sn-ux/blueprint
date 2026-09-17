@@ -110,7 +110,32 @@ export interface Candidate {
 
 // ── floors ──────────────────────────────────────────────────────────────────
 /** Below this a card is not worth opening, whatever else is true of it. */
-const MIN_TRACKS = 4;
+/**
+ * The cheap early exit each family keeps, which is not the rule.
+ *
+ * It was four, which quietly floored album cards at four songs however short
+ * the record — a second floor competing with the real one. It is the lowest
+ * any card can be now, so the only floor that decides anything is the one
+ * below, applied once where the candidates are gathered.
+ */
+const MIN_TRACKS = 1;
+/**
+ * How much music a card has to hand over, by what it is about.
+ *
+ * An artist or a genre is a big subject, and four songs of one is a sample
+ * rather than an introduction — twelve is enough to be worth opening and to
+ * tell you whether you were right about it.
+ *
+ * An album is not a big subject: it is a fixed object with however many songs
+ * are on it, and the card is the part of it you do not have. Holding a floor
+ * over that would throw away short records and nearly-complete ones, which are
+ * the best album cards there are.
+ */
+const MIN_SONGS = 12;
+const MIN_ALBUM_SONGS = 1;
+
+export const minSongsFor = (kind: "album" | "artist" | "set") =>
+  kind === "album" ? MIN_ALBUM_SONGS : MIN_SONGS;
 const MIN_LANE_DEPTH = 15;
 const MIN_ARTIST_HELD = 2;
 const MIN_ALBUM_HELD = 1;
@@ -1351,7 +1376,11 @@ export const FAMILIES = [
 export function findAll(ref: Reference, p: Profile): Candidate[] {
   const out: Candidate[] = [];
   for (const f of FAMILIES) out.push(...f(ref, p));
-  // Nothing without friend music can exist. Belt and braces on an invariant
-  // the families already enforce, because it is the whole product.
-  return out.filter((c) => c.tracks.length >= MIN_TRACKS);
+  /**
+   * Nothing without friend music can exist, and nothing under its own floor.
+   *
+   * The families each keep a cheap early exit, but the rule itself lives here
+   * so there is one place it is written and no family can be missed.
+   */
+  return out.filter((c) => c.tracks.length >= minSongsFor(c.subject.kind));
 }
