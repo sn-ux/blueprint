@@ -18,6 +18,33 @@ const CARD_TYPE: Record<string, CardSubjectType> = {
   album: "ALBUM", artist: "ARTIST", set: "SONG_SET",
 };
 
+/**
+ * The content level a card is about.
+ *
+ * The engine groups candidates by three subject kinds; the app reads five
+ * levels. A set whose subject is a lane is a subgenre card, and two families
+ * are exactly that: WHAT_THEY_HAVE is titled "Experimental hip hop" and
+ * A_SCENE_YOU_TOUCHED "Art rock". Both were badged Songs because "set" is how
+ * the engine stores a lane internally, so the Subgenre level read as empty
+ * while the cards for it were sitting in the feed under another name.
+ *
+ * The set families that really are collections of recordings stay Songs: the
+ * tracks several friends each kept, and a year's worth of a lane.
+ *
+ * This is the card's label and nothing else. It is read after a candidate has
+ * been generated, scored, consolidated, ordered and capped, so it cannot
+ * affect what exists, what is eligible, how anything ranks, what is selected
+ * or what order it arrives in.
+ */
+const LANE_SUBJECT = new Set<Candidate["family"]>([
+  "WHAT_THEY_HAVE", "A_SCENE_YOU_TOUCHED",
+]);
+
+const levelOf = (c: Candidate): CardSubjectType =>
+  c.subject.kind === "set" && LANE_SUBJECT.has(c.family)
+    ? "SUBGENRE"
+    : CARD_TYPE[c.subject.kind] ?? "SONG_SET";
+
 const spotifyUrl = (id: string | null) =>
   (id ? `https://open.spotify.com/track/${id}` : null);
 
@@ -114,7 +141,7 @@ export function toFeedCard(
     id: `fr:${c.family}:${c.key}`,
     version: `${c.tracks.length}:${c.holders.map((h) => h.count).join(",")}`,
     rank,
-    cardType: CARD_TYPE[c.subject.kind] ?? "SONG_SET",
+    cardType: levelOf(c),
     qualityBand: c.band,
     title: r.title,
     byline: r.byline,
