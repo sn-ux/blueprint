@@ -1,72 +1,79 @@
 /**
- * The drawing at the foot of a card: how this music touches the library.
+ * The drawing at the foot of a card: this music, among the music you have.
  *
- * A card's sentence says what is being offered. The drawing says why it is in
- * front of you and where it sits, in artwork you already recognise: the
- * records of theirs on your shelf, the part of this one you have, the records
- * of yours this person is already singing on, your corner of a scene.
+ * One language, drawn from one of two things the corpus actually holds:
  *
- * A relation has a shape, and the shape is not always a line in time. Four
- * drawings cover what the data supports:
+ *   records   covers on a dated line - the records of theirs on your shelf,
+ *             and the one this card is about, sitting where it belongs
+ *   artists   the artists you already keep in a scene, and the one being
+ *             introduced, placed by the era of what you hold
  *
- *   chronology  records or years on a dated line, yours and the new one
- *   fill        a set, the share of it you hold, and the share this opens
- *   hub         one subject, and the records of yours it is already on
- *   neighbours  the artists you keep in a scene, and the one being introduced
+ * What the drawing contains is chosen per family, so it explains that card's
+ * own sentence rather than a general fact. A card saying you have nothing by
+ * J. Cole after 2021 draws his records with yours stopping and the rest
+ * carrying on; a card saying somebody is on two records you own draws those
+ * two records; a card about a scene draws the artists you keep in it.
  *
- * Every family names the drawing its relation actually has, with a fallback,
- * so every card carries one. Nothing is invented: a year is a year the rows
- * carry, a count is a count of real recordings, and an item is either music
- * the viewer holds or music this card hands over.
- *
- * The one date this cannot fix is a reissue's. A record is placed at the
- * earliest year any edition of it carries, which puts a remaster back on its
- * own release; a recording whose only copy here is a remastered pressing still
- * carries that pressing's date.
+ * Nothing is invented. A year is the earliest year the rows give that music,
+ * an item is either something the viewer holds or something this card opens,
+ * and every item is a real record or a real artist with its own artwork.
  */
-import type { PersonRow } from "../types";
 import { laneTitle } from "../display";
 import type { Candidate } from "./candidates";
 import { normText, type Reference } from "./reference";
-
-export type RelationKind = "chronology" | "fill" | "hub" | "neighbours";
 
 export interface RelationItem {
   id: string;
   name: string;
   imageUrl: string | null;
-  /** A record is a square, a person is a circle. */
+  /** A record is a square, an artist is a circle. */
   shape: "square" | "circle";
-  /** What the viewer already has, against what this card opens. */
-  state: "yours" | "offered";
-  /** Drawn under the item where the drawing is dated. */
+  /**
+   * What the viewer already has, what this card opens, and what is neither.
+   *
+   * "other" is the rest of the catalogue: a record by the same artist that
+   * neither side holds. It is what makes a record legible as coming before or
+   * after the ones you know, and without it an album card from somebody you
+   * own a single track by had nothing to be placed against at all.
+   */
+  state: "yours" | "offered" | "other";
   year: number | null;
 }
 
 export interface Relation {
-  kind: RelationKind;
-  /** The relation in words, under the drawing. */
-  caption: string;
-  /** A dated drawing's span. */
+  /** What the items are. */
+  of: "records" | "artists";
+  /** The scene this is drawn inside, where there is one. */
+  scope: string | null;
   axis: { from: number; to: number } | null;
-  /** A fill drawing's set: recordings, not items. */
-  share: { yours: number; offered: number; total: number } | null;
   items: RelationItem[];
 }
 
-/** Past this the artwork is too small to recognise at a card's width. */
-const MAX_ITEMS = 9;
-/** A drawing of the viewer's own things needs at least this many to read. */
-const MIN_YOURS = 2;
-/** Covers shown beside a fill bar, so the set is a thing and not a number. */
-const MAX_FACES = 4;
+/**
+ * Six, because the artwork has to be recognisable.
+ *
+ * Nine covers across a card's width leaves each of them twenty-six points,
+ * which is a coloured square rather than a record you know.
+ */
+const MAX_ITEMS = 6;
+/**
+ * Two marks, or there is nothing to read a position against.
+ *
+ * Two is enough: this record, and the one of theirs you already have, is a
+ * before and an after. Below that the drawing is a single cover stating what
+ * the title beside it already states.
+ */
+const MIN_ITEMS = 2;
 
 // -- shared reads -----------------------------------------------------------
 
 const holds = (ref: Reference, wk: string, uid: string) =>
   ref.works.get(wk)?.holders.has(uid) ?? false;
 
-/** First cover in a fixed order, so the same set always shows the same one. */
+/** The earliest year the rows give this recording, never a reissue's. */
+const yearOfWork = (ref: Reference, wk: string) =>
+  ref.works.get(wk)?.firstYear ?? null;
+
 function coverOf(ref: Reference, works: Iterable<string>): string | null {
   for (const wk of [...works].sort()) {
     const u = ref.works.get(wk)?.row.imageUrl;
@@ -89,52 +96,111 @@ function median(years: number[]): number | null {
   return s[Math.floor((s.length - 1) / 2)];
 }
 
-const plural = (n: number, one: string, many = `${one}s`) => n === 1 ? one : many;
-
-/** The lane a card hangs off, when it hangs off one. */
 function laneOf(c: Candidate): string | null {
   const k = c.connection.kind;
   return k === "LANE_DEPTH" || k === "PERSON" ? c.connection.label : null;
 }
 
-/** The artist whose catalogue this card sits inside, if any. */
+/**
+ * The scene this card's music sits in, for cards whose claim is not about one.
+ *
+ * An album card hangs off a record rather than a scene, so it has no lane to
+ * fall back on, and an artist with one record in the corpus has no catalogue
+ * to draw either. The music itself still belongs somewhere: the lane most of
+ * the card's own recordings were placed in.
+ */
+function laneOfTracks(ref: Reference, c: Candidate): string | null {
+  const n = new Map<string, number>();
+  for (const wk of c.tracks) {
+    const sg = ref.works.get(wk)?.subgenre;
+    if (sg) n.set(sg, (n.get(sg) ?? 0) + 1);
+  }
+  const best = [...n].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0];
+  return best ? best[0] : null;
+}
+
 function artistOf(ref: Reference, c: Candidate): string | null {
   if (c.subject.kind === "artist") return c.subject.key;
   if (c.subject.kind === "album") return ref.albums.get(c.subject.key)?.artistKey ?? null;
   return null;
 }
 
-// -- chronology -------------------------------------------------------------
-
 /**
- * An artist's records, in release order.
+ * Finish a drawing, or refuse it.
  *
- * Only full-length records they released themselves. An artist's album map is
- * filled a row at a time, so one guest verse puts the host's record into the
- * guest's catalogue, and a catalogue is what somebody released rather than
- * what they turned up on.
+ * Both sides have to be on it: something of the viewer's for the new thing to
+ * be placed against, and the new thing itself. Where there are more than fit,
+ * what survives is what sits nearest in time to what is being offered, because
+ * the neighbours are what answer "where does this go".
  */
-function artistChronology(
-  ref: Reference, c: Candidate, uid: string, artistKey: string,
+function settle(
+  of: Relation["of"], scope: string | null, raw: RelationItem[],
 ): Relation | null {
-  const a = ref.artists.get(artistKey);
-  if (!a) return null;
-  const own = (aid: string) => ref.albums.get(aid)?.artistKey === artistKey;
-  const offered = new Set<string>();
-  for (const wk of c.tracks) {
-    const aid = ref.works.get(wk)?.albumId;
-    if (aid) offered.add(aid);
+  /**
+   * An undated item still belongs on the drawing.
+   *
+   * Filtering them out took the lit item off thirty-eight scene cards and left
+   * the drawing with nothing to explain. What an undated item costs is the
+   * dated line, not its place: where anything lacks a year the items are
+   * ordered and evenly spaced instead.
+   */
+  const items = [...raw].sort(
+    (a, b) => (a.year ?? 0) - (b.year ?? 0) || a.id.localeCompare(b.id));
+  if (items.length === 0) return null;
+
+  let kept = items;
+  if (items.length > MAX_ITEMS) {
+    const anchors = items.filter((i) => i.state === "offered").map((i) => i.year ?? 0);
+    const near = (i: RelationItem) =>
+      anchors.length ? Math.min(...anchors.map((y) => Math.abs((i.year ?? 0) - y))) : 0;
+    const lit = items.filter((i) => i.state === "offered").slice(0, 2);
+    const rank = (i: RelationItem) => (i.state === "yours" ? 0 : 1);
+    const rest = items
+      .filter((i) => !lit.includes(i))
+      .sort((a, b) => rank(a) - rank(b) || near(a) - near(b) || (a.year ?? 0) - (b.year ?? 0))
+      .slice(0, MAX_ITEMS - lit.length);
+    kept = [...lit, ...rest].sort(
+      (a, b) => (a.year ?? 0) - (b.year ?? 0) || a.id.localeCompare(b.id));
   }
-  const subject = c.subject.kind === "album" ? c.subject.key : null;
 
   /**
-   * When a record came out, across every edition of it the corpus has, read
-   * before anything is filtered: the edition carrying the original date is
-   * often one neither side holds.
+   * A drawing needs the new thing and something to place it against. What it
+   * is placed against is the viewer's own where there is any, and the rest of
+   * the same catalogue or scene where there is not.
    */
+  if (!kept.some((i) => i.state === "offered")) return null;
+  if (kept.length < MIN_ITEMS) return null;
+
+  const ys = kept.map((i) => i.year).filter((y): y is number => y !== null);
+  const axis = ys.length === kept.length && Math.max(...ys) > Math.min(...ys)
+    ? { from: Math.min(...ys), to: Math.max(...ys) } : null;
+  return { of, scope, axis, items: kept };
+}
+
+// -- records ----------------------------------------------------------------
+
+/**
+ * One position per record, across every edition of it.
+ *
+ * A catalogue carries the same album several times: an explicit and a clean, a
+ * standard and an expanded, a remaster twenty years later. Placed separately
+ * they stack as two identical covers; dated separately the remaster drags the
+ * record two decades forward. So editions merge on the name, and the record
+ * sits at the earliest year any of them carries.
+ */
+interface Record {
+  ids: { any: string; yours: string | null; offered: string | null };
+  name: string; year: number; works: Set<string>;
+  isYours: boolean; isOffered: boolean; size: number;
+}
+
+function foldEditions(
+  ref: Reference, uid: string, albums: Iterable<string>,
+  offeredAlbums: Set<string>, subject: string | null, own: (aid: string) => boolean,
+): Record[] {
+  const ids = [...albums].filter(own).sort();
   const firstYear = new Map<string, number>();
-  for (const aid of a.albums.keys()) {
-    if (!own(aid)) continue;
+  for (const aid of ids) {
     const alb = ref.albums.get(aid);
     if (!alb || alb.year === null || alb.albumType !== "album") continue;
     const k = normText(alb.name);
@@ -142,35 +208,53 @@ function artistChronology(
     if (at === undefined || alb.year < at) firstYear.set(k, alb.year);
   }
 
-  const records = new Map<string, {
-    ids: { any: string; yours: string | null; offered: string | null };
-    name: string; year: number; works: Set<string>;
-    isOffered: boolean; isYours: boolean; size: number;
-  }>();
 
-  for (const aid of [...a.albums.keys()].sort()) {
-    if (!own(aid)) continue;
+  /**
+   * An edition, not a namesake.
+   *
+   * Two albums whose names reduce to the same thing are the same record only
+   * when one of them is written as an edition of it: "Smoke + Mirrors" and
+   * "Smoke + Mirrors (Deluxe)" are one record, and folding them stops a
+   * remaster dragging it twenty years forward. Weezer's Blue, Green and White
+   * albums are all called exactly "Weezer" and are three records; folding
+   * those put 1994, 2001 and 2016 under one cover dated 1994.
+   *
+   * So a fold needs the raw names to differ, or the years to agree — which is
+   * the duplicate-pressing case it also has to catch.
+   */
+  const bare = new Map<string, Set<string>>();
+  for (const aid of ids) {
+    const alb = ref.albums.get(aid);
+    if (!alb) continue;
+    const k = normText(alb.name);
+    let names = bare.get(k);
+    if (!names) { names = new Set(); bare.set(k, names); }
+    names.add(alb.name.trim().toLowerCase());
+  }
+  const namesakes = (k: string) => (bare.get(k)?.size ?? 0) === 1;
+
+  const out = new Map<string, Record>();
+  for (const aid of ids) {
     const alb = ref.albums.get(aid);
     if (!alb || alb.year === null || alb.albumType !== "album") continue;
-    const works = a.albums.get(aid) ?? new Set<string>();
-    const isOffered = aid === subject || offered.has(aid);
+    const works = alb.works;
+    const isOffered = aid === subject || offeredAlbums.has(aid);
     const isYours = [...works].some((wk) => holds(ref, wk, uid));
-    if (!isOffered && !isYours) continue;
 
-    const key = normText(alb.name);
-    const year = firstYear.get(key) ?? alb.year;
-    const hit = records.get(key);
+    const name = normText(alb.name);
+    const folds = !namesakes(name);
+    const key = folds ? name : `${name}:${alb.year}`;
+    const year = folds ? (firstYear.get(name) ?? alb.year) : alb.year;
+    const hit = out.get(key);
     if (!hit) {
-      records.set(key, {
+      out.set(key, {
         ids: { any: aid, yours: isYours ? aid : null, offered: isOffered ? aid : null },
-        name: alb.name, year, works: new Set(works),
-        isOffered, isYours, size: works.size,
+        name: alb.name, year, works: new Set(works), isYours, isOffered, size: works.size,
       });
       continue;
     }
-    hit.isOffered ||= isOffered;
     hit.isYours ||= isYours;
-    /** An id has to name a pressing that is doing what the item claims. */
+    hit.isOffered ||= isOffered;
     if (isYours && !hit.ids.yours) hit.ids.yours = aid;
     if (isOffered && !hit.ids.offered) hit.ids.offered = aid;
     for (const wk of works) hit.works.add(wk);
@@ -179,237 +263,242 @@ function artistChronology(
       hit.ids.any = aid; hit.name = alb.name; hit.size = works.size;
     }
   }
+  return [...out.values()];
+}
+
+/**
+ * A record you already own part of reads as yours, even when the card opens
+ * more of it.
+ *
+ * On a "more of them" card the viewer's own tracks usually sit on the same
+ * records the card is handing over, so lighting every one of them left an
+ * Offset drawing with three new records and nothing of his the viewer had.
+ * The exception is the record the card is *about*, which must stay lit however
+ * much of it is already on the shelf — that is the whole claim of an album
+ * card.
+ */
+const asItem = (ref: Reference, r: Record, subject: string | null): RelationItem => {
+  const isSubject = subject !== null && (r.ids.offered === subject || r.ids.any === subject);
+  const state: RelationItem["state"] =
+    isSubject ? "offered" : r.isYours ? "yours" : r.isOffered ? "offered" : "other";
+  return {
+    id: (state === "offered" ? r.ids.offered : r.ids.yours) ?? r.ids.any,
+    name: r.name, year: r.year, imageUrl: coverOf(ref, r.works),
+    shape: "square", state,
+  };
+};
+
+/**
+ * An artist's records: the ones on your shelf, and the one this card is about.
+ *
+ * Only records they released themselves. An artist's album map is filled a row
+ * at a time, so a guest verse puts the host's record into the guest's
+ * catalogue, and a catalogue is what somebody released.
+ */
+function catalogue(
+  ref: Reference, c: Candidate, uid: string, artistKey: string,
+): Relation | null {
+  const a = ref.artists.get(artistKey);
+  if (!a) return null;
+  const offeredAlbums = new Set<string>();
+  for (const wk of c.tracks) {
+    const aid = ref.works.get(wk)?.albumId;
+    if (aid) offeredAlbums.add(aid);
+  }
+  const records = foldEditions(
+    ref, uid, a.albums.keys(), offeredAlbums,
+    c.subject.kind === "album" ? c.subject.key : null,
+    (aid) => ref.albums.get(aid)?.artistKey === artistKey,
+  );
 
   /** One cover per year per side: two records at one point is not a position. */
   const perYear = new Map<string, RelationItem & { size: number }>();
-  for (const r of records.values()) {
-    const state: RelationItem["state"] = r.isOffered ? "offered" : "yours";
-    const at = `${r.year}:${state}`;
+  const subject = c.subject.kind === "album" ? c.subject.key : null;
+  for (const r of records) {
+    const item = asItem(ref, r, subject);
+    const at = `${r.year}:${item.state}`;
     const hit = perYear.get(at);
     if (hit && hit.size >= r.works.size) continue;
-    perYear.set(at, {
-      id: (state === "offered" ? r.ids.offered : r.ids.yours) ?? r.ids.any,
-      name: r.name, year: r.year, imageUrl: coverOf(ref, r.works),
-      shape: "square", state, size: r.works.size,
+    perYear.set(at, { ...item, size: r.works.size });
+  }
+  return settle("records", null,
+    [...perYear.values()].map(({ size: _s, ...i }) => i));
+}
+
+/**
+ * The same shelf, drawn from recordings rather than from full-length records.
+ *
+ * Half of the "more of them" cards could not draw a catalogue: the viewer's
+ * copies of that artist are singles, compilations and soundtrack entries, none
+ * of which is a record with a release of its own. Those still have covers and
+ * dates, and they are still the artist's music on this person's shelf.
+ */
+function shelfOfRecordings(
+  ref: Reference, c: Candidate, uid: string, artistKey: string,
+): Relation | null {
+  const a = ref.artists.get(artistKey);
+  if (!a) return null;
+  const offered = new Set(c.tracks);
+  const seen = new Map<string, RelationItem & { n: number }>();
+
+  for (const wk of [...a.works].sort()) {
+    const w = ref.works.get(wk);
+    if (!w) continue;
+    const mine = w.holders.has(uid);
+    const lit = offered.has(wk);
+    if (!mine && !lit) continue;
+    const id = w.albumId ?? wk;
+    const alb = w.albumId ? ref.albums.get(w.albumId) : null;
+    const hit = seen.get(id);
+    if (hit) {
+      hit.n++;
+      if (lit && hit.state === "yours") hit.state = "offered";
+      continue;
+    }
+    seen.set(id, {
+      id, name: alb?.name ?? w.name,
+      year: alb?.year ?? yearOfWork(ref, wk),
+      imageUrl: coverOf(ref, alb?.works ?? [wk]),
+      shape: "square", state: lit && !mine ? "offered" : "yours", n: 1,
     });
   }
-
-  const items = trim([...perYear.values()].map(({ size: _s, ...i }) => i));
-  const yours = items.filter((i) => i.state === "yours").length;
-  if (yours < MIN_YOURS || items.length - yours < 1) return null;
-  const years = new Set(items.map((i) => i.year as number));
-  if (years.size < 3) return null;
-  const from = items[0].year as number;
-  const to = items[items.length - 1].year as number;
-  if (to - from < 2) return null;
-
-  return {
-    kind: "chronology",
-    caption: `${yours} ${plural(yours, "record")} of theirs you keep`,
-    axis: { from, to }, share: null, items,
-  };
+  /** The records each side has most of read as the shelf. */
+  const ranked = [...seen.values()].sort((x, y) => y.n - x.n);
+  const lit = ranked.filter((i) => i.state === "offered").slice(0, 2);
+  const mine = ranked.filter((i) => i.state === "yours").slice(0, MAX_ITEMS - lit.length);
+  return settle("records", null, [...lit, ...mine].map(({ n: _n, ...i }) => i));
 }
-
-/** The years of a scene the viewer holds, and the one this card is about. */
-function laneChronology(
-  ref: Reference, c: Candidate, uid: string, lane: string,
-): Relation | null {
-  const works = ref.subgenreWorks.get(lane);
-  if (!works) return null;
-  const cut = c.subject.key.lastIndexOf(":");
-  const target = cut < 0 ? NaN : Number(c.subject.key.slice(cut + 1));
-  if (!Number.isInteger(target)) return null;
-
-  const mine = new Map<number, Set<string>>();
-  for (const wk of [...works].sort()) {
-    const w = ref.works.get(wk);
-    if (!w || w.year === null || !w.holders.has(uid)) continue;
-    const set = mine.get(w.year) ?? new Set<string>();
-    set.add(wk); mine.set(w.year, set);
-  }
-
-  const items: RelationItem[] = [];
-  for (const [year, wks] of [...mine].sort((a, b) => a[0] - b[0])) {
-    if (year === target) continue;
-    items.push({ id: `y${year}`, name: String(year), year,
-      imageUrl: coverOf(ref, wks), shape: "square", state: "yours" });
-  }
-  items.push({ id: `y${target}`, name: String(target), year: target,
-    imageUrl: coverOf(ref, c.tracks), shape: "square", state: "offered" });
-
-  const kept = trim(items.sort((a, b) => (a.year as number) - (b.year as number)));
-  const yours = kept.filter((i) => i.state === "yours").length;
-  if (yours < MIN_YOURS) return null;
-  const from = kept[0].year as number;
-  const to = kept[kept.length - 1].year as number;
-  if (to - from < 2) return null;
-
-  return {
-    kind: "chronology",
-    caption: `${yours} ${plural(yours, "year")} of ${laneTitle(lane).toLowerCase()} you keep`,
-    axis: { from, to }, share: null, items: kept,
-  };
-}
-
-// -- fill -------------------------------------------------------------------
 
 /**
- * A set, the part of it the viewer holds, and the part this card opens.
+ * The records of yours this person is already on, and the records of theirs.
  *
- * The drawing that answers "where does this fit" for a record: four of twelve
- * filled, the other eight being handed over. The counts are recordings rather
- * than drawn items, so a forty-track catalogue states forty.
+ * A guest credit has no position in a catalogue of the viewer's, so the
+ * drawing is the two shelves side by side in time: what they are already on,
+ * and what of their own this card opens.
  */
-function fill(ref: Reference, c: Candidate, uid: string): Relation | null {
-  let total = 0, yours = 0, of = "";
-  let art: Iterable<string> = c.tracks;
-  let shape: RelationItem["shape"] = "square";
-
-  if (c.subject.kind === "album") {
-    const alb = ref.albums.get(c.subject.key);
-    if (!alb) return null;
-    const works = alb.works;
-    total = Math.max(alb.totalTracks || 0, works.size);
-    yours = [...works].filter((wk) => holds(ref, wk, uid)).length;
-    of = `its ${total} tracks`;
-    art = works;
-  } else if (c.subject.kind === "artist") {
-    const a = ref.artists.get(c.subject.key);
-    if (!a) return null;
-    total = a.works.size;
-    yours = a.worksByUser.get(uid)?.size ?? 0;
-    of = `their ${total} here`;
-    art = a.works;
-    shape = "circle";
-  } else {
-    const lane = laneOf(c);
-    const works = lane ? ref.subgenreWorks.get(lane) : null;
-    if (!works) return null;
-    total = works.size;
-    yours = [...works].filter((wk) => holds(ref, wk, uid)).length;
-    of = `${total} in ${laneTitle(lane!).toLowerCase()}`;
-    art = works;
-  }
-
-  const offered = Math.min(c.available, Math.max(0, total - yours));
-  if (total <= 0 || offered <= 0) return null;
-
-  /** The subject, then a few of the recordings being handed over. */
-  const items: RelationItem[] = [{
-    id: `subject:${c.subject.key}`, name: c.subject.label,
-    imageUrl: shape === "circle" ? faceOf(ref, art) : coverOf(ref, art),
-    shape, state: "yours", year: null,
-  }];
-  const seen = new Set<string>();
-  for (const wk of c.tracks) {
-    if (items.length > MAX_FACES) break;
-    const w = ref.works.get(wk);
-    const key = w?.albumId ?? wk;
-    if (!w || seen.has(key)) continue;
-    seen.add(key);
-    items.push({ id: key, name: w.name, imageUrl: w.row.imageUrl ?? null,
-      shape: "square", state: "offered", year: w.year });
-  }
-
-  return {
-    kind: "fill",
-    caption: yours > 0 ? `You have ${yours} of ${of}` : `This opens ${offered} of ${of}`,
-    axis: null, share: { yours, offered, total }, items,
-  };
-}
-
-// -- hub --------------------------------------------------------------------
-
-/**
- * One subject, and the records of the viewer's it is already on.
- *
- * A guest credit is the strongest connection in the system that is neither a
- * record nor an artist: this person is literally singing on music the listener
- * chose. A line in time says nothing about that; the records do.
- *
- * The host recordings are the part of the candidate's footprint that is not
- * its own payload, which is where the family put them.
- */
-function hub(ref: Reference, c: Candidate, uid: string): Relation | null {
+function appearances(ref: Reference, c: Candidate, uid: string): Relation | null {
   const offered = new Set(c.tracks);
   const hosts = c.footprint.filter((wk) => !offered.has(wk) && holds(ref, wk, uid));
-  if (hosts.length < 1) return null;
+  if (hosts.length === 0) return null;
 
-  const byAlbum = new Map<string, Set<string>>();
+  const items = new Map<string, RelationItem>();
   for (const wk of hosts) {
     const w = ref.works.get(wk);
     if (!w) continue;
-    const key = w.albumId ?? wk;
-    const set = byAlbum.get(key) ?? new Set<string>();
-    set.add(wk); byAlbum.set(key, set);
-  }
-
-  const items: RelationItem[] = [{
-    id: `subject:${c.subject.key}`, name: c.subject.label,
-    imageUrl: faceOf(ref, ref.artists.get(c.subject.key)?.works ?? c.tracks),
-    shape: "circle", state: "offered", year: null,
-  }];
-  for (const [key, wks] of [...byAlbum].sort()) {
-    if (items.length > MAX_ITEMS) break;
-    const w = ref.works.get([...wks][0]);
-    items.push({
-      id: key, name: ref.albums.get(key)?.name ?? w?.name ?? "",
-      imageUrl: coverOf(ref, wks), shape: "square", state: "yours",
-      year: ref.albums.get(key)?.year ?? w?.year ?? null,
+    const aid = w.albumId;
+    const alb = aid ? ref.albums.get(aid) : null;
+    const id = aid ?? wk;
+    items.set(id, {
+      id, name: alb?.name ?? w.name, year: alb?.year ?? yearOfWork(ref, wk),
+      imageUrl: coverOf(ref, alb?.works ?? [wk]), shape: "square", state: "yours",
     });
   }
-  const n = items.length - 1;
-  return {
-    kind: "hub",
-    caption: `On ${n} ${plural(n, "record")} you own`,
-    axis: null, share: null, items,
-  };
-}
-
-/** The people who hold this, when the relation is that everyone here does. */
-function peopleHub(
-  ref: Reference, c: Candidate, people: Map<string, PersonRow>,
-): Relation | null {
-  if (c.holders.length < 1) return null;
-  const items: RelationItem[] = [{
-    id: `subject:${c.subject.key}`, name: c.subject.label,
-    imageUrl: faceOf(ref, ref.artists.get(c.subject.key)?.works ?? c.tracks),
-    shape: "circle", state: "offered", year: null,
-  }];
-  for (const h of c.holders.slice(0, MAX_ITEMS)) {
-    const p = people.get(h.uid);
-    items.push({ id: h.uid, name: p?.name ?? "Someone", imageUrl: p?.image ?? null,
-      shape: "circle", state: "yours", year: null });
+  for (const wk of c.tracks) {
+    const w = ref.works.get(wk);
+    if (!w) continue;
+    const aid = w.albumId;
+    const alb = aid ? ref.albums.get(aid) : null;
+    const id = aid ?? wk;
+    if (items.has(id)) continue;
+    items.set(id, {
+      id, name: alb?.name ?? w.name, year: alb?.year ?? yearOfWork(ref, wk),
+      imageUrl: coverOf(ref, alb?.works ?? [wk]), shape: "square", state: "offered",
+    });
   }
-  const n = items.length - 1;
-  return {
-    kind: "hub",
-    caption: `${n} ${plural(n, "library")} here ${n === 1 ? "has" : "have"} them`,
-    axis: null, share: null, items,
-  };
+  return settle("records", null, [...items.values()]);
 }
-
-// -- neighbours -------------------------------------------------------------
 
 /**
- * The artists the viewer keeps in a scene, and the one being introduced.
+ * Your records in a scene, and the ones this card opens inside it.
  *
- * Ordered by how much of each the viewer holds rather than by date, because
- * what this drawing answers is "this is your corner of this music" — the
- * question a scene card raises, which no chronology addresses.
+ * What a card about a year of a scene is claiming: here is the run of it you
+ * keep, and here is the part of it that passed you by.
  */
-function neighbours(
+function sceneRecords(
   ref: Reference, c: Candidate, uid: string, lane: string,
 ): Relation | null {
   const works = ref.subgenreWorks.get(lane);
   if (!works) return null;
 
-  const mine = new Map<string, Set<string>>();
+  const mine = new Map<string, { works: Set<string>; year: number | null; name: string }>();
   for (const wk of [...works].sort()) {
     const w = ref.works.get(wk);
     if (!w || !w.holders.has(uid)) continue;
-    const set = mine.get(w.artistKey) ?? new Set<string>();
-    set.add(wk); mine.set(w.artistKey, set);
+    const aid = w.albumId;
+    const id = aid ?? wk;
+    const alb = aid ? ref.albums.get(aid) : null;
+    const hit = mine.get(id);
+    if (hit) { hit.works.add(wk); continue; }
+    mine.set(id, {
+      works: new Set([wk]), name: alb?.name ?? w.name,
+      year: alb?.year ?? yearOfWork(ref, wk),
+    });
+  }
+
+  const offered = new Map<string, { works: Set<string>; year: number | null; name: string }>();
+  for (const wk of c.tracks) {
+    const w = ref.works.get(wk);
+    if (!w) continue;
+    const aid = w.albumId;
+    const id = aid ?? wk;
+    const alb = aid ? ref.albums.get(aid) : null;
+    const hit = offered.get(id);
+    if (hit) { hit.works.add(wk); continue; }
+    offered.set(id, {
+      works: new Set([wk]), name: alb?.name ?? w.name,
+      year: alb?.year ?? yearOfWork(ref, wk),
+    });
+  }
+
+  /** The records of theirs the viewer keeps most of read as their own shelf. */
+  const yours = [...mine]
+    .filter(([id]) => !offered.has(id))
+    .sort((a, b) => b[1].works.size - a[1].works.size || a[0].localeCompare(b[0]))
+    .slice(0, MAX_ITEMS);
+  const lit = [...offered]
+    .sort((a, b) => b[1].works.size - a[1].works.size || a[0].localeCompare(b[0]))
+    .slice(0, 2);
+
+  const items: RelationItem[] = [
+    ...yours.map(([id, v]) => ({
+      id, name: v.name, year: v.year, imageUrl: coverOf(ref, v.works),
+      shape: "square" as const, state: "yours" as const,
+    })),
+    ...lit.map(([id, v]) => ({
+      id, name: v.name, year: v.year, imageUrl: coverOf(ref, v.works),
+      shape: "square" as const, state: "offered" as const,
+    })),
+  ];
+  return settle("records", laneTitle(lane), items);
+}
+
+// -- artists ----------------------------------------------------------------
+
+/**
+ * The artists you already keep in a scene, and the one being introduced.
+ *
+ * Placed by the era of the music rather than by how much of each you have,
+ * because a scene reads as a period as much as a sound. An artist already on
+ * the shelf is not an introduction, so only somebody the viewer keeps nothing
+ * of here can be the lit one.
+ */
+function sceneArtists(
+  ref: Reference, c: Candidate, uid: string, lane: string,
+): Relation | null {
+  const works = ref.subgenreWorks.get(lane);
+  if (!works) return null;
+
+  const mine = new Map<string, { works: Set<string>; years: number[] }>();
+  const laneYears = new Map<string, number[]>();
+  for (const wk of [...works].sort()) {
+    const w = ref.works.get(wk);
+    if (!w) continue;
+    const y = yearOfWork(ref, wk);
+    if (y !== null) (laneYears.get(w.artistKey) ?? laneYears.set(w.artistKey, []).get(w.artistKey))!.push(y);
+    if (!w.holders.has(uid)) continue;
+    const hit = mine.get(w.artistKey);
+    if (hit) { hit.works.add(wk); if (y !== null) hit.years.push(y); continue; }
+    mine.set(w.artistKey, { works: new Set([wk]), years: y !== null ? [y] : [] });
   }
 
   const offered = new Map<string, number>();
@@ -417,99 +506,70 @@ function neighbours(
     const ak = ref.works.get(wk)?.artistKey;
     if (ak) offered.set(ak, (offered.get(ak) ?? 0) + 1);
   }
-  /**
-   * Only an artist the viewer keeps nothing of here is an introduction.
-   *
-   * A scene card hands over tracks by artists the viewer does not have, but
-   * some of those artists are already on their shelf with other records: this
-   * drawing marked Drake as new on a rap card to somebody holding thirty-six
-   * of his tracks. Where nothing on the card is genuinely new to the scene the
-   * relation is a share of it, not an introduction, and the chain falls
-   * through to that.
-   */
-  const fresh = (ak: string) => !mine.has(ak);
   const lead = (c.subject.kind === "artist" ? [c.subject.key]
-    : [...offered].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-        .slice(0, 3).map(([ak]) => ak)).filter(fresh);
+    : [...offered].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([ak]) => ak))
+    .filter((ak) => !mine.has(ak))
+    .slice(0, 2);
   if (lead.length === 0) return null;
 
   const items: RelationItem[] = [];
   for (const ak of lead) {
     const a = ref.artists.get(ak);
     if (!a) continue;
-    items.push({ id: ak, name: a.name, imageUrl: faceOf(ref, a.works),
-      shape: "circle", state: "offered", year: median([...a.years.keys()]) });
+    items.push({
+      id: ak, name: a.name, shape: "circle", state: "offered",
+      imageUrl: faceOf(ref, a.works), year: median(laneYears.get(ak) ?? []),
+    });
   }
-  const yours = [...mine]
-    .filter(([ak]) => !lead.includes(ak))
-    .sort((a, b) => b[1].size - a[1].size || a[0].localeCompare(b[0]))
-    .slice(0, MAX_ITEMS - items.length);
-  for (const [ak, wks] of yours) {
-    items.push({ id: ak, name: ref.artists.get(ak)?.name ?? ak,
-      imageUrl: faceOf(ref, ref.artists.get(ak)?.works ?? wks),
-      shape: "circle", state: "yours", year: null });
+  for (const [ak, v] of [...mine]
+    .sort((a, b) => b[1].works.size - a[1].works.size || a[0].localeCompare(b[0]))
+    .slice(0, MAX_ITEMS)) {
+    items.push({
+      id: ak, name: ref.artists.get(ak)?.name ?? ak, shape: "circle", state: "yours",
+      imageUrl: faceOf(ref, ref.artists.get(ak)?.works ?? v.works), year: median(v.years),
+    });
   }
-
-  const n = items.filter((i) => i.state === "yours").length;
-  if (n < MIN_YOURS || items.length === n) return null;
-  return {
-    kind: "neighbours",
-    caption: `${n} ${plural(n, "artist")} you keep in ${laneTitle(lane).toLowerCase()}`,
-    axis: null, share: null, items,
-  };
+  return settle("artists", laneTitle(lane), items);
 }
 
-// -- trimming ---------------------------------------------------------------
-
-/** Keep what sits nearest the thing being offered. */
-function trim(items: RelationItem[]): RelationItem[] {
-  const sorted = [...items].sort(
-    (a, b) => (a.year ?? 0) - (b.year ?? 0) || a.id.localeCompare(b.id));
-  if (sorted.length <= MAX_ITEMS) return sorted;
-  const anchors = sorted.filter((i) => i.state === "offered").map((i) => i.year ?? 0);
-  const near = (i: RelationItem) =>
-    Math.min(...anchors.map((y) => Math.abs((i.year ?? 0) - y)));
-  const kept = sorted.filter((i) => i.state === "offered");
-  const rest = sorted
-    .filter((i) => i.state === "yours")
-    .sort((a, b) => near(a) - near(b) || (a.year ?? 0) - (b.year ?? 0))
-    .slice(0, Math.max(0, MAX_ITEMS - kept.length));
-  return [...kept, ...rest].sort(
-    (a, b) => (a.year ?? 0) - (b.year ?? 0) || a.id.localeCompare(b.id));
-}
-
-// -- what each family draws -------------------------------------------------
+// -- what each card draws ---------------------------------------------------
 
 /**
- * The drawing a family's relation actually is, then what to fall back to.
+ * The drawing this card's own sentence needs, then what to fall back to.
  *
- * Read in order, first one the data supports wins. Every chain ends in
- * something that cannot fail, because a card without a drawing is a card that
- * never says why it is in front of you.
+ * Read in order, first the data supports wins. A card whose claim is about a
+ * catalogue draws that catalogue; one whose claim is about a scene draws the
+ * scene; one about somebody already on your records draws those records.
  */
 export function buildRelation(
-  ref: Reference, c: Candidate, uid: string, people: Map<string, PersonRow>,
+  ref: Reference, c: Candidate, uid: string,
 ): Relation | null {
   const artistKey = artistOf(ref, c);
-  const lane = laneOf(c);
+  const lane = laneOf(c) ?? laneOfTracks(ref, c);
 
-  const chrono = () => artistKey ? artistChronology(ref, c, uid, artistKey) : null;
-  const years = () => lane ? laneChronology(ref, c, uid, lane) : null;
-  const near = () => lane ? neighbours(ref, c, uid, lane) : null;
-  const set = () => fill(ref, c, uid);
-  const on = () => hub(ref, c, uid);
-  const who = () => peopleHub(ref, c, people);
+  const shelf = () => artistKey ? catalogue(ref, c, uid, artistKey) : null;
+  const shelfAll = () => artistKey ? shelfOfRecordings(ref, c, uid, artistKey) : null;
+  const guest = () => appearances(ref, c, uid);
+  const scene = () => lane ? sceneArtists(ref, c, uid, lane) : null;
+  const inScene = () => lane ? sceneRecords(ref, c, uid, lane) : null;
 
   const chain: (() => Relation | null)[] =
-    c.family === "GUEST_ON_YOUR_RECORDS" ? [on, set, who]
-    : c.family === "A_YEAR_IN_YOUR_LANE" ? [years, near, set]
-    : c.family === "EVERYONE_BUT_YOU" ? [near, who, set]
-    : c.family === "ONLY_ONE_FRIEND_HAS_IT" ? [near, who, set]
-    : c.family === "FINISH_THE_RECORD" || c.family === "YOU_HAVE_THE_HITS"
-      ? [set, chrono, who]
-    : c.family === "DEEPER_ON_AN_ARTIST" ? [set, chrono, who]
-    : lane ? [near, set, who]
-    : [chrono, set, who];
+    // a record, placed among the records of theirs you keep
+    c.family === "FINISH_THE_RECORD" || c.family === "YOU_HAVE_THE_HITS"
+    || c.family === "THE_RECORD_YOU_SKIPPED" || c.family === "ONE_RECORD_LEFT"
+      ? [shelf, shelfAll, scene, inScene]
+    // a catalogue you are already into, and where yours stops or starts
+    : c.family === "DEEPER_ON_AN_ARTIST" || c.family === "SINCE_YOU_STOPPED"
+    || c.family === "BEFORE_YOU_ARRIVED"
+      ? [shelf, shelfAll, scene, inScene]
+    // somebody already on records you own
+    : c.family === "GUEST_ON_YOUR_RECORDS" ? [guest, shelfAll, scene]
+    // a year of a scene that passed you by
+    : c.family === "A_YEAR_IN_YOUR_LANE" ? [inScene, scene, shelf]
+    // a scene you have barely entered: your few records in it are the anchor
+    : c.family === "A_SCENE_YOU_TOUCHED" ? [inScene, scene]
+    // an artist inside a scene you already keep
+    : [scene, shelf, shelfAll, inScene];
 
   for (const attempt of chain) {
     const r = attempt();

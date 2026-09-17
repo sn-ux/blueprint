@@ -122,7 +122,25 @@ export interface Reference {
   users: string[];
   /** Rows per user, and the corpus total. */
   size: Tally;
-  works: Map<string, { name: string; artist: string; artistKey: string; subgenre: string; world: string; albumId: string | null; year: number | null; holders: Set<string>; row: TrackRow }>;
+  works: Map<string, {
+    name: string; artist: string; artistKey: string; subgenre: string; world: string;
+    albumId: string | null;
+    /** The date on the pressing this recording was first read from. */
+    year: number | null;
+    /**
+     * The earliest year any pressing of this recording carries.
+     *
+     * A recording is one thing across many pressings, and they do not agree
+     * about when it came out: 1,220 recordings here carry more than one year
+     * and 873 of those disagree by five years or more, because a remaster is
+     * dated to its reissue. Reading whichever row arrived first dated Link
+     * Wray's "Rumble" to 2024 and Martin Denny's "Tune from Rangoon" to 2021 —
+     * 669 recordings later than their own rows allow. Anything placing music
+     * in time wants this one rather than `year`.
+     */
+    firstYear: number | null;
+    holders: Set<string>; row: TrackRow;
+  }>;
   artists: Map<string, ArtistRef>;
   albums: Map<string, AlbumRef>;
   /** Corpus rows per subgenre, and which world it sits in. */
@@ -180,9 +198,10 @@ export function buildReference(input: TrackRow[]): Reference {
     let w = ref.works.get(wk);
     if (!w) {
       w = { name: t.name, artist: t.artist, artistKey: ak, subgenre: sg, world,
-            albumId: t.albumId ?? null, year: y, holders: new Set(), row: t };
+            albumId: t.albumId ?? null, year: y, firstYear: y, holders: new Set(), row: t };
       ref.works.set(wk, w);
     }
+    if (y !== null && (w.firstYear === null || y < w.firstYear)) w.firstYear = y;
     w.holders.add(uid);
 
     let a = ref.artists.get(ak);

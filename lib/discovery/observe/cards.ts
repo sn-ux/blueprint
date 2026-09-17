@@ -173,6 +173,6 @@ export function toFeedCard(
     previewTracks: tracks.slice(0, previewLimit),
     releaseYearMin: lo,
     releaseYearMax: hi,
-    relation: buildRelation(ref, c, viewerId, people),
+    relation: buildRelation(ref, c, viewerId),
   };
 }
