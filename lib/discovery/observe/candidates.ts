@@ -46,7 +46,15 @@ export type FamilyId =
   | "SINCE_YOU_STOPPED"
   | "RECORD_BEFORE_YOURS"
   | "RECORD_AFTER_YOURS"
-  | "RECORD_BETWEEN_YOURS";
+  | "RECORD_BETWEEN_YOURS"
+  | "ARTIST_BEFORE_YOURS"
+  | "ARTIST_AFTER_YOURS"
+  | "ARTIST_BETWEEN_YOURS"
+  | "GENRE_PART_BEFORE"
+  | "GENRE_PART_AFTER"
+  | "GENRE_GAP"
+  | "RELATED_GENRE"
+  | "RELATED_GENRE_CONSENSUS";
 
 /** Why this viewer, stated as something their library contains. */
 export type ConnectionKind =
@@ -115,6 +123,16 @@ const MIN_FRIENDS_FOR_LANE = 2;
  * than a shelf.
  */
 const DISCOGRAPHY_HELD = 5;
+/** Years of a genre on the shelf before its shape is a run you have followed. */
+const GENRE_RUN_YEARS = 4;
+/** A span worth naming is more than one stray year. */
+const GENRE_SPAN_YEARS = 2;
+/** A year or two without a release does not break a run. */
+const GENRE_GAP_STEP = 3;
+/** Artists two genres share before one is a doorway into the other. */
+const SHARED_MANY = 3;
+/** And below this they are barely the same music at all. */
+const SHARED_FEW = 1;
 /**
  * And it has to be more agreement than the lane's own base rate predicts.
  *
@@ -159,7 +177,15 @@ const VARIOUS_ARTISTS_AT = 4;
  * music, so it is not a thumb on the ranking.
  */
 const REASON_SPECIFICITY: Record<FamilyId, number> = {
+  ARTIST_BETWEEN_YOURS: 10,
+  GENRE_GAP: 10,
   RECORD_BETWEEN_YOURS: 10,
+  ARTIST_BEFORE_YOURS: 9,
+  ARTIST_AFTER_YOURS: 9,
+  GENRE_PART_BEFORE: 9,
+  GENRE_PART_AFTER: 9,
+  RELATED_GENRE_CONSENSUS: 8,
+  RELATED_GENRE: 7,
   RECORD_BEFORE_YOURS: 10,
   RECORD_AFTER_YOURS: 10,
   ONE_RECORD_LEFT: 9,
@@ -193,6 +219,14 @@ const TIER: Partial<Record<FamilyId, number>> = {
   RECORD_BEFORE_YOURS: 1,
   RECORD_AFTER_YOURS: 1,
   RECORD_BETWEEN_YOURS: 1,
+  ARTIST_BEFORE_YOURS: 1,
+  ARTIST_AFTER_YOURS: 1,
+  ARTIST_BETWEEN_YOURS: 1,
+  GENRE_PART_BEFORE: 1,
+  GENRE_PART_AFTER: 1,
+  GENRE_GAP: 1,
+  RELATED_GENRE: 1,
+  RELATED_GENRE_CONSENSUS: 1,
 };
 export const tierOf = (f: FamilyId) => TIER[f] ?? 0;
 
@@ -1057,12 +1091,263 @@ function discographyOrder(ref: Reference, p: Profile): Candidate[] {
   return out;
 }
 
+/** The middle year of a set of years. Robust to one reissue far from the rest. */
+function midYear(years: number[]): number | null {
+  if (years.length === 0) return null;
+  const s = [...years].sort((a, b) => a - b);
+  return s[Math.floor((s.length - 1) / 2)];
+}
+
+/**
+ * Every artist in a genre, with the era of their work in it and who holds them.
+ *
+ * One pass per genre, reused by the artist-order and genre-order families, and
+ * dated on the earliest year each recording carries rather than whichever
+ * pressing was read first.
+ */
+function genreArtists(ref: Reference, lane: string) {
+  const out = new Map<string, { years: number[]; works: Set<string> }>();
+  for (const wk of ref.subgenreWorks.get(lane) ?? []) {
+    const w = ref.works.get(wk);
+    if (!w) continue;
+    let a = out.get(w.artistKey);
+    if (!a) { a = { years: [], works: new Set() }; out.set(w.artistKey, a); }
+    a.works.add(wk);
+    if (w.firstYear !== null) a.years.push(w.firstYear);
+  }
+  return out;
+}
+
+/**
+ * An artist from a genre you are in, placed before, after or between the
+ * artists of it you already keep.
+ *
+ * The card introduces the artist; the genre's own timeline is the context that
+ * says where they sit. A between is the sharpest of the three, because an
+ * artist inside the years you already listen to is one you might reasonably
+ * have met and have not.
+ */
+function artistOrder(ref: Reference, p: Profile): Candidate[] {
+  const out: Candidate[] = [];
+  for (const [lane, mine] of p.bySubgenre) {
+    if (mine.size < MIN_LANE_DEPTH || !classified(lane)) continue;
+    const all = genreArtists(ref, lane);
+
+    const yoursEra: number[] = [];
+    for (const [ak, a] of all) {
+      if (!p.byArtist.has(ak)) continue;
+      const y = midYear(a.years);
+      if (y !== null) yoursEra.push(y);
+    }
+    if (new Set(yoursEra).size < 2) continue;
+    const first = Math.min(...yoursEra);
+    const last = Math.max(...yoursEra);
+
+    for (const [ak, a] of all) {
+      if (p.byArtist.has(ak)) continue;
+      const era = midYear(a.years);
+      if (era === null) continue;
+      const family: FamilyId =
+        era < first ? "ARTIST_BEFORE_YOURS"
+        : era > last ? "ARTIST_AFTER_YOURS"
+        : "ARTIST_BETWEEN_YOURS";
+      const artist = ref.artists.get(ak);
+      if (!artist) continue;
+      const { tracks, holders, evidence, available, relevance } =
+        rank(ref, p, artist.works);
+      if (tracks.length < MIN_TRACKS || holders.length < MIN_FRIENDS_FOR_LANE) continue;
+      out.push({
+        family,
+        key: `${family === "ARTIST_BEFORE_YOURS" ? "artbefore"
+               : family === "ARTIST_AFTER_YOURS" ? "artafter" : "artbetween"}:${lane}:${ak}`,
+        subject: { kind: "artist", key: ak, label: artist.name },
+        tracks, holders, evidence, available,
+        connection: { kind: "LANE_DEPTH", key: lane, label: lane, yours: mine.size },
+        facts: {
+          artist: artist.name, lane, era, first, last,
+          yoursInLane: mine.size, peers: new Set(yoursEra).size, available,
+        },
+        relevance,
+        discovery: tracks.length / Math.max(tracks.length, artist.works.size),
+        subjectSize: artist.works.size,
+        score: worth(relevance, tracks.length, artist.works.size),
+        footprint: [...tracks, ...mine],
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * The part of a genre you have not been to: before your run, after it, or a
+ * hole inside it.
+ *
+ * This is what the year-slice card was reaching for and could not say. A
+ * listener's time in a genre has a shape, and what is missing is a span rather
+ * than a single year — everything in it before you arrived, everything since
+ * you last looked, or a stretch in the middle you went straight past.
+ */
+function genreOrder(ref: Reference, p: Profile): Candidate[] {
+  const out: Candidate[] = [];
+  for (const [lane, mine] of p.bySubgenre) {
+    if (mine.size < MIN_LANE_DEPTH || !classified(lane)) continue;
+
+    const mineYears: number[] = [];
+    const byYear = new Map<number, string[]>();
+    for (const wk of ref.subgenreWorks.get(lane) ?? []) {
+      const w = ref.works.get(wk);
+      if (!w || w.firstYear === null) continue;
+      if (p.works.has(wk)) { mineYears.push(w.firstYear); continue; }
+      const list = byYear.get(w.firstYear) ?? [];
+      list.push(wk); byYear.set(w.firstYear, list);
+    }
+    if (new Set(mineYears).size < GENRE_RUN_YEARS) continue;
+    const first = Math.min(...mineYears);
+    const last = Math.max(...mineYears);
+    const held = new Set(mineYears);
+
+    /**
+     * A gap is one unbroken stretch, not every missing year at once.
+     *
+     * Taking all of them gave a Motown card reading "nothing from 1970 to
+     * 2022" to somebody holding records from 1973, 1977 and 1983 — the ends of
+     * a scatter rather than a hole. The longest run with nothing in it is the
+     * hole, and it is the only one the sentence can honestly name.
+     */
+    const inside = [...byYear.keys()]
+      .filter((y) => y > first && y < last && !held.has(y))
+      .sort((x, y) => x - y);
+    let runs: number[][] = [];
+    for (const y of inside) {
+      const tail = runs[runs.length - 1];
+      if (tail && y - tail[tail.length - 1] <= GENRE_GAP_STEP) tail.push(y);
+      else runs.push([y]);
+    }
+    /** The run that leaves the widest stretch of the shelf untouched. */
+    runs = runs.sort((a, b) =>
+      (b[b.length - 1] - b[0]) - (a[a.length - 1] - a[0]) || b.length - a.length);
+
+    const spans: { family: FamilyId; years: number[] }[] = [
+      { family: "GENRE_PART_BEFORE", years: [...byYear.keys()].filter((y) => y < first) },
+      { family: "GENRE_PART_AFTER", years: [...byYear.keys()].filter((y) => y > last) },
+      { family: "GENRE_GAP", years: runs[0] ?? [] },
+    ];
+
+    for (const { family, years } of spans) {
+      if (years.length < GENRE_SPAN_YEARS) continue;
+      const pool: string[] = [];
+      for (const y of years) pool.push(...(byYear.get(y) ?? []));
+      const { tracks, holders, evidence, available, relevance } = rank(ref, p, pool);
+      if (tracks.length < MIN_TRACKS || holders.length < MIN_FRIENDS_FOR_LANE) continue;
+      const lo = Math.min(...years);
+      const hi = Math.max(...years);
+      out.push({
+        family,
+        key: `${family === "GENRE_PART_BEFORE" ? "gbefore"
+               : family === "GENRE_PART_AFTER" ? "gafter" : "ggap"}:${lane}`,
+        subject: { kind: "set", key: `${family}:${lane}`, label: lane },
+        tracks, holders, evidence, available,
+        connection: { kind: "LANE_DEPTH", key: lane, label: lane, yours: mine.size },
+        facts: {
+          lane, yours: mine.size, first, last, spanFrom: lo, spanTo: hi,
+          years: years.length, available,
+        },
+        relevance,
+        discovery: tracks.length / Math.max(tracks.length, pool.length),
+        subjectSize: pool.length,
+        score: worth(relevance, tracks.length, pool.length),
+        footprint: [...tracks, ...mine],
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * A genre next to one you are in, told by the artists the two share.
+ *
+ * Shared artists are a fact about the corpus rather than a judgement about
+ * sound: the same people made music filed in both places. Two cards fall out
+ * of it, and they are opposites. Many shared artists is a doorway — you are
+ * most of the way there already. Few shared artists and several friends
+ * agreeing anyway is the other thing entirely, and worth saying so.
+ */
+function relatedGenre(ref: Reference, p: Profile): Candidate[] {
+  const out: Candidate[] = [];
+  const mineArtists = new Map<string, Set<string>>();
+  for (const [lane, works] of p.bySubgenre) {
+    if (works.size < MIN_LANE_DEPTH || !classified(lane)) continue;
+    const set = new Set<string>();
+    for (const wk of works) {
+      const ak = ref.works.get(wk)?.artistKey;
+      if (ak) set.add(ak);
+    }
+    mineArtists.set(lane, set);
+  }
+
+  for (const [lane, yours] of mineArtists) {
+    for (const [other, artists] of ref.subgenreWorks) {
+      if (other === lane || !classified(other)) continue;
+      /**
+       * Not a genre the reader is already in — but sharing four artists with
+       * somewhere almost always means holding a song or two there, so
+       * demanding none at all meant this card never fired once.
+       */
+      if ((p.bySubgenre.get(other)?.size ?? 0) >= MIN_LANE_DEPTH) continue;
+      if (ref.subgenreWorld.get(other) !== ref.subgenreWorld.get(lane)) continue;
+
+      const theirs = new Set<string>();
+      for (const wk of artists) {
+        const ak = ref.works.get(wk)?.artistKey;
+        if (ak) theirs.add(ak);
+      }
+      let shared = 0;
+      for (const ak of yours) if (theirs.has(ak)) shared++;
+
+      const { tracks, holders, evidence, available, relevance } = rank(ref, p, artists);
+      if (tracks.length < MIN_TRACKS) continue;
+      const family: FamilyId | null =
+        shared >= SHARED_MANY ? "RELATED_GENRE"
+        : shared <= SHARED_FEW && holders.length >= MIN_FRIENDS_FOR_LANE + 1
+          ? "RELATED_GENRE_CONSENSUS"
+        : null;
+      if (!family) continue;
+      out.push({
+        family,
+        key: `${family === "RELATED_GENRE" ? "related" : "vouched"}:${lane}:${other}`,
+        subject: { kind: "set", key: `genre:${other}`, label: other },
+        tracks, holders, evidence, available,
+        connection: { kind: "LANE_DEPTH", key: lane, label: lane, yours: yours.size },
+        facts: {
+          lane, otherLane: other, shared, yoursInLane: p.bySubgenre.get(lane)?.size ?? 0,
+          world: ref.subgenreWorld.get(lane) ?? "", available,
+        },
+        relevance,
+        discovery: tracks.length / Math.max(tracks.length, artists.size),
+        subjectSize: artists.size,
+        score: worth(relevance, tracks.length, artists.size),
+        footprint: [...tracks],
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Three levels, not five.
+ *
+ * A song collection was only ever a slice of a genre cut by release date, and
+ * saying so as a span is what genreOrder does — so the year slice is retired
+ * into it. The set several friends independently kept is retired outright: it
+ * is the same selection the quick-listen playlist already makes, and making it
+ * twice is not two cards.
+ */
 export const FAMILIES = [
   finishTheRecord, deeperOnAnArtist, theRecordYouSkipped,
-  newInYourLane, whatTheyHave, theyAllKeepIt, sinceYouStopped,
+  newInYourLane, whatTheyHave, sinceYouStopped,
   youHaveTheHits, beforeYouArrived, oneRecordLeft, guestOnYourRecords,
-  onlyOneFriendHasIt, everyoneButYou, aSceneYouTouched, aYearInYourLane,
-  discographyOrder,
+  onlyOneFriendHasIt, everyoneButYou, aSceneYouTouched,
+  discographyOrder, artistOrder, genreOrder, relatedGenre,
 ];
 
 export function findAll(ref: Reference, p: Profile): Candidate[] {

@@ -215,6 +215,82 @@ export function render(c: Candidate, nameOf: (id: string) => string): Rendered {
         detail: `Your ${s("artist")} albums run from ${n("first")} to ${n("last")}. This one came out in ${n("year")}, inside that run, and you have none of it. ${who} ${has} ${plural(count, "song")}${leader}.${trimmed}`,
       };
 
+    /**
+     * An artist placed in the genre's own run. The card introduces them; the
+     * dates say where they sit against the people already on the shelf.
+     */
+    case "ARTIST_BEFORE_YOURS":
+      return {
+        title: s("artist"),
+        byline: "",
+        caption: `The ${laneInline(s("lane"))} artists you have start around ${n("first")}. ${s("artist")} came earlier. ${who} ${has} ${plural(count, "song")}.`,
+        detail: `You have ${plural(n("peers"), "artist")} in ${laneInline(s("lane"))}, the earliest working around ${n("first")}. ${s("artist")} was making it around ${n("era")}, before any of them, and you have none of their music. ${who} ${has} ${plural(count, "song")}${leader}.${trimmed}`,
+      };
+
+    case "ARTIST_AFTER_YOURS":
+      return {
+        title: s("artist"),
+        byline: "",
+        caption: `The ${laneInline(s("lane"))} artists you have stop around ${n("last")}. ${s("artist")} came later. ${who} ${has} ${plural(count, "song")}.`,
+        detail: `You have ${plural(n("peers"), "artist")} in ${laneInline(s("lane"))}, the latest working around ${n("last")}. ${s("artist")} was making it around ${n("era")}, after all of them, and you have none of their music. ${who} ${has} ${plural(count, "song")}${leader}.${trimmed}`,
+      };
+
+    case "ARTIST_BETWEEN_YOURS":
+      return {
+        title: s("artist"),
+        byline: "",
+        caption: `${s("artist")} sits between the ${laneInline(s("lane"))} artists you have, around ${n("era")}, and you have none of their music. ${who} ${has} ${plural(count, "song")}.`,
+        detail: `Your ${laneInline(s("lane"))} artists run from about ${n("first")} to ${n("last")}. ${s("artist")} was working around ${n("era")}, inside that, and is not in your library at all. ${who} ${has} ${plural(count, "song")}${leader}.${trimmed}`,
+      };
+
+    /**
+     * The part of a genre somebody has not been to. A span rather than a year:
+     * what the shelf is missing is a stretch, and saying which one is the card.
+     */
+    case "GENRE_PART_BEFORE":
+      return {
+        title: laneTitle(s("lane")),
+        byline: "",
+        caption: `Your ${laneInline(s("lane"))} starts in ${n("first")}. ${who} ${has} ${plural(count, "song")} of it from before that, back to ${n("spanFrom")}.`,
+        detail: `You have ${laneSongs(n("yours"), s("lane"))}, none of them older than ${n("first")}. ${who} ${has} ${plural(count, "song")} from ${n("spanFrom")} to ${n("spanTo")}${leader}.${trimmed}`,
+      };
+
+    case "GENRE_PART_AFTER":
+      return {
+        title: laneTitle(s("lane")),
+        byline: "",
+        caption: `Your ${laneInline(s("lane"))} stops in ${n("last")}. ${who} ${has} ${plural(count, "song")} of it from after that, up to ${n("spanTo")}.`,
+        detail: `You have ${laneSongs(n("yours"), s("lane"))}, none of them newer than ${n("last")}. ${who} ${has} ${plural(count, "song")} from ${n("spanFrom")} to ${n("spanTo")}${leader}.${trimmed}`,
+      };
+
+    case "GENRE_GAP":
+      return {
+        title: laneTitle(s("lane")),
+        byline: "",
+        caption: `You have ${laneInline(s("lane"))} from ${n("first")} to ${n("last")} and nothing from ${n("spanFrom")} to ${n("spanTo")}. ${who} ${has} ${plural(count, "song")} from those years.`,
+        detail: `Your ${laneSongs(n("yours"), s("lane"))} run from ${n("first")} to ${n("last")}, with ${plural(n("years"), "year")} inside that you have nothing from. ${who} ${has} ${plural(count, "song")} from ${n("spanFrom")} to ${n("spanTo")}${leader}.${trimmed}`,
+      };
+
+    /**
+     * A genre next to one you are in, told by the artists the two share. The
+     * two versions are opposites, so they say different things.
+     */
+    case "RELATED_GENRE":
+      return {
+        title: laneTitle(s("otherLane")),
+        byline: "",
+        caption: `${plural(n("shared"), "artist")} you have in ${laneInline(s("lane"))} also ${verb(n("shared"), "works", "work")} in ${laneInline(s("otherLane"))}, which you have none of. ${who} ${has} ${plural(count, "song")}.`,
+        detail: `${plural(n("shared"), "of the artist")} in your ${laneInline(s("lane"))} ${is(n("shared"))} also filed under ${laneInline(s("otherLane"))}, and nothing of yours sits there. ${who} ${has} ${plural(count, "song")} of it${leader}.${trimmed}`,
+      };
+
+    case "RELATED_GENRE_CONSENSUS":
+      return {
+        title: laneTitle(s("otherLane")),
+        byline: "",
+        caption: `${laneTitle(s("otherLane"))} shares almost nobody with your ${laneInline(s("lane"))}, but ${who} all keep it. ${plural(count, "song")} of it ${is(count)} not in your library.`,
+        detail: `${laneTitle(s("otherLane"))} and your ${laneInline(s("lane"))} share ${n("shared") === 0 ? "no artists at all" : plural(n("shared"), "artist")}, so this is not the next step along. ${who} arrived at it separately and ${has} ${plural(count, "song")} you do not${leader}.${trimmed}`,
+      };
+
     case "ONE_RECORD_LEFT":
       return {
         title: s("album"),

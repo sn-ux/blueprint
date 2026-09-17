@@ -831,7 +831,14 @@ export function buildRelation(
    * placed in the scene of the music it is handing over.
    */
   const lanes = artistKey ? lanesOfArtist(ref, artistKey) : [];
-  const lane = laneOf(c) ?? lanes[0] ?? laneOfTracks(ref, c);
+  /**
+   * A card about a neighbouring genre is drawn in that genre, not in the one
+   * the reader already has: its subject is the new one, and the roster of the
+   * new one with the shared artists ringed is the whole claim.
+   */
+  const related = c.family === "RELATED_GENRE" || c.family === "RELATED_GENRE_CONSENSUS";
+  const lane = related ? c.subject.label
+    : laneOf(c) ?? lanes[0] ?? laneOfTracks(ref, c);
 
   const shelf = () => artistKey ? catalogue(ref, c, uid, artistKey) : null;
   const shelfAll = () => artistKey ? shelfOfRecordings(ref, c, uid, artistKey) : null;
@@ -933,6 +940,17 @@ export function buildRelation(
      */
     : c.family === "A_SCENE_YOU_TOUCHED" ? [roster, inScene, scene]
     : c.family === "WHAT_THEY_HAVE" ? [roster, scene, inScene]
+    /**
+     * The genre's own run, with the part the reader has nothing from lit
+     * inside it — which is the card.
+     */
+    : c.family === "GENRE_PART_BEFORE" || c.family === "GENRE_PART_AFTER"
+    || c.family === "GENRE_GAP" ? [inScene, roster]
+    /** A neighbouring genre: its roster, with what the reader already has ringed. */
+    : related ? [roster, scene, inScene]
+    /** An artist introduced on the timeline of the genre they work in. */
+    : c.family === "ARTIST_BEFORE_YOURS" || c.family === "ARTIST_AFTER_YOURS"
+    || c.family === "ARTIST_BETWEEN_YOURS" ? [scene, wider, inScene]
     // an artist inside a scene you already keep
     : [scene, wider, shelf, shelfAll, inScene];
 

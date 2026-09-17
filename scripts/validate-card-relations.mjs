@@ -14,6 +14,7 @@
 import { loadCorpus } from "../lib/discovery/corpus.ts";
 import { observe, buildReference, buildProfile } from "../lib/discovery/observe/observe.ts";
 import { toFeedCard } from "../lib/discovery/observe/cards.ts";
+import { laneTitle } from "../lib/discovery/display.ts";
 import { prisma } from "../lib/prisma.ts";
 
 const { people, tracks } = await loadCorpus();
@@ -239,7 +240,13 @@ for (const uid of [...new Set(tracks.map((t) => t.userId))]) {
     }
 
     if (rel.of === "scene") {
-      const lane = c.connection.label;
+      /**
+       * The scene drawn is not always the scene the reader stands in: a card
+       * about a neighbouring genre draws that one. Resolve it from the label
+       * the drawing carries rather than from the card's connection.
+       */
+      const named = (x) => laneTitle(x) === rel.scope;
+      const lane = [...ref.subgenreWorks.keys()].find(named) ?? c.connection.label;
       const inLane = (id) => [...(ref.subgenreWorks.get(lane) ?? [])]
         .some((wk) => ref.works.get(wk)?.artistKey === id);
       const keptHere = (id) => [...(ref.subgenreWorks.get(lane) ?? [])]

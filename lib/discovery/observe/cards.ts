@@ -19,31 +19,17 @@ const CARD_TYPE: Record<string, CardSubjectType> = {
 };
 
 /**
- * The content level a card is about.
+ * Three levels, not five.
  *
- * The engine groups candidates by three subject kinds; the app reads five
- * levels. A set whose subject is a lane is a subgenre card, and two families
- * are exactly that: WHAT_THEY_HAVE is titled "Experimental hip hop" and
- * A_SCENE_YOU_TOUCHED "Art rock". Both were badged Songs because "set" is how
- * the engine stores a lane internally, so the Subgenre level read as empty
- * while the cards for it were sitting in the feed under another name.
- *
- * The set families that really are collections of recordings stay Songs: the
- * tracks several friends each kept, and a year's worth of a lane.
- *
- * This is the card's label and nothing else. It is read after a candidate has
- * been generated, scored, consolidated, ordered and capped, so it cannot
- * affect what exists, what is eligible, how anything ranks, what is selected
- * or what order it arrives in.
+ * The app reads albums, artists and genres. A song collection was only a slice
+ * of a genre cut by release date and is no longer generated; the difference
+ * between a genre and a subgenre is one nobody reading a card can use, and
+ * almost every library holds all seven of the broad ones, so the broad ones
+ * were never a card anybody saw. What used to be called a subgenre is the
+ * genre now, and every card whose subject is one says so.
  */
-const LANE_SUBJECT = new Set<Candidate["family"]>([
-  "WHAT_THEY_HAVE", "A_SCENE_YOU_TOUCHED",
-]);
-
 const levelOf = (c: Candidate): CardSubjectType =>
-  c.subject.kind === "set" && LANE_SUBJECT.has(c.family)
-    ? "SUBGENRE"
-    : CARD_TYPE[c.subject.kind] ?? "SONG_SET";
+  c.subject.kind === "set" ? "GENRE" : CARD_TYPE[c.subject.kind] ?? "GENRE";
 
 const spotifyUrl = (id: string | null) =>
   (id ? `https://open.spotify.com/track/${id}` : null);

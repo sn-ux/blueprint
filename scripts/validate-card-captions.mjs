@@ -42,7 +42,12 @@ for (const uid of uids) {
       if (t.title !== c.subject.label)
         note("subject name was recapitalised", `${c.family}: ${t.title}`);
     } else {
-      const lane = String(c.facts.lane ?? c.subject.label);
+      /**
+       * A card about a neighbouring genre is titled with that genre, not with
+       * the one the reader already has — `facts.lane` is where they stand and
+       * `facts.other` is what is being offered.
+       */
+      const lane = String(c.facts.otherLane ?? c.facts.lane ?? c.subject.label);
       const expect = laneTitle(lane);
       if (!t.title.startsWith(expect))
         note("lane title is not the lane in sentence case", `${c.family}: "${t.title}" expected "${expect}"`);
