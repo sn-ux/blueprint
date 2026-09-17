@@ -99,6 +99,59 @@ export interface SessionBuild {
 }
 
 /**
+ * A reading order that is not the same reading order every time.
+ *
+ * Generation orders the reservoir once and deterministically, which is what
+ * the quality gradient and the repetition spacing are built on. Lifecycle then
+ * lifts what has never been shown above what has. Both are wanted — and
+ * between them they leave a reader who has already seen everything once with
+ * one fixed order, returned identically on every pull. That is what a refresh
+ * is for, and the legacy path already solved it: a seed per session, and each
+ * slot drawn from a window a few pages deep rather than off the top of one
+ * sort. This is that, over the observation engine's own order.
+ *
+ * The draw is biased towards the front of the window, so the strongest cards
+ * still surface early and the gradient survives being stirred. The window is
+ * local, so a card seventy places down does not arrive first.
+ *
+ * Spacing is carried through the draw: within the window, a card repeating the
+ * previous card's family or headline artist is passed over for one that does
+ * not. Without that, stirring would undo the repetition control generation
+ * spent its ordering on.
+ */
+function mulberry32(a: number) {
+  return () => {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function stir(cards: StoredCard[], windowSize: number, seed: number): StoredCard[] {
+  const rng = mulberry32(seed);
+  const pool = [...cards];
+  const out: StoredCard[] = [];
+  while (pool.length > 0) {
+    const w = Math.min(windowSize, pool.length);
+    /** Squared, so the front of the window is drawn from far more often. */
+    const start = Math.floor(w * rng() * rng());
+    let pick = start;
+    const prev = out[out.length - 1]?.card;
+    if (prev) {
+      for (let n = 0; n < w; n++) {
+        const j = (start + n) % w;
+        const c = pool[j].card;
+        if (c.generator !== prev.generator
+            && (!c.artist || c.artist !== prev.artist)) { pick = j; break; }
+      }
+    }
+    out.push(pool.splice(pick, 1)[0]);
+  }
+  return out;
+}
+
+/**
  * The observation engine's session.
  *
  * Generation has already ordered the reservoir — strongest first, families and
@@ -158,7 +211,18 @@ async function startObservationSession(
     for (const r of resting) suppressed.push({ key: r.stored.card.id, status: "COOLING" });
   }
 
-  ordered.forEach((s, i) => { s.card.rank = i + 1; });
+  /**
+   * One seed per session, so two sessions over unchanged lifecycle state do
+   * not compose identically — which is how a card ends up pinned to the same
+   * position across every refresh.
+   */
+  const stirred = stir(
+    ordered,
+    CFG.LIFECYCLE.pageSize * CFG.LIFECYCLE.pageWindowMultiple,
+    (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0,
+  );
+
+  stirred.forEach((s, i) => { s.card.rank = i + 1; });
   console.log(
     `[friends] ${viewerId} raw ${built.counts.raw} → distinct ${built.counts.distinct}`
     + ` → feed ${ordered.length}, ${built.counts.friendTracks} friend tracks`
@@ -166,17 +230,17 @@ async function startObservationSession(
     + ` SOLID ${built.counts.solid})`,
   );
 
-  if (!persist) return { sessionId: "", stored: ordered, suppressed };
+  if (!persist) return { sessionId: "", stored: stirred, suppressed };
   const session = await prisma.recommendationFeedSession.create({
     data: {
       userId: viewerId,
       expiresAt: new Date(now.getTime() + CFG.LIFECYCLE.sessionTtlMinutes * 60_000),
       depth: 0,
-      cards: ordered as unknown as object,
+      cards: stirred as unknown as object,
     },
     select: { id: true },
   });
-  return { sessionId: session.id, stored: ordered, suppressed };
+  return { sessionId: session.id, stored: stirred, suppressed };
 }
 
 /**
