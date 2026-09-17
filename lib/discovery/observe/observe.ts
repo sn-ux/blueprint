@@ -49,7 +49,9 @@ export interface ObserveResult {
 }
 
 const DEFAULTS = {
-  minTracks: 4, redundancy: 0.35, window: 8, familyPerWindow: 2, limit: Infinity,
+  minTracks: 4, redundancy: 0.35, window: 8, familyPerWindow: 2,
+  /** At most half a window about the same kind of subject. */
+  kindPerWindow: 4, limit: Infinity,
 };
 
 /**
@@ -97,18 +99,8 @@ export function observe(
   // substantially the same recordings, the stronger reason survives.
   // Score first; where two cards are the same music they tie exactly, and the
   // sharper reason takes it.
-  /**
-   * Tier first, then score, then the sharpness of the reason.
-   *
-   * A prioritised family is offered ahead of a better-scoring card of an older
-   * kind. Nothing about the music's own numbers is touched to achieve it, and
-   * repetition control still runs afterwards, so a tier cannot take the whole
-   * first screen.
-   */
   const sorted = [...raw].sort((a, b) =>
-    tierOf(b.family) - tierOf(a.family)
-    || b.score - a.score
-    || specificityOf(b.family) - specificityOf(a.family));
+    b.score - a.score || specificityOf(b.family) - specificityOf(a.family));
   const kept: (Candidate & { band: Band })[] = [];
   const seenSubject = new Set<string>();
   const seenTracks: Set<string>[] = [];
@@ -136,6 +128,8 @@ export function observe(
   const taken = new Set<Candidate>();
   const recentFamily: FamilyId[] = [];
   const recentAnchor: string[] = [];
+  /** What kind of thing each recent card was about: an album, an artist, a scene. */
+  const recentKind: string[] = [];
   const spend: string[][] = [];
   const spent = new Map<string, number>();
 
@@ -143,6 +137,7 @@ export function observe(
     stream.push(c); taken.add(c);
     recentFamily.push(c.family);
     recentAnchor.push(anchorOf(c));
+    recentKind.push(c.subject.kind);
     const fp = c.footprint.slice(0, 80);
     spend.push(fp);
     for (const wk of fp) spent.set(wk, (spent.get(wk) ?? 0) + 1);
@@ -151,7 +146,7 @@ export function observe(
         const n = (spent.get(wk) ?? 1) - 1;
         if (n <= 0) spent.delete(wk); else spent.set(wk, n);
       }
-      recentFamily.shift(); recentAnchor.shift();
+      recentFamily.shift(); recentAnchor.shift(); recentKind.shift();
     }
   };
 
@@ -161,6 +156,19 @@ export function observe(
     if (relax < 2) {
       let n = 0; for (const f of recentFamily) if (f === c.family) n++;
       if (n >= o.familyPerWindow + relax) return false;
+    }
+    /**
+     * A window cannot be all one kind of thing.
+     *
+     * Family and anchor limits are not enough on their own: several families
+     * can be about the same kind of subject, and when three of them were
+     * prioritised at once the feed became albums and nothing else for ten
+     * pages. A reader is owed a mix of albums, artists and scenes on any given
+     * screen, so no more than half a window is the same kind.
+     */
+    if (relax < 1) {
+      let k = 0; for (const x of recentKind) if (x === c.subject.kind) k++;
+      if (k >= o.kindPerWindow) return false;
     }
     if (relax < 1 && c.tracks.length) {
       let seen = 0;
@@ -172,11 +180,24 @@ export function observe(
 
   while (stream.length < o.limit) {
     let chosen: (Candidate & { band: Band }) | null = null;
+    /**
+     * Priority is first refusal on a slot, not a place at the front of the
+     * queue.
+     *
+     * A prioritised family is looked at before the rest at each step, so its
+     * cards surface as early as anything will let them — but they pass through
+     * the same window as everything else, so they cannot take a screen, and
+     * the score decides among them.
+     */
     for (let relax = 0; relax <= 2 && !chosen; relax++) {
-      for (const c of kept) {
-        if (taken.has(c)) continue;
-        if (!fits(c, relax)) continue;
-        chosen = c; break;
+      for (const first of [true, false]) {
+        for (const c of kept) {
+          if (taken.has(c)) continue;
+          if (first && tierOf(c.family) === 0) continue;
+          if (!fits(c, relax)) continue;
+          chosen = c; break;
+        }
+        if (chosen) break;
       }
     }
     if (!chosen) break;
