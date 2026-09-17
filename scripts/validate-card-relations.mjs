@@ -61,7 +61,16 @@ const heldArtists = new Map();  // userId -> Set<artist lowercased>
 const tagsOf = new Map();       // recording -> Set<subgenre tag>
 const holdersOf = new Map();    // recording -> Set<userId>
 const heldYears = new Map();    // `${userId}|${year}` -> Set<subgenre tag>
-const artistSongs = new Map();  // artist lowercased -> Set<recording>
+/**
+ * Artists keyed the way an identity must be, not the way a name reads.
+ *
+ * "Tru" and "T.R.U." are one act to the engine, which strips punctuation to
+ * form a key. Keying this file's artist maps by the display name instead left
+ * every "T.R.U." row invisible to them, and six drawings were reported for
+ * marking an artist the reader holds plenty of.
+ */
+const akey = (name) => plain(name);
+const artistSongs = new Map();  // artist key -> Set<recording>
 /**
  * Distinct pressings, which bound any identity scheme from above.
  *
@@ -104,8 +113,9 @@ for (const t of tracks) {
   }
   (heldSongs.get(t.userId) ?? heldSongs.set(t.userId, new Set()).get(t.userId)).add(r);
   (heldArtists.get(t.userId) ?? heldArtists.set(t.userId, new Set()).get(t.userId)).add(artist);
-  (artistSongs.get(artist) ?? artistSongs.set(artist, new Set()).get(artist)).add(r);
-  (artistPressings.get(artist) ?? artistPressings.set(artist, new Set()).get(artist)).add(t.spotifyId);
+  const ak = akey(t.artist);
+  (artistSongs.get(ak) ?? artistSongs.set(ak, new Set()).get(ak)).add(r);
+  (artistPressings.get(ak) ?? artistPressings.set(ak, new Set()).get(ak)).add(t.spotifyId);
   (tagsOf.get(r) ?? tagsOf.set(r, new Set()).get(r)).add(t.blueprintSubgenre);
   if (year !== null) (songYears.get(r) ?? songYears.set(r, new Set()).get(r)).add(year);
   (holdersOf.get(r) ?? holdersOf.set(r, new Set()).get(r)).add(t.userId);
@@ -220,7 +230,7 @@ for (const uid of [...new Set(tracks.map((t) => t.userId))]) {
     if (rel.of === "artists") {
       for (const it of rel.items) {
         const name = (ref.artists.get(it.id)?.name ?? "").toLowerCase();
-        const all = artistSongs.get(name) ?? new Set();
+        const all = artistSongs.get(akey(name)) ?? new Set();
         const has = [...all].some((x) => mine.has(x));
         if (it.state === "yours" && !has)
           note("an artist the viewer holds nothing by marked yours", `${where}: ${it.name}`);

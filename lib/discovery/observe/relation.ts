@@ -57,6 +57,13 @@ export interface Relation {
  */
 const MAX_ITEMS = 6;
 /**
+ * Five on a scene line, because each face carries a name under it.
+ *
+ * A name needs about as much width again as the picture it sits under, so a
+ * sixth face would either clip its own label or push it into its neighbour's.
+ */
+const MAX_ARTISTS = 5;
+/**
  * Two marks, or there is nothing to read a position against.
  *
  * Two is enough: this record, and the one of theirs you already have, is a
@@ -643,19 +650,55 @@ function sceneArtists(
     });
   }
   /**
-   * The peers are artists the reader actually keeps in this scene, the ones
-   * they hold most of first. Nobody is drawn twice: the lit artist is not
-   * repeated here even where the reader holds some of them.
+   * Peers either side of the lit artist, nearest in time first.
+   *
+   * Taking the peers the reader holds most of put them all on one side: a
+   * Playboi Carti line ran one artist before him and four after, which reads
+   * as the end of a scene rather than a place in it. Drawing alternately from
+   * before and after puts him between them, and where a side is genuinely
+   * empty — the earliest artist in a scene has nobody before them — the other
+   * side fills the space rather than a gap being invented.
    */
-  for (const [ak, v] of [...mine]
+  const anchor = items[0]?.year ?? null;
+  const peers = [...mine]
     .filter(([ak]) => !lead.includes(ak))
-    .sort((a, b) => b[1].works.size - a[1].works.size || a[0].localeCompare(b[0]))
-    .slice(0, MAX_ITEMS)) {
-    items.push({
-      id: ak, name: ref.artists.get(ak)?.name ?? ak, shape: "circle", state: "yours",
-      imageUrl: faceOf(ref, ref.artists.get(ak)?.works ?? v.works), year: median(v.years),
-    });
+    .map(([ak, v]) => ({
+      id: ak, name: ref.artists.get(ak)?.name ?? ak, shape: "circle" as const,
+      state: "yours" as const,
+      imageUrl: faceOf(ref, ref.artists.get(ak)?.works ?? v.works),
+      /**
+       * Every face on the line is dated the same way: the middle year of that
+       * artist's work in this scene, across the corpus.
+       *
+       * Dating the peers by the reader's own copies and the lit artist by the
+       * whole corpus put two measures on one axis, and it showed — the lit
+       * artist landed systematically early, so 476 of 778 lines had every peer
+       * on one side of them.
+       */
+      year: median(laneYears.get(ak) ?? v.years),
+      /** Ties break on how much of them the reader keeps. */
+      held: v.works.size,
+    }));
+
+  const gap = (p: { year: number | null }) =>
+    p.year === null || anchor === null ? Number.MAX_SAFE_INTEGER : Math.abs(p.year - anchor);
+  const byNearest = (a: typeof peers[number], b: typeof peers[number]) =>
+    gap(a) - gap(b) || b.held - a.held || a.id.localeCompare(b.id);
+  const dated = (p: { year: number | null }) => p.year !== null && anchor !== null;
+  const before = peers.filter((p) => dated(p) && p.year! < anchor!).sort(byNearest);
+  const after = peers.filter((p) => dated(p) && p.year! > anchor!).sort(byNearest);
+  /** Same year as the lit artist, or undated: neither side, so they fill. */
+  const level = peers
+    .filter((p) => !dated(p) || p.year === anchor).sort(byNearest);
+
+  const room = MAX_ARTISTS - items.length;
+  const picked: typeof peers = [];
+  while (picked.length < room && (before.length || after.length)) {
+    if (before.length) picked.push(before.shift()!);
+    if (picked.length < room && after.length) picked.push(after.shift()!);
   }
+  for (const p of level) { if (picked.length >= room) break; picked.push(p); }
+  for (const { held: _held, ...item } of picked) items.push(item);
   return settle("artists", label ?? laneTitle(lane), items);
 }
 
@@ -684,13 +727,39 @@ export function buildRelation(
   const shelfAll = () => artistKey ? shelfOfRecordings(ref, c, uid, artistKey) : null;
   const guest = () => appearances(ref, c, uid);
   const named = lane !== null && !UNNAMED.test(lane);
-  const scene = () => named ? sceneArtists(ref, c, uid, lane!) : null;
-  /** The genre above the subgenre, where a subgenre holds no peers at all. */
+  const inLane = () => named ? sceneArtists(ref, c, uid, lane!) : null;
+
+  /**
+   * Somebody either side, which is what makes it a place rather than an end.
+   *
+   * A scene can be too narrow to have both: the reader keeps no
+   * neo-psychedelic act earlier than Tame Impala and no alternative R&B act
+   * later than KAYTRANADA, so a quarter of these lines ran off one edge. The
+   * genre above usually has both, so where the subgenre cannot put anybody on
+   * one side the whole drawing moves up a scope rather than borrowing a face
+   * from a scene the label does not name.
+   */
+  const twoSided = (r: Relation | null): boolean => {
+    if (!r) return false;
+    const lit = r.items.find((i) => i.state === "offered");
+    if (!lit || lit.year === null) return false;
+    const side = (f: (y: number) => boolean) =>
+      r.items.some((i) => i.state === "yours" && i.year !== null && f(i.year));
+    return side((y) => y < lit.year!) && side((y) => y > lit.year!);
+  };
+
   const wider = () => {
     const world = lane ? ref.subgenreWorld.get(lane) : null;
     if (!world || !lane || UNNAMED.test(world)) return null;
     return sceneArtists(ref, c, uid, lane, worldWorks(ref, world), laneTitle(world));
   };
+  const scene = () => {
+    const here = inLane();
+    if (twoSided(here)) return here;
+    const above = wider();
+    return twoSided(above) ? above : here ?? above;
+  };
+  /** The genre above the subgenre, where a subgenre holds no peers at all. */
   const inScene = () => named ? sceneRecords(ref, c, uid, lane!) : null;
 
   const chain: (() => Relation | null)[] =
