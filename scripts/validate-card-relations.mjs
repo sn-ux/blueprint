@@ -167,7 +167,18 @@ for (const uid of [...new Set(tracks.map((t) => t.userId))]) {
     // 2. a drawing has to say something: both sides present, and a caption
     const yours = rel.items.filter((x) => x.state === "yours");
     const offered = rel.items.filter((x) => x.state === "offered");
-    if (offered.length < 1) note("nothing in the drawing is being offered", where);
+    /**
+     * A placement has to have the new thing on it. A roster has no single new
+     * thing: it is a scene's artists with the reader's own ringed among them,
+     * so what it has to have is both of those.
+     */
+    if (rel.of === "scene") {
+      if (yours.length < 1) note("a roster with none of the reader's own on it", where);
+      if (!rel.items.some((x) => x.state === "other"))
+        note("a roster with nobody else in the scene", where);
+    } else if (offered.length < 1) {
+      note("nothing in the drawing is being offered", where);
+    }
     if (new Set(rel.items.map((x) => x.id)).size !== rel.items.length)
       note("the same item twice", where);
 
@@ -225,6 +236,25 @@ for (const uid of [...new Set(tracks.map((t) => t.userId))]) {
       }
       if (!rel.items.some((x) => x.state === "offered"))
         note("a records drawing with nothing offered", where);
+    }
+
+    if (rel.of === "scene") {
+      const lane = c.connection.label;
+      const inLane = (id) => [...(ref.subgenreWorks.get(lane) ?? [])]
+        .some((wk) => ref.works.get(wk)?.artistKey === id);
+      const keptHere = (id) => [...(ref.subgenreWorks.get(lane) ?? [])]
+        .some((wk) => ref.works.get(wk)?.artistKey === id
+          && ref.works.get(wk)?.holders.has(uid));
+      for (const it of rel.items) {
+        if (!inLane(it.id))
+          note("a roster shows somebody with no music in the scene", `${where}: ${it.name}`);
+        if (it.state === "yours" && !keptHere(it.id))
+          note("a roster rings somebody the reader keeps nothing of here", `${where}: ${it.name}`);
+        if (it.state === "other" && keptHere(it.id))
+          note("a roster leaves unringed somebody the reader keeps here", `${where}: ${it.name}`);
+        if (it.state === "offered")
+          note("a roster lights somebody as new", `${where}: ${it.name}`);
+      }
     }
 
     if (rel.of === "artists") {

@@ -42,7 +42,15 @@ export interface RelationItem {
 
 export interface Relation {
   /** What the items are. */
-  of: "records" | "artists";
+  /**
+   * What the items are, and which of them is emphasised.
+   *
+   * "records" and "artists" place one thing the card is opening among things
+   * the reader has. "scene" is the other way round: the roster of a subgenre,
+   * with the reader's own ringed inside it, which is what a card about a
+   * subgenre is actually claiming.
+   */
+  of: "records" | "artists" | "scene";
   /** The scene this is drawn inside, where there is one. */
   scope: string | null;
   axis: { from: number; to: number } | null;
@@ -72,6 +80,8 @@ const MAX_ARTISTS = 5;
 const MIN_PEERS = 2;
 /** How much of an artist's filed work a lane must be to count as their scene. */
 const MIN_SHARE = 0.3;
+/** How many of the reader's own to ring on a scene roster. */
+const ROSTER_YOURS = 2;
 /**
  * Two marks, or there is nothing to read a position against.
  *
@@ -233,11 +243,15 @@ function settle(
 
   let kept = items;
   if (items.length > MAX_ITEMS) {
-    const anchors = items.filter((i) => i.state === "offered").map((i) => i.year ?? 0);
+    const anchors = items
+      .filter((i) => i.state === (of === "scene" ? "yours" : "offered"))
+      .map((i) => i.year ?? 0);
     const near = (i: RelationItem) =>
       anchors.length ? Math.min(...anchors.map((y) => Math.abs((i.year ?? 0) - y))) : 0;
-    const lit = items.filter((i) => i.state === "offered").slice(0, 2);
-    const rank = (i: RelationItem) => (i.state === "yours" ? 0 : 1);
+    const lit = of === "scene"
+      ? items.filter((i) => i.state === "yours").slice(0, ROSTER_YOURS)
+      : items.filter((i) => i.state === "offered").slice(0, 2);
+    const rank = (i: RelationItem) => (i.state === (of === "scene" ? "other" : "yours") ? 0 : 1);
     const rest = items
       .filter((i) => !lit.includes(i))
       .sort((a, b) => rank(a) - rank(b) || near(a) - near(b) || (a.year ?? 0) - (b.year ?? 0))
@@ -251,7 +265,12 @@ function settle(
    * is placed against is the viewer's own where there is any, and the rest of
    * the same catalogue or scene where there is not.
    */
-  if (!kept.some((i) => i.state === "offered")) return null;
+  /**
+   * A placement needs the new thing on it; a roster has no single new thing,
+   * only the reader's own ringed among the rest.
+   */
+  if (of !== "scene" && !kept.some((i) => i.state === "offered")) return null;
+  if (of === "scene" && !kept.some((i) => i.state === "yours")) return null;
   if (kept.length < MIN_ITEMS) return null;
 
   const ys = kept.map((i) => i.year).filter((y): y is number => y !== null);
@@ -734,6 +753,66 @@ function sceneArtists(
   return settle("artists", label ?? laneTitle(lane), items);
 }
 
+/**
+ * The roster of a scene, with the reader's own ringed inside it.
+ *
+ * A subgenre card is not about one artist, so nothing on it should be lit as
+ * though it were. What it is about is a body of music and how much of it this
+ * reader has: the artists people here keep in that scene, laid out by era, and
+ * the reader's own circled among them.
+ *
+ * "People here keep" is counted in libraries rather than in recordings, so the
+ * roster is who the corpus actually likes rather than who happens to have the
+ * most tracks in it.
+ */
+function sceneRoster(
+  ref: Reference, c: Candidate, uid: string, lane: string,
+): Relation | null {
+  const works = ref.subgenreWorks.get(lane);
+  if (!works) return null;
+
+  const who = new Map<string, {
+    works: Set<string>; years: number[]; holders: Set<string>; mine: boolean;
+  }>();
+  for (const wk of [...works].sort()) {
+    const w = ref.works.get(wk);
+    if (!w) continue;
+    let a = who.get(w.artistKey);
+    if (!a) {
+      a = { works: new Set(), years: [], holders: new Set(), mine: false };
+      who.set(w.artistKey, a);
+    }
+    a.works.add(wk);
+    const y = yearOfWork(ref, wk);
+    if (y !== null) a.years.push(y);
+    for (const h of w.holders) a.holders.add(h);
+    if (w.holders.has(uid)) a.mine = true;
+  }
+
+  const liked = (x: [string, { holders: Set<string>; works: Set<string> }],
+                 y: [string, { holders: Set<string>; works: Set<string> }]) =>
+    y[1].holders.size - x[1].holders.size
+    || y[1].works.size - x[1].works.size
+    || x[0].localeCompare(y[0]);
+
+  const all = [...who];
+  const ringed = all.filter(([, a]) => a.mine).sort(liked).slice(0, ROSTER_YOURS);
+  const rest = all.filter(([, a]) => !a.mine).sort(liked)
+    .slice(0, MAX_ARTISTS - ringed.length);
+  if (ringed.length === 0 || rest.length === 0) return null;
+
+  const items: RelationItem[] = [...ringed, ...rest].map(([ak, a]) => ({
+    id: ak,
+    name: ref.artists.get(ak)?.name ?? ak,
+    shape: "circle" as const,
+    /** Ringed for the reader's own; the rest of the roster is context. */
+    state: a.mine ? ("yours" as const) : ("other" as const),
+    imageUrl: faceOf(ref, ref.artists.get(ak)?.works ?? a.works),
+    year: median(a.years),
+  }));
+  return settle("scene", laneTitle(lane), items);
+}
+
 // -- what each card draws ---------------------------------------------------
 
 /**
@@ -809,6 +888,7 @@ export function buildRelation(
     return best ?? inLane() ?? above;
   };
   /** The genre above the subgenre, where a subgenre holds no peers at all. */
+  const roster = () => named ? sceneRoster(ref, c, uid, lane!) : null;
   const inScene = () => named ? sceneRecords(ref, c, uid, lane!) : null;
 
   const chain: (() => Relation | null)[] =
@@ -830,8 +910,13 @@ export function buildRelation(
       ? [scene, wider, shelf, shelfAll, inScene]
     // a year of a scene that passed you by
     : c.family === "A_YEAR_IN_YOUR_LANE" ? [inScene, scene, shelf]
-    // a scene you have barely entered: your few records in it are the anchor
-    : c.family === "A_SCENE_YOU_TOUCHED" ? [inScene, scene]
+    /**
+     * A subgenre card draws the scene's roster: the artists people here keep
+     * in it, by era, with the reader's own ringed inside it. Neither its
+     * records nor one lit newcomer — the card is about the body of music.
+     */
+    : c.family === "A_SCENE_YOU_TOUCHED" ? [roster, inScene, scene]
+    : c.family === "WHAT_THEY_HAVE" ? [roster, scene, inScene]
     // an artist inside a scene you already keep
     : [scene, wider, shelf, shelfAll, inScene];
 
