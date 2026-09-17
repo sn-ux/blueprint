@@ -25,7 +25,7 @@
  */
 import { poissonUpperBits } from "./stats";
 import { holdRate, measureRates, type Rates } from "./rates";
-import { artistKeyOf, type Reference } from "./reference";
+import { albumRun, artistKeyOf, type Reference } from "./reference";
 import type { Profile } from "./profile";
 
 export type FamilyId =
@@ -1039,44 +1039,42 @@ function discographyOrder(ref: Reference, p: Profile): Candidate[] {
     const a = ref.artists.get(ak);
     if (!a) continue;
 
-    /** Their records, dated, with whether this listener holds any of each. */
-    const records = new Map<string, { year: number; mine: boolean; works: Set<string> }>();
-    for (const aid of [...a.albums.keys()].sort()) {
-      const alb = ref.albums.get(aid);
-      if (!alb || alb.year === null || alb.albumType !== "album") continue;
-      if (alb.artistKey !== ak || alb.totalTracks > MAX_ALBUM_TRACKS) continue;
-      const works = a.albums.get(aid) ?? new Set<string>();
-      const mine = [...works].some((wk) => p.works.has(wk));
-      const hit = records.get(aid);
-      if (hit) { hit.mine ||= mine; continue; }
-      records.set(aid, { year: alb.year, mine, works });
-    }
-    const mineYears = [...records.values()].filter((r) => r.mine).map((r) => r.year);
+    /**
+     * Their albums, from the one definition of that — so the year in the
+     * sentence is the year on the drawing.
+     */
+    const records = albumRun(ref, ak)
+      .filter((r) => r.totalTracks <= MAX_ALBUM_TRACKS)
+      .map((r) => ({
+        ...r,
+        mine: [...r.works].some((wk) => p.works.has(wk)),
+      }));
+
+    const mineYears = records.filter((r) => r.mine).map((r) => r.year);
     if (new Set(mineYears).size < 2) continue;
     const first = Math.min(...mineYears);
     const last = Math.max(...mineYears);
 
-    for (const [aid, r] of records) {
+    for (const r of records) {
       if (r.mine) continue;
-      const family: FamilyId | null =
+      const family: FamilyId =
         r.year < first ? "RECORD_BEFORE_YOURS"
         : r.year > last ? "RECORD_AFTER_YOURS"
         : "RECORD_BETWEEN_YOURS";
-      const alb = ref.albums.get(aid);
-      if (!alb) continue;
       const { tracks, holders, evidence, available, relevance } =
         rank(ref, p, r.works);
       if (tracks.length < MIN_TRACKS) continue;
-      const size = Math.max(alb.totalTracks || 0, r.works.size);
+      const size = Math.max(r.totalTracks || 0, r.works.size);
+      const aid = r.ids[0];
       out.push({
         family,
         key: `${family === "RECORD_BEFORE_YOURS" ? "before"
                : family === "RECORD_AFTER_YOURS" ? "after" : "between"}:${aid}`,
-        subject: { kind: "album", key: aid, label: alb.name, artist: alb.artist },
+        subject: { kind: "album", key: aid, label: r.name, artist: a.name },
         tracks, holders, evidence, available,
         connection: { kind: "ARTIST_HELD", key: ak, label: a.name, yours: held.size },
         facts: {
-          artist: a.name, album: alb.name, year: r.year,
+          artist: a.name, album: r.name, year: r.year,
           yours: held.size, records: new Set(mineYears).size,
           first, last, available,
         },

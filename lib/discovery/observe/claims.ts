@@ -287,8 +287,14 @@ export function render(c: Candidate, nameOf: (id: string) => string): Rendered {
       return {
         title: laneTitle(s("otherLane")),
         byline: "",
-        caption: `${laneTitle(s("otherLane"))} shares almost nobody with your ${laneInline(s("lane"))}, but ${who} all keep it. ${plural(count, "song")} of it ${is(count)} not in your library.`,
-        detail: `${laneTitle(s("otherLane"))} and your ${laneInline(s("lane"))} share ${n("shared") === 0 ? "no artists at all" : plural(n("shared"), "artist")}, so this is not the next step along. ${who} arrived at it separately and ${has} ${plural(count, "song")} you do not${leader}.${trimmed}`,
+        /**
+         * Lead with what the reader can act on. "UK R&B shares almost nobody
+         * with your funk" is the selection rule talking out loud, and it reads
+         * as nonsense; that several people here keep something the reader has
+         * never been near is the card.
+         */
+        caption: `${who} all keep ${laneTitle(s("otherLane"))}, and you have none of it. ${plural(count, "song")} of theirs ${is(count)} not in your library.`,
+        detail: `${who} each keep ${laneInline(s("otherLane"))} and you have none of it. It is not the next step along from your ${laneInline(s("lane"))} either — the two share ${n("shared") === 0 ? "no artists at all" : plural(n("shared"), "artist")} — so this is somewhere several people arrived at separately${leader}.${trimmed}`,
       };
 
     case "ONE_RECORD_LEFT":

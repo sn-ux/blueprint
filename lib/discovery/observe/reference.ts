@@ -359,3 +359,72 @@ export function rateWithout(part: Tally | undefined, whole: Tally, uid: string):
   const pnum = without(part, uid);
   return Math.max(pnum, 0.5) / (w + 0.5);
 }
+
+/**
+ * An artist's albums, one entry per record, at the earliest year it carries.
+ *
+ * The single definition of "their albums", because two of them disagreeing is
+ * a card that lies. Generation read the raw album rows and the drawing folded
+ * them, so a 2026 deluxe edition of a 2024 record produced a card reading
+ * "your Freddie Gibbs albums stop at 2025, this one came out in 2026" over a
+ * drawing with 2024 written on it. Both read this now.
+ *
+ * A catalogue holds the same record several times over: an explicit and a
+ * clean, a standard and an expanded, a remaster twenty years later. Three
+ * tests fold them, one per case the data actually contains — the same year, an
+ * edition suffix on the name, or the same songs — and what survives all three
+ * is the namesake: Weezer's Blue and Green albums, one name, one artist,
+ * different years, different songs, two records.
+ */
+export interface AlbumRecord {
+  /** Every edition of this record, the fullest first. */
+  ids: string[];
+  name: string;
+  /** The earliest year any edition of it carries. */
+  year: number;
+  /** Recordings the corpus has from any edition. */
+  works: Set<string>;
+  totalTracks: number;
+}
+
+export function albumRun(ref: Reference, artistKey: string): AlbumRecord[] {
+  const a = ref.artists.get(artistKey);
+  if (!a) return [];
+  const own = [...a.albums.keys()].filter((aid) => {
+    const alb = ref.albums.get(aid);
+    return !!alb && alb.artistKey === artistKey
+      && alb.albumType === "album" && alb.year !== null;
+  }).sort((x, y) =>
+    (ref.albums.get(y)?.works.size ?? 0) - (ref.albums.get(x)?.works.size ?? 0)
+    || x.localeCompare(y));
+
+  const out: AlbumRecord[] = [];
+  for (const aid of own) {
+    const alb = ref.albums.get(aid)!;
+    const name = normText(alb.name);
+    const raw = alb.name.trim().toLowerCase();
+    const hit = out.find((r) => {
+      if (normText(r.name) !== name) return false;
+      if (r.year === alb.year) return true;
+      if (r.name.trim().toLowerCase() !== raw) return true;
+      const smaller = alb.works.size <= r.works.size ? alb.works : r.works;
+      const larger = alb.works.size <= r.works.size ? r.works : alb.works;
+      if (smaller.size === 0) return false;
+      let shared = 0;
+      for (const wk of smaller) if (larger.has(wk)) shared++;
+      return shared * 2 >= smaller.size;
+    });
+    if (!hit) {
+      out.push({
+        ids: [aid], name: alb.name, year: alb.year as number,
+        works: new Set(alb.works), totalTracks: alb.totalTracks,
+      });
+      continue;
+    }
+    hit.ids.push(aid);
+    hit.year = Math.min(hit.year, alb.year as number);
+    hit.totalTracks = Math.max(hit.totalTracks, alb.totalTracks);
+    for (const wk of alb.works) hit.works.add(wk);
+  }
+  return out.sort((x, y) => x.year - y.year || x.name.localeCompare(y.name));
+}

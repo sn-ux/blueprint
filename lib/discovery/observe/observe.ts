@@ -17,7 +17,7 @@
  * cap: the requirement is that a run of near-identical cards not happen, not
  * that a family be rationed.
  */
-import { findAll, specificityOf, tierOf, type Candidate, type FamilyId } from "./candidates";
+import { findAll, specificityOf, type Candidate, type FamilyId } from "./candidates";
 import { artistKeyOf } from "./reference";
 import { buildProfile, type Profile } from "./profile";
 import { buildReference, type Reference } from "./reference";
@@ -181,23 +181,19 @@ export function observe(
   while (stream.length < o.limit) {
     let chosen: (Candidate & { band: Band }) | null = null;
     /**
-     * Priority is first refusal on a slot, not a place at the front of the
-     * queue.
+     * Best first, and nothing else.
      *
-     * A prioritised family is looked at before the rest at each step, so its
-     * cards surface as early as anything will let them — but they pass through
-     * the same window as everything else, so they cannot take a screen, and
-     * the score decides among them.
+     * Eleven families ended up prioritised, which is nine hundred of two
+     * thousand cards getting first refusal on every slot — at that point the
+     * tier is not a priority, it is a second ranking laid over the real one,
+     * and the feed stopped feeling ranked at all. A new card type earns its
+     * place by scoring, like every other.
      */
     for (let relax = 0; relax <= 2 && !chosen; relax++) {
-      for (const first of [true, false]) {
-        for (const c of kept) {
-          if (taken.has(c)) continue;
-          if (first && tierOf(c.family) === 0) continue;
-          if (!fits(c, relax)) continue;
-          chosen = c; break;
-        }
-        if (chosen) break;
+      for (const c of kept) {
+        if (taken.has(c)) continue;
+        if (!fits(c, relax)) continue;
+        chosen = c; break;
       }
     }
     if (!chosen) break;

@@ -20,7 +20,7 @@
  */
 import { laneTitle } from "../display";
 import type { Candidate } from "./candidates";
-import { normText, type Reference } from "./reference";
+import { albumRun, normText, type Reference } from "./reference";
 
 export interface RelationItem {
   id: string;
@@ -282,13 +282,13 @@ function settle(
 // -- records ----------------------------------------------------------------
 
 /**
- * One position per record, across every edition of it.
+ * One position per record, from the one definition of an artist's albums.
  *
- * A catalogue carries the same album several times: an explicit and a clean, a
- * standard and an expanded, a remaster twenty years later. Placed separately
- * they stack as two identical covers; dated separately the remaster drags the
- * record two decades forward. So editions merge on the name, and the record
- * sits at the earliest year any of them carries.
+ * The folding used to live here, which meant generation and this drawing each
+ * had their own idea of when a record came out. A card read "your Freddie
+ * Gibbs albums stop at 2025, this one came out in 2026" over a drawing with
+ * 2024 written on it, because a deluxe edition is its own album row and only
+ * one of the two was folding it back. Both read reference.ts now.
  */
 interface Record {
   ids: { any: string; yours: string | null; offered: string | null };
@@ -297,119 +297,23 @@ interface Record {
 }
 
 function foldEditions(
-  ref: Reference, uid: string, albums: Iterable<string>,
-  offeredAlbums: Set<string>, subject: string | null, own: (aid: string) => boolean,
+  ref: Reference, uid: string, artistKey: string,
+  offeredAlbums: Set<string>, subject: string | null,
 ): Record[] {
-  const ids = [...albums].filter(own).sort();
-  /**
-   * An edition, not a namesake, told apart by what is on the record.
-   *
-   * Two albums whose names reduce to the same thing are sometimes one record
-   * and sometimes not, and the name cannot say which. Weezer's Blue, Green and
-   * White albums are all called exactly "Weezer" and are three records;
-   * "The Come Up Mixtape Vol. 1" released in 2007 and re-released in 2024 is
-   * one, and drawing it twice put the same cover on the line at two dates.
-   *
-   * What separates them is the recordings: a re-release carries the same
-   * songs, a namesake carries different ones. So same-named albums fold only
-   * where the smaller one's recordings are mostly on the larger.
-   */
-  const sameName = new Map<string, string[]>();
-  for (const aid of ids) {
-    const alb = ref.albums.get(aid);
-    if (!alb) continue;
-    const k = normText(alb.name);
-    let group = sameName.get(k);
-    if (!group) { group = []; sameName.set(k, group); }
-    group.push(aid);
-  }
-
-  /** The group this record folds into: itself, plus any re-release of it. */
-  const foldKey = new Map<string, string>();
-  for (const [k, group] of sameName) {
-    const sorted = [...group].sort((a, b) =>
-      (ref.albums.get(b)?.works.size ?? 0) - (ref.albums.get(a)?.works.size ?? 0)
-      || a.localeCompare(b));
-    const roots: string[] = [];
-    for (const aid of sorted) {
-      const alb0 = ref.albums.get(aid);
-      if (!alb0) continue;
-      const mine = alb0.works;
-      const myName = alb0.name.trim().toLowerCase();
-      const root = roots.find((r) => {
-        const alb = ref.albums.get(r);
-        const theirs = alb?.works ?? new Set<string>();
-        /**
-         * The same year, written as an edition of it, or the same songs.
-         *
-         * Three tests because there are three cases, and the year settles most
-         * of them: "The Recession" and "Elephant" each sit in the corpus as
-         * two and three album ids with one name, one artist and one year,
-         * which is one record catalogued twice. "Revolver (Super Deluxe)" is
-         * plainly an edition of "Revolver" though the corpus holds different
-         * tracks from each. "The Come Up Mixtape Vol. 1" re-released under the
-         * identical title carries the same songs.
-         *
-         * What survives all three is the namesake: Weezer's Blue and Green
-         * albums, one name, one artist, different years, different songs.
-         */
-        if ((alb?.year ?? null) === alb0.year) return true;
-        if ((alb?.name.trim().toLowerCase() ?? "") !== myName) return true;
-        const smaller = mine.size <= theirs.size ? mine : theirs;
-        const larger = mine.size <= theirs.size ? theirs : mine;
-        if (smaller.size === 0) return false;
-        let shared = 0;
-        for (const wk of smaller) if (larger.has(wk)) shared++;
-        return shared * 2 >= smaller.size;
-      });
-      if (root) foldKey.set(aid, `${k}:${root}`);
-      else { roots.push(aid); foldKey.set(aid, `${k}:${aid}`); }
-    }
-  }
-
-  const out = new Map<string, Record>();
-  for (const aid of ids) {
-    const alb = ref.albums.get(aid);
-    if (!alb || alb.year === null || alb.albumType !== "album") continue;
-    const works = alb.works;
-    const isOffered = aid === subject || offeredAlbums.has(aid);
-    const isYours = [...works].some((wk) => holds(ref, wk, uid));
-
-    const key = foldKey.get(aid) ?? `${normText(alb.name)}:${aid}`;
-    const year = alb.year;
-    const hit = out.get(key);
-    if (!hit) {
-      out.set(key, {
-        ids: { any: aid, yours: isYours ? aid : null, offered: isOffered ? aid : null },
-        name: alb.name, year, works: new Set(works), isYours, isOffered, size: works.size,
-      });
-      continue;
-    }
-    hit.isYours ||= isYours;
-    hit.isOffered ||= isOffered;
-    if (isYours && !hit.ids.yours) hit.ids.yours = aid;
-    if (isOffered && !hit.ids.offered) hit.ids.offered = aid;
-    for (const wk of works) hit.works.add(wk);
-    /** A folded record sits at the earliest year any edition of it carries. */
-    hit.year = Math.min(hit.year, year);
-    if (works.size > hit.size || (works.size === hit.size && aid < hit.ids.any)) {
-      hit.ids.any = aid; hit.name = alb.name; hit.size = works.size;
-    }
-  }
-  return [...out.values()];
+  return albumRun(ref, artistKey).map((r) => {
+    const opened = r.ids.find((id) => id === subject || offeredAlbums.has(id)) ?? null;
+    const yours = r.ids.find((id) =>
+      [...(ref.albums.get(id)?.works ?? [])].some((wk) => holds(ref, wk, uid))) ?? null;
+    return {
+      ids: { any: r.ids[0], yours, offered: opened },
+      name: r.name, year: r.year, works: r.works,
+      isYours: [...r.works].some((wk) => holds(ref, wk, uid)),
+      isOffered: opened !== null,
+      size: r.works.size,
+    };
+  });
 }
 
-/**
- * A record you already own part of reads as yours, even when the card opens
- * more of it.
- *
- * On a "more of them" card the viewer's own tracks usually sit on the same
- * records the card is handing over, so lighting every one of them left an
- * Offset drawing with three new records and nothing of his the viewer had.
- * The exception is the record the card is *about*, which must stay lit however
- * much of it is already on the shelf — that is the whole claim of an album
- * card.
- */
 const asItem = (ref: Reference, r: Record, subject: string | null): RelationItem => {
   const isSubject = subject !== null && (r.ids.offered === subject || r.ids.any === subject);
   const state: RelationItem["state"] =
@@ -438,11 +342,8 @@ function catalogue(
     const aid = ref.works.get(wk)?.albumId;
     if (aid) offeredAlbums.add(aid);
   }
-  const records = foldEditions(
-    ref, uid, a.albums.keys(), offeredAlbums,
-    c.subject.kind === "album" ? c.subject.key : null,
-    (aid) => ref.albums.get(aid)?.artistKey === artistKey,
-  );
+  const records = foldEditions(ref, uid, artistKey, offeredAlbums,
+    c.subject.kind === "album" ? c.subject.key : null);
 
   /** One cover per year per side: two records at one point is not a position. */
   const perYear = new Map<string, RelationItem & { size: number }>();
@@ -813,6 +714,74 @@ function sceneRoster(
   return settle("scene", laneTitle(lane), items);
 }
 
+/**
+ * A genre's artists, with the ones from the stretch the reader is missing lit.
+ *
+ * The same roster a genre card always draws, read against the span the card is
+ * about: an artist whose work sits inside those years is what the card is
+ * offering, and the reader's own are ringed around them.
+ */
+function sceneSpan(
+  ref: Reference, c: Candidate, uid: string, lane: string,
+): Relation | null {
+  const works = ref.subgenreWorks.get(lane);
+  if (!works) return null;
+  const from = Number(c.facts.spanFrom);
+  const to = Number(c.facts.spanTo);
+  if (!Number.isInteger(from) || !Number.isInteger(to)) return null;
+
+  const offered = new Set(c.tracks);
+  const who = new Map<string, {
+    works: Set<string>; years: number[]; spanYears: number[];
+    mine: boolean; inSpan: boolean;
+  }>();
+  for (const wk of [...works].sort()) {
+    const w = ref.works.get(wk);
+    if (!w) continue;
+    let a = who.get(w.artistKey);
+    if (!a) {
+      a = { works: new Set(), years: [], spanYears: [], mine: false, inSpan: false };
+      who.set(w.artistKey, a);
+    }
+    a.works.add(wk);
+    if (w.firstYear !== null) a.years.push(w.firstYear);
+    if (w.holders.has(uid)) a.mine = true;
+    if (offered.has(wk)) {
+      a.inSpan = true;
+      /**
+       * An artist offered from a missing stretch is dated by the work that
+       * puts them in it, not by their whole run in the genre. Dating Neil
+       * Young by his career put him at 1972 on a card about 1986 to 1999.
+       */
+      if (w.firstYear !== null) a.spanYears.push(w.firstYear);
+    }
+  }
+
+  const items: RelationItem[] = [];
+  const lit = [...who]
+    .filter(([, a]) => a.inSpan && !a.mine)
+    .sort((x, y) => y[1].works.size - x[1].works.size || x[0].localeCompare(y[0]))
+    .slice(0, 2);
+  for (const [ak, a] of lit) {
+    items.push({
+      id: ak, name: ref.artists.get(ak)?.name ?? ak, shape: "circle",
+      state: "offered", imageUrl: faceOf(ref, a.works),
+      year: median(a.spanYears.length ? a.spanYears : a.years),
+    });
+  }
+  if (items.length === 0) return null;
+  for (const [ak, a] of [...who]
+    .filter(([ak, a]) => a.mine && !lit.some(([x]) => x === ak))
+    .sort((x, y) => y[1].works.size - x[1].works.size || x[0].localeCompare(y[0]))
+    .slice(0, MAX_ARTISTS - items.length)) {
+    items.push({
+      id: ak, name: ref.artists.get(ak)?.name ?? ak, shape: "circle",
+      state: "yours", imageUrl: faceOf(ref, a.works), year: median(a.years),
+    });
+  }
+  return settle("artists", laneTitle(lane), items);
+}
+
 // -- what each card draws ---------------------------------------------------
 
 /**
@@ -912,6 +881,11 @@ export function buildRelation(
   };
   /** The genre above the subgenre, where a subgenre holds no peers at all. */
   const roster = () => named ? sceneRoster(ref, c, uid, lane!) : null;
+  /**
+   * The genre's artists with the missing stretch lit: the ones the reader
+   * keeps, ringed, and the ones working in the years they have nothing from.
+   */
+  const span = () => named ? sceneSpan(ref, c, uid, lane!) : null;
   const inScene = () => named ? sceneRecords(ref, c, uid, lane!) : null;
 
   const chain: (() => Relation | null)[] =
@@ -944,8 +918,14 @@ export function buildRelation(
      * The genre's own run, with the part the reader has nothing from lit
      * inside it — which is the card.
      */
+    /**
+     * A genre card draws the genre's artists, never its album covers. Renaming
+     * subgenre to genre changed nothing about that: the roster is what a card
+     * about a body of music shows, and the part the reader has nothing from is
+     * lit inside it.
+     */
     : c.family === "GENRE_PART_BEFORE" || c.family === "GENRE_PART_AFTER"
-    || c.family === "GENRE_GAP" ? [inScene, roster]
+    || c.family === "GENRE_GAP" ? [span, roster, scene]
     /** A neighbouring genre: its roster, with what the reader already has ringed. */
     : related ? [roster, scene, inScene]
     /** An artist introduced on the timeline of the genre they work in. */
