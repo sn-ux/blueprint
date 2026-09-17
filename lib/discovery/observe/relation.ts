@@ -878,13 +878,29 @@ export function buildRelation(
    */
   const scene = () => {
     let best: Relation | null = null;
+    /**
+     * The narrowest scene with enough company, whichever side of the artist it
+     * sits on.
+     *
+     * Sidedness used to be a condition here and it was the wrong one. Every
+     * rage rap artist this reader keeps is later than Playboi Carti, so his
+     * own scene failed the test and the drawing widened to rap — a scene so
+     * broad that being in it says nothing, which is the complaint that sent me
+     * back to this. Company is what makes artists feel related; which side of
+     * him they fall on is a fact about his shelf, not a reason to leave the
+     * scene he actually works in.
+     *
+     * Two-sidedness is still preferred, but only between scenes that both have
+     * company: the narrower one wins, and a scene with nobody in it at all is
+     * still passed over.
+     */
     for (const l of lanes.length ? lanes : named ? [lane!] : []) {
       const r = sceneArtists(ref, c, uid, l);
-      if (twoSided(r) && peers(r) >= MIN_PEERS) return r;
+      if (peers(r) >= MIN_PEERS) return r;
       if (!best && r) best = r;
     }
     const above = wider();
-    if (twoSided(above) && peers(above) >= MIN_PEERS) return above;
+    if (peers(above) >= MIN_PEERS) return above;
     return best ?? inLane() ?? above;
   };
   /** The genre above the subgenre, where a subgenre holds no peers at all. */
