@@ -65,6 +65,16 @@ const MAX_ITEMS = 6;
  */
 const MIN_ITEMS = 2;
 
+/**
+ * The untaxonomised part of the corpus is not a scene.
+ *
+ * A fifth of the rows here carry the subgenre "unknown" under the world
+ * "Other" — 7,786 of them. Artists in that bucket are not peers in anything,
+ * and "UNKNOWN" printed over a drawing names nothing. A card whose music lands
+ * there draws its catalogue instead.
+ */
+const UNNAMED = /^(unknown|other|n\/a|none)$/i;
+
 // -- shared reads -----------------------------------------------------------
 
 const holds = (ref: Reference, wk: string, uid: string) =>
@@ -113,9 +123,27 @@ function laneOfTracks(ref: Reference, c: Candidate): string | null {
   const n = new Map<string, number>();
   for (const wk of c.tracks) {
     const sg = ref.works.get(wk)?.subgenre;
-    if (sg) n.set(sg, (n.get(sg) ?? 0) + 1);
+    if (sg && !UNNAMED.test(sg)) n.set(sg, (n.get(sg) ?? 0) + 1);
   }
   const best = [...n].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0];
+  return best ? best[0] : null;
+}
+
+/**
+ * The scene an artist works in, taken from their whole catalogue.
+ *
+ * Better than the scene of whatever this card happens to be handing over: a
+ * fifth of the corpus is untaxonomised, so the majority over one card's dozen
+ * recordings is often "unknown" for an artist whose work is plainly filed
+ * somewhere. Reading it off everything the corpus holds by them recovers the
+ * real scene, and with it the peers to place them among.
+ */
+function laneOfArtist(ref: Reference, artistKey: string): string | null {
+  const a = ref.artists.get(artistKey);
+  if (!a) return null;
+  const best = [...a.subgenres]
+    .filter(([sg]) => !UNNAMED.test(sg))
+    .sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]))[0];
   return best ? best[0] : null;
 }
 
@@ -522,6 +550,34 @@ function sceneRecords(
 // -- artists ----------------------------------------------------------------
 
 /**
+ * Every recording in a genre, as one set.
+ *
+ * A subgenre can be too narrow to place anybody in: 47 artist cards had a
+ * reader holding the card's artist and not one other artist in their
+ * subgenre — Tame Impala with no other neo-psychedelic act on the shelf. The
+ * genre above it is where their peers actually are, so the drawing widens to
+ * it rather than falling back to a row of the artist's own covers.
+ *
+ * Built once per corpus and per genre, because unioning a genre's subgenres
+ * is a pass over thousands of recordings and several hundred cards may ask.
+ */
+const WORLDS = new WeakMap<Reference, Map<string, Set<string>>>();
+
+function worldWorks(ref: Reference, world: string): Set<string> {
+  let per = WORLDS.get(ref);
+  if (!per) { per = new Map(); WORLDS.set(ref, per); }
+  const hit = per.get(world);
+  if (hit) return hit;
+  const out = new Set<string>();
+  for (const [lane, w] of ref.subgenreWorld) {
+    if (w !== world) continue;
+    for (const wk of ref.subgenreWorks.get(lane) ?? []) out.add(wk);
+  }
+  per.set(world, out);
+  return out;
+}
+
+/**
  * The artists you already keep in a scene, and the one being introduced.
  *
  * Placed by the era of the music rather than by how much of each you have,
@@ -531,8 +587,9 @@ function sceneRecords(
  */
 function sceneArtists(
   ref: Reference, c: Candidate, uid: string, lane: string,
+  pool?: Set<string>, label?: string,
 ): Relation | null {
-  const works = ref.subgenreWorks.get(lane);
+  const works = pool ?? ref.subgenreWorks.get(lane);
   if (!works) return null;
 
   const mine = new Map<string, { works: Set<string>; years: number[] }>();
@@ -553,10 +610,27 @@ function sceneArtists(
     const ak = ref.works.get(wk)?.artistKey;
     if (ak) offered.set(ak, (offered.get(ak) ?? 0) + 1);
   }
-  const lead = (c.subject.kind === "artist" ? [c.subject.key]
-    : [...offered].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([ak]) => ak))
-    .filter((ak) => !mine.has(ak))
-    .slice(0, 2);
+  /**
+   * What the drawing lights, which is not the same question on both kinds of card.
+   *
+   * An artist card is about one artist, so that artist is lit whether or not
+   * the reader already holds some of them: "you have three of theirs and there
+   * are thirty more" is a card about that artist, and the drawing has to say
+   * which one.
+   *
+   * A scene card is about a scene, and its lead is drawn from whatever it
+   * happens to be handing over. There, an artist already on the shelf is not
+   * an introduction — this marked Drake as new to somebody holding thirty-six
+   * of his tracks — so only an artist the reader keeps nothing of here can be
+   * the lit one.
+   */
+  const lead = c.subject.kind === "artist"
+    ? [c.subject.key]
+    : [...offered]
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .map(([ak]) => ak)
+        .filter((ak) => !mine.has(ak))
+        .slice(0, 2);
   if (lead.length === 0) return null;
 
   const items: RelationItem[] = [];
@@ -568,7 +642,13 @@ function sceneArtists(
       imageUrl: faceOf(ref, a.works), year: median(laneYears.get(ak) ?? []),
     });
   }
+  /**
+   * The peers are artists the reader actually keeps in this scene, the ones
+   * they hold most of first. Nobody is drawn twice: the lit artist is not
+   * repeated here even where the reader holds some of them.
+   */
   for (const [ak, v] of [...mine]
+    .filter(([ak]) => !lead.includes(ak))
     .sort((a, b) => b[1].works.size - a[1].works.size || a[0].localeCompare(b[0]))
     .slice(0, MAX_ITEMS)) {
     items.push({
@@ -576,7 +656,7 @@ function sceneArtists(
       imageUrl: faceOf(ref, ref.artists.get(ak)?.works ?? v.works), year: median(v.years),
     });
   }
-  return settle("artists", laneTitle(lane), items);
+  return settle("artists", label ?? laneTitle(lane), items);
 }
 
 // -- what each card draws ---------------------------------------------------
@@ -592,31 +672,50 @@ export function buildRelation(
   ref: Reference, c: Candidate, uid: string,
 ): Relation | null {
   const artistKey = artistOf(ref, c);
-  const lane = laneOf(c) ?? laneOfTracks(ref, c);
+  /**
+   * An artist card is placed in the artist's own scene; anything else is
+   * placed in the scene of the music it is handing over.
+   */
+  const lane = laneOf(c)
+    ?? (artistKey ? laneOfArtist(ref, artistKey) : null)
+    ?? laneOfTracks(ref, c);
 
   const shelf = () => artistKey ? catalogue(ref, c, uid, artistKey) : null;
   const shelfAll = () => artistKey ? shelfOfRecordings(ref, c, uid, artistKey) : null;
   const guest = () => appearances(ref, c, uid);
-  const scene = () => lane ? sceneArtists(ref, c, uid, lane) : null;
-  const inScene = () => lane ? sceneRecords(ref, c, uid, lane) : null;
+  const named = lane !== null && !UNNAMED.test(lane);
+  const scene = () => named ? sceneArtists(ref, c, uid, lane!) : null;
+  /** The genre above the subgenre, where a subgenre holds no peers at all. */
+  const wider = () => {
+    const world = lane ? ref.subgenreWorld.get(lane) : null;
+    if (!world || !lane || UNNAMED.test(world)) return null;
+    return sceneArtists(ref, c, uid, lane, worldWorks(ref, world), laneTitle(world));
+  };
+  const inScene = () => named ? sceneRecords(ref, c, uid, lane!) : null;
 
   const chain: (() => Relation | null)[] =
     // a record, placed among the records of theirs you keep
     c.family === "FINISH_THE_RECORD" || c.family === "YOU_HAVE_THE_HITS"
     || c.family === "THE_RECORD_YOU_SKIPPED" || c.family === "ONE_RECORD_LEFT"
       ? [shelf, shelfAll, scene, inScene]
-    // a catalogue you are already into, and where yours stops or starts
+    /**
+     * An artist card draws the scene it sits in, among the artists the reader
+     * keeps there, with the one the card is about lit between them.
+     *
+     * Not its discography. A row of that artist's own covers says what the
+     * title beside it already says; where they fall among the artists this
+     * reader already likes is the thing the card cannot state in a sentence.
+     * The catalogue stays the drawing for a card about a record.
+     */
     : c.family === "DEEPER_ON_AN_ARTIST" || c.family === "SINCE_YOU_STOPPED"
-    || c.family === "BEFORE_YOU_ARRIVED"
-      ? [shelf, shelfAll, scene, inScene]
-    // somebody already on records you own
-    : c.family === "GUEST_ON_YOUR_RECORDS" ? [guest, shelfAll, scene]
+    || c.family === "BEFORE_YOU_ARRIVED" || c.family === "GUEST_ON_YOUR_RECORDS"
+      ? [scene, wider, shelf, shelfAll, inScene]
     // a year of a scene that passed you by
     : c.family === "A_YEAR_IN_YOUR_LANE" ? [inScene, scene, shelf]
     // a scene you have barely entered: your few records in it are the anchor
     : c.family === "A_SCENE_YOU_TOUCHED" ? [inScene, scene]
     // an artist inside a scene you already keep
-    : [scene, shelf, shelfAll, inScene];
+    : [scene, wider, shelf, shelfAll, inScene];
 
   for (const attempt of chain) {
     const r = attempt();

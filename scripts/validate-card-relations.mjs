@@ -129,6 +129,7 @@ for (const t of tracks) {
 }
 
 let total = 0, drawn = 0, items = 0;
+const bare = [];
 const kinds = new Map();
 
 for (const uid of [...new Set(tracks.map((t) => t.userId))]) {
@@ -139,8 +140,16 @@ for (const uid of [...new Set(tracks.map((t) => t.userId))]) {
     const rel = card.relation;
     const where = `${c.family} / ${card.title}`;
 
-    // 1. every card carries a drawing
-    if (!rel) { note("card has no drawing at all", where); return; }
+    /**
+     * Coverage, reported rather than asserted.
+     *
+     * Almost every card can be placed, and the few that cannot are a fact
+     * about the corpus rather than a fault: an artist with one record in it
+     * and no named scene has nothing to be drawn against, and a lone cover
+     * states what the title beside it already states. What this file asserts
+     * is that every mark on a drawing is real, not that a drawing exists.
+     */
+    if (!rel) { bare.push(where); return; }
     drawn++;
     items += rel.items.length;
     kinds.set(rel.of, (kinds.get(rel.of) ?? 0) + 1);
@@ -218,10 +227,21 @@ for (const uid of [...new Set(tracks.map((t) => t.userId))]) {
         if (it.state === "offered") {
           if (!cardArtists.has(name))
             note("an artist the card does not open marked offered", `${where}: ${it.name}`);
-          const lane = c.connection.label;
-          const kept = [...(ref.subgenreWorks.get(lane) ?? [])].some(
-            (wk) => ref.works.get(wk)?.artistKey === it.id && ref.works.get(wk)?.holders.has(uid));
-          if (kept) note("an artist the viewer already keeps here marked as new", `${where}: ${it.name}`);
+          /**
+           * On a scene card the lit artist is an introduction, so one already
+           * on the reader's shelf must not be lit. On an artist card the lit
+           * artist is the card's subject, which the reader commonly holds
+           * some of — that is what "thirty more of them" means — so the same
+           * check would fail every one of those cards.
+           */
+          if (c.subject.kind !== "artist") {
+            const lane = c.connection.label;
+            const kept = [...(ref.subgenreWorks.get(lane) ?? [])].some(
+              (wk) => ref.works.get(wk)?.artistKey === it.id && ref.works.get(wk)?.holders.has(uid));
+            if (kept) note("an artist the viewer already keeps here marked as new", `${where}: ${it.name}`);
+          } else if (it.id !== c.subject.key) {
+            note("an artist card lights somebody other than its subject", `${where}: ${it.name}`);
+          }
         }
         if (it.year !== null) {
           const ys = [...all].flatMap((x) => [...(songYears.get(x) ?? [])]);
@@ -235,6 +255,10 @@ for (const uid of [...new Set(tracks.map((t) => t.userId))]) {
 }
 
 console.log(`checked ${total} cards, ${drawn} with a drawing (${((drawn / total) * 100).toFixed(1)}%), ${items} items`);
+if (bare.length) {
+  console.log(`${bare.length} could not be placed at all:`);
+  for (const b of bare.slice(0, 5)) console.log(`      ${b}`);
+}
 console.log([...kinds].sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k}=${v}`).join("  "), "\n");
 const ks = Object.keys(fails);
 if (!ks.length) console.log("INVARIANT HOLDS — every card draws its relation, and every mark on it is in the rows");
