@@ -1,3 +1,4 @@
+import type { Timeline } from "./observe/timeline";
 import { loadCorpus } from "./corpus";
 import { label, laneTitle } from "./display";
 import { runEngine } from "./engine";
@@ -112,6 +113,16 @@ export interface FeedCard {
    */
   releaseYearMin: number | null;
   releaseYearMax: number | null;
+
+  /**
+   * Where this card's music sits against what the viewer already holds.
+   *
+   * Release positions on one axis: the records, artists or years the viewer
+   * keeps from the same set, plus the thing this card is opening, so a gap can
+   * be seen rather than described. Null wherever the data cannot place the
+   * subject honestly, which is most cards.
+   */
+  timeline?: Timeline | null;
 }
 
 const spotifyUrl = (id: string | null) =>
