@@ -529,6 +529,38 @@ async function caption(viewerId: string, stored: StoredCard[]): Promise<boolean>
   return false;
 }
 
+/**
+ * Captions for the cards a reader is actually looking at.
+ *
+ * Called on its own, after the page has been delivered, so nothing about the
+ * feed waits on it. Only ids from the reader's own session are honoured and
+ * only ones still unwritten are sent, so a second ask for the same page costs
+ * nothing and cannot be used to drive generation for cards nobody reached.
+ */
+export async function captionCards(
+  viewerId: string, sessionId: string, ids: string[],
+): Promise<Record<string, string>> {
+  const row = await prisma.recommendationFeedSession.findFirst({
+    where: { id: sessionId, userId: viewerId },
+    select: { cards: true, depth: true, laps: true },
+  });
+  if (!row) return {};
+
+  const stored = row.cards as unknown as StoredCard[];
+  const wanted = new Set(ids);
+  const asked = stored.filter((s) => wanted.has(s.card.id));
+  if (!asked.length) return {};
+
+  if (await caption(viewerId, asked)) {
+    await persist(sessionId, stored, row.depth, row.laps);
+  }
+  const out: Record<string, string> = {};
+  for (const s of asked) {
+    if (s.card.captionSource === "llm") out[s.card.id] = s.card.caption;
+  }
+  return out;
+}
+
 async function persist(sessionId: string, stored: StoredCard[], depth: number, laps: number) {
   await prisma.recommendationFeedSession.update({
     where: { id: sessionId },
@@ -599,19 +631,13 @@ export async function feedPage(
   const end = offset + slice.length;
 
   /**
-   * Captions are written for the page in hand, not for the session.
+   * Captions are not written here.
    *
-   * A reading is several hundred cards deep and almost nobody reaches the
-   * bottom of one, so writing the whole thing up front would pay for prose
-   * nobody reads and would hold the first request open while it happened.
-   * The cards here are the same objects as the ones in `stored`, so writing
-   * the page and saving the session are the same act, and a card already
-   * written is skipped — scrolling back over a page costs nothing.
+   * One costs seven to nine seconds, and a page holds twenty-four, so writing
+   * them inside this request meant a feed that took minutes to appear. The
+   * reader gets the cards now and asks for the captions of the ones actually
+   * in front of them; see captionCards below.
    */
-  if (sessionId) {
-    const wrote = await caption(viewerId, slice);
-    if (wrote) await persist(sessionId, stored, depth, laps);
-  }
 
   // More exists whenever another card has been composed, another band can
   // still be searched, or anything is far enough back to come round again.
@@ -620,7 +646,15 @@ export async function feedPage(
   const hasMore = end < stored.length || canDeepen || canResurface;
 
   return {
-    cards: slice.map((s, i) => ({ ...s.card, rank: offset + i + 1 })),
+    // An unwritten caption is sent as absent, not as the prose it would have
+    // had. Showing the old line and swapping it a few seconds later is worse
+    // than showing the space it is about to occupy.
+    cards: slice.map((s, i) => ({
+      ...s.card,
+      rank: offset + i + 1,
+      caption: s.card.captionSource === "llm" ? s.card.caption : "",
+      captionPending: s.card.captionSource !== "llm",
+    })),
     nextCursor: hasMore ? encodeCursor(sessionId as string, end) : null,
     hasMore,
     caughtUp: !hasMore,
@@ -654,7 +688,14 @@ export async function cardDetail(
   }
   if (!hit) return null;
 
-  return { card: hit.card, tracks: await hydrate(viewerId, hit.deliverableIds) };
+  return {
+    card: {
+      ...hit.card,
+      caption: hit.card.captionSource === "llm" ? hit.card.caption : "",
+      captionPending: hit.card.captionSource !== "llm",
+    },
+    tracks: await hydrate(viewerId, hit.deliverableIds),
+  };
 }
 
 /** Track rows for a stored deliverable set, with the people who hold each. */

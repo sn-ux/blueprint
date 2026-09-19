@@ -56,6 +56,8 @@ export interface FeedCard {
    * sent to the writer once, since the snapshot it lives in is durable.
    */
   captionSource?: "llm";
+  /** True while the caption has yet to be written, so the client can wait. */
+  captionPending?: boolean;
 
   generator: string;
   claimType: string;
