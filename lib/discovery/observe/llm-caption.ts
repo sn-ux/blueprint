@@ -18,7 +18,7 @@ import { prisma } from "@/lib/prisma";
 
 /** Per-page, so one batch of cards is one request. */
 const MODEL = process.env.BLUEPRINT_CAPTION_MODEL ?? "claude-sonnet-5";
-const MAX_CARDS = 40;
+const MAX_CARDS = Number(process.env.BLUEPRINT_CAPTION_LIMIT ?? 40);
 
 export interface ListenerContext {
   /** Their commonest Spotify genres, commonest first. */
@@ -38,8 +38,18 @@ export interface CaptionCard {
   subject: string;
   artist: string | null;
   lane: string | null;
-  /** Spotify genres attached to the card's own tracks. */
+  /** How the card's own subject is filed. Empty for a genre card, whose
+   * subject is the genre itself. */
   cardGenres: string[];
+  /**
+   * The listener's existing lane that put this card in front of them.
+   *
+   * On a genre card this is emphatically not what the card is about: the card
+   * "you like afrobeat, so here is anti-folk" carries anti-folk as its subject
+   * and afrobeat as its anchor, and describing the anchor gets you a caption
+   * about Afrobeat sitting under a heading that says Anti-folk.
+   */
+  anchor: string | null;
   /** Years of the card's tracks, for a rough sense of period. */
   years: number[];
 }
@@ -80,7 +90,8 @@ Return a JSON array, one object per card, in the order given: [{"id": "<the card
 /** The listener facts that actually bear on one card. Exported so the
  * exact model input can be inspected without making a request. */
 export function contextFor(card: CaptionCard, who: ListenerContext): string {
-  const related = new Set([...card.cardGenres, card.lane ?? ""].filter(Boolean).map((g) => g.toLowerCase()));
+  const related = new Set([...card.cardGenres, card.anchor ?? "", card.lane ?? ""]
+    .filter(Boolean).map((g) => g.toLowerCase()));
   const near: string[] = [];
   for (const [artist, n] of [...who.holdings].sort((a, b) => b[1] - a[1])) {
     if (norm(artist) === norm(card.artist ?? card.subject)) continue;
@@ -98,8 +109,11 @@ export function contextFor(card: CaptionCard, who: ListenerContext): string {
 
   const lines = [
     `id: ${card.id}`,
-    `${card.type}: ${card.subject}${card.artist && card.type === "ALBUM" ? ` by ${card.artist}` : ""}`,
+    `WRITE ABOUT — ${card.type}: ${card.subject}` +
+      `${card.artist && card.type === "ALBUM" ? ` by ${card.artist}` : ""}`,
     card.cardGenres.length ? `filed as: ${card.cardGenres.slice(0, 4).join(", ")}` : null,
+    card.anchor ? `they already like: ${card.anchor} — this is the reason the card ` +
+      `was raised, not its subject. Do not describe ${card.anchor}.` : null,
     years ? `recordings here span: ${years}` : null,
     near.length ? `their artists in this area: ${near.join(", ")}` : null,
     `their listening overall: ${who.genres.slice(0, 8).join(", ")}`,

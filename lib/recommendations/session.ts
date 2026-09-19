@@ -232,6 +232,7 @@ async function startObservationSession(
   );
 
   if (!persist) return { sessionId: "", stored: stirred, suppressed };
+  await caption(viewerId, stirred);
   const session = await prisma.recommendationFeedSession.create({
     data: {
       userId: viewerId,
@@ -505,8 +506,15 @@ async function caption(viewerId: string, stored: StoredCard[]): Promise<void> {
         : card.cardType === "ALBUM" ? "ALBUM" : "GENRE",
       subject: card.title,
       artist: card.artist,
-      lane: card.subgenre ?? card.genre,
-      cardGenres: [card.subgenre, card.genre].filter((g): g is string => !!g && g !== "unknown"),
+      // A genre card's subject is its title. Its `subgenre` is the lane the
+      // reader already keeps, which is the anchor and never the subject.
+      lane: card.cardType === "ARTIST" || card.cardType === "ALBUM"
+        ? card.subgenre ?? card.genre : null,
+      cardGenres: card.cardType === "ARTIST" || card.cardType === "ALBUM"
+        ? [card.subgenre, card.genre].filter((g): g is string => !!g && g !== "unknown")
+        : [],
+      anchor: card.cardType === "ARTIST" || card.cardType === "ALBUM"
+        ? null : (card.subgenre && card.subgenre !== "unknown" ? card.subgenre : null),
       years: [card.releaseYearMin, card.releaseYearMax]
         .filter((y): y is number => typeof y === "number"),
     }));

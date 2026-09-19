@@ -33,8 +33,10 @@ for (const t of ["ARTIST", "ALBUM", "GENRE"]) {
 }
 const cards = picked.map(({ card }) => ({
   id: card.id, type: typeOf(card), subject: card.title, artist: card.artist,
-  lane: card.subgenre ?? card.genre,
-  cardGenres: [card.subgenre, card.genre].filter((g) => g && g !== "unknown"),
+  lane: typeOf(card) === "GENRE" ? null : (card.subgenre ?? card.genre),
+  cardGenres: typeOf(card) === "GENRE" ? []
+    : [card.subgenre, card.genre].filter((g) => g && g !== "unknown"),
+  anchor: typeOf(card) === "GENRE" && card.subgenre !== "unknown" ? card.subgenre : null,
   years: [card.releaseYearMin, card.releaseYearMax].filter((y) => typeof y === "number"),
 }));
 
