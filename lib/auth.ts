@@ -11,11 +11,9 @@ export const authOptions: NextAuthOptions = {
       clientSecret: process.env.SPOTIFY_CLIENT_SECRET!,
       /**
        * The two behavioural scopes are new, and a token issued before them
-       * does not have them — an account keeps whatever it was granted until
-       * its owner signs in again, at which point the adapter updates the same
-       * Account row in place. The User, their Sessions, their notes and every
-       * Track they own are untouched by that; only the tokens and the scope
-       * string change.
+       * does not have them. An account keeps whatever it was granted until
+       * its owner signs in again — and see the signIn event below for why
+       * signing in again is not, on its own, enough.
        *
        * user-top-read           /me/top/artists, /me/top/tracks
        * user-read-recently-played  /me/player/recently-played
@@ -33,6 +31,53 @@ export const authOptions: NextAuthOptions = {
     session({ session, user }) {
       if (session.user) session.user.id = user.id;
       return session;
+    },
+  },
+  events: {
+    /**
+     * Keep the stored Spotify credential in step with the newest grant.
+     *
+     * NextAuth links an account exactly once. On every sign-in after the
+     * first, callback-handler finds the existing Account row, mints a fresh
+     * session and returns — linkAccount is never called again, and the
+     * adapter's getUserByAccount is a pure read. So the row keeps the tokens
+     * and the scope string from the day the account was first linked, and a
+     * grant made later is discarded.
+     *
+     * That is invisible until the scopes change, which is what adding
+     * user-top-read and user-read-recently-played did: somebody could sign
+     * out, sign in, approve the new consent screen, and still be stored with
+     * the old token and the old scope string, so nothing could read the new
+     * endpoints.
+     *
+     * This writes the new grant onto the row that already exists. Keyed on
+     * the provider account, so it can only ever touch the Spotify account
+     * that just signed in. updateMany rather than update because a first
+     * sign-in has already been written by linkAccount and there is nothing
+     * here to correct — that case is a no-op, not an error. Nothing else on
+     * the row, the user, their sessions or their library is read or written.
+     */
+    async signIn({ account }) {
+      if (account?.provider !== "spotify") return;
+      try {
+        await prisma.account.updateMany({
+          where: {
+            provider: "spotify",
+            providerAccountId: account.providerAccountId,
+          },
+          data: {
+            access_token: account.access_token ?? undefined,
+            refresh_token: account.refresh_token ?? undefined,
+            expires_at:
+              typeof account.expires_at === "number" ? account.expires_at : undefined,
+            token_type: account.token_type ?? undefined,
+            scope: account.scope ?? undefined,
+          },
+        });
+      } catch (e) {
+        // A sign-in that has otherwise succeeded must not fail here.
+        console.error("[auth] could not refresh the stored Spotify grant:", e);
+      }
     },
   },
   secret: process.env.NEXTAUTH_SECRET,
