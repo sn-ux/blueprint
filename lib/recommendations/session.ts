@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import * as CFG from "@/lib/discovery/config";
 import { compose } from "@/lib/discovery/engine";
+import { writeCaptions, loadListener, type CaptionCard } from "@/lib/discovery/observe/llm-caption";
 import { buildFeed, toFeedCard, type FeedCard, type FeedPerson, type FeedTrack } from "@/lib/discovery/feed";
 import { evaluate, type ExposureState, type LifecycleStatus } from "@/lib/discovery/lifecycle";
 import { MAX_DEPTH } from "@/lib/discovery/tiers";
@@ -328,6 +329,7 @@ export async function startSession(viewerId: string, persist = true): Promise<Se
 
   if (!persist) return { sessionId: "", stored, suppressed };
 
+  await caption(viewerId, stored);
   const session = await prisma.recommendationFeedSession.create({
     data: {
       userId: viewerId,
@@ -419,12 +421,12 @@ async function extendSession(
           depth: c.tier ?? nextDepth,
         }));
         const next = [...stored, ...added];
-        await persist(sessionId, next, nextDepth, laps);
+        await persist(sessionId, next, nextDepth, laps, viewerId);
         console.log(`[feed] session ${sessionId} → depth ${nextDepth}, +${added.length} new (${next.length} total)`);
         return { stored: next, depth: nextDepth, laps, grew: true };
       }
       // Nothing new at this band; record the depth so it is not retried.
-      await persist(sessionId, stored, nextDepth, laps);
+      await persist(sessionId, stored, nextDepth, laps, viewerId);
       depth = nextDepth;
     }
   }
@@ -480,12 +482,48 @@ async function extendSession(
     lifecycle: { ...card.lifecycle, status: "REVIVED" as LifecycleStatus },
   }));
   const next = [...stored, ...added];
-  await persist(sessionId, next, depth, laps + 1);
+  await persist(sessionId, next, depth, laps + 1, viewerId);
   console.log(`[feed] session ${sessionId} lap ${laps + 1}, +${added.length} resurfaced (${next.length} total)`);
   return { stored: next, depth, laps: laps + 1, grew: true };
 }
 
-async function persist(sessionId: string, stored: StoredCard[], depth: number, laps: number) {
+/**
+ * Give this page's cards their captions before the page is written down.
+ *
+ * Cards are stored as a snapshot, so this runs once per page rather than once
+ * per request, and a card already carrying a written caption is left alone.
+ * A card the writer skips keeps the prose it arrived with.
+ */
+async function caption(viewerId: string, stored: StoredCard[]): Promise<void> {
+  const pending = stored.filter((s) => s.card.captionSource !== "llm");
+  if (!pending.length || !process.env.ANTHROPIC_API_KEY) return;
+  try {
+    const who = await loadListener(viewerId);
+    const cards: CaptionCard[] = pending.map(({ card }) => ({
+      id: card.id,
+      type: card.cardType === "ARTIST" ? "ARTIST"
+        : card.cardType === "ALBUM" ? "ALBUM" : "GENRE",
+      subject: card.title,
+      artist: card.artist,
+      lane: card.subgenre ?? card.genre,
+      cardGenres: [card.subgenre, card.genre].filter((g): g is string => !!g && g !== "unknown"),
+      years: [card.releaseYearMin, card.releaseYearMax]
+        .filter((y): y is number => typeof y === "number"),
+    }));
+    const written = await writeCaptions(cards, who);
+    for (const s of pending) {
+      const c = written.get(s.card.id);
+      if (c) { s.card.caption = c; s.card.captionSource = "llm"; }
+    }
+    console.log(`[caption] wrote ${written.size}/${pending.length} for ${viewerId}`);
+  } catch (e) {
+    console.error("[caption] page kept its built-in prose:", e);
+  }
+}
+
+async function persist(sessionId: string, stored: StoredCard[], depth: number, laps: number,
+  viewerId?: string) {
+  if (viewerId) await caption(viewerId, stored);
   await prisma.recommendationFeedSession.update({
     where: { id: sessionId },
     data: { cards: stored as unknown as object, depth, laps },

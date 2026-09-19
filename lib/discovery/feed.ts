@@ -51,6 +51,11 @@ export interface FeedCard {
   title: string;
   byline: string;
   caption: string;
+  /**
+   * "llm" once the caption has been written by the model. A card is only ever
+   * sent to the writer once, since the snapshot it lives in is durable.
+   */
+  captionSource?: "llm";
 
   generator: string;
   claimType: string;
