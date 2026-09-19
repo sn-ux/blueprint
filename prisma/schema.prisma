@@ -20,6 +20,9 @@ model User {
   exposures     RecommendationExposure[]
   feedSessions  RecommendationFeedSession[]
   notes         Note[]
+  topArtists TopArtist[]
+  topTracks  TopTrack[]
+  plays      PlayEvent[]
 }
 
 model Account {
@@ -237,4 +240,104 @@ model Note {
   // The read is always "every note on this target, newest first".
   @@index([targetKey, createdAt])
   @@index([authorId])
+}
+
+/**
+ * Behavioural signals, which are not library data.
+ *
+ * Three things Spotify knows that a saved library does not say: who somebody
+ * has listened to most over a period, which songs, and what they have played
+ * recently. None of it belongs in Track. A play is not a save, a top artist is
+ * not an owned record, and nothing here may be read as either — so they are
+ * their own tables, written by their own stage of the sync, and the corpus
+ * that builds recommendations still reads Track and only Track.
+ */
+
+/**
+ * An artist in one of this person's top-50 lists, at the rank Spotify gave.
+ *
+ * Kept as a dated snapshot rather than overwritten, because the evidence worth
+ * having is persistence: an artist in the top fifty of three ranges, or in
+ * this month's and last month's, is saying something a single list cannot.
+ * One snapshot per range per day — a sync that runs hourly does not write
+ * twenty-four copies of the same list.
+ */
+model TopArtist {
+  id              String   @id @default(cuid())
+  userId          String
+  spotifyArtistId String
+  name            String
+  /** "short_term" (~4 weeks), "medium_term" (~6 months), "long_term" (years). */
+  timeRange       String
+  /** 1-based position in that list, as returned. */
+  rank            Int
+  /** Spotify's own genre strings for the artist, verbatim and unclassified. */
+  genres          String[]
+  popularity      Int?
+  imageUrl        String?
+  /** UTC midnight of the day this snapshot was taken. */
+  capturedOn      DateTime
+  fetchedAt       DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, spotifyArtistId, timeRange, capturedOn])
+  @@index([userId, timeRange, rank])
+}
+
+/** A track in one of this person's top-50 lists, at the rank Spotify gave. */
+model TopTrack {
+  id              String   @id @default(cuid())
+  userId          String
+  spotifyId       String
+  name            String
+  artist          String
+  spotifyArtistId String?
+  albumId         String?
+  album           String?
+  timeRange       String
+  rank            Int
+  popularity      Int?
+  imageUrl        String?
+  capturedOn      DateTime
+  fetchedAt       DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, spotifyId, timeRange, capturedOn])
+  @@index([userId, timeRange, rank])
+}
+
+/**
+ * One play, at the moment Spotify says it happened.
+ *
+ * Recently Played is a rolling window of the last fifty plays and nothing
+ * older, so a single pull is a snapshot and only repeated pulls become a
+ * record. Each play is keyed on when it happened, so re-reading the same
+ * window adds nothing and a history accumulates instead of being overwritten.
+ *
+ * A row here says somebody played something. It does not say they saved it,
+ * and nothing may promote it into their library.
+ */
+model PlayEvent {
+  id              String   @id @default(cuid())
+  userId          String
+  spotifyId       String
+  name            String
+  artist          String
+  spotifyArtistId String?
+  albumId         String?
+  album           String?
+  imageUrl        String?
+  /** Spotify's played_at, verbatim. Never the time of the sync. */
+  playedAt        DateTime
+  /** What it was played from — an album, a playlist, an artist page — if given. */
+  contextUri      String?
+  contextType     String?
+  fetchedAt       DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, spotifyId, playedAt])
+  @@index([userId, playedAt])
 }

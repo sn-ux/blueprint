@@ -9,8 +9,19 @@ export const authOptions: NextAuthOptions = {
     Spotify({
       clientId: process.env.SPOTIFY_CLIENT_ID!,
       clientSecret: process.env.SPOTIFY_CLIENT_SECRET!,
+      /**
+       * The two behavioural scopes are new, and a token issued before them
+       * does not have them — an account keeps whatever it was granted until
+       * its owner signs in again, at which point the adapter updates the same
+       * Account row in place. The User, their Sessions, their notes and every
+       * Track they own are untouched by that; only the tokens and the scope
+       * string change.
+       *
+       * user-top-read           /me/top/artists, /me/top/tracks
+       * user-read-recently-played  /me/player/recently-played
+       */
       authorization:
-        "https://accounts.spotify.com/authorize?scope=user-library-read%20user-read-email%20streaming%20user-read-private%20user-modify-playback-state%20playlist-read-private%20playlist-read-collaborative%20playlist-modify-private%20playlist-modify-public",
+        "https://accounts.spotify.com/authorize?scope=user-library-read%20user-read-email%20streaming%20user-read-private%20user-modify-playback-state%20playlist-read-private%20playlist-read-collaborative%20playlist-modify-private%20playlist-modify-public%20user-top-read%20user-read-recently-played",
     }),
   ],
   session: {

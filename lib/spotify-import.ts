@@ -20,6 +20,7 @@
 import axios from "axios";
 import { prisma } from "@/lib/prisma";
 import { classifyGenres } from "@/lib/blueprint-taxonomy";
+import { collectSignals } from "@/lib/spotify-signals";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -436,6 +437,24 @@ export async function runLikedSongsImport(userId: string): Promise<ImportResult>
     `  staleTracksRemoved             = ${purge.count}\n` +
     `  dbTrackCountAfter              = ${dbTrackCountAfter}`
   );
+
+  // ── Stage 8: Behavioural signals ─────────────────────────────────────────
+  //
+  // What they listen to, which is a different question from what they own.
+  // Last, and unable to fail the import: the library above is already written,
+  // and somebody who has not signed in since the new scopes were added simply
+  // gets a skip. Nothing here touches Track.
+  const signals = await collectSignals(userId).catch((e) => {
+    console.error(`[import] signals failed for userId=${userId}:`, e);
+    return null;
+  });
+  if (signals) {
+    console.log(
+      `[import] signals: topArtists=${signals.topArtists} topTracks=${signals.topTracks}` +
+      ` plays=+${signals.plays} (${signals.playsAlreadyKnown} already known)` +
+      `${signals.skipped ? ` — ${signals.skipped}` : ""}`,
+    );
+  }
 
   // A successful sync proves Spotify access is currently valid — clear any
   // previous auto-hide from a past 401/403 (e.g. user was re-added to the
