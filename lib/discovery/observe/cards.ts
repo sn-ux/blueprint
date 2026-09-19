@@ -11,6 +11,7 @@ import type { CardSubjectType, PersonRow } from "../types";
 import type { Band } from "./observe";
 import type { Candidate } from "./candidates";
 import { render } from "./claims";
+import { writeCaption, tasteOf, plainName, type ArtistFacts, type Taste } from "./caption";
 import type { Reference } from "./reference";
 import { buildRelation } from "./relation";
 
@@ -123,6 +124,8 @@ function contextOf(c: Candidate, nameOf: (id: string) => string) {
 export function toFeedCard(
   ref: Reference, c: Candidate & { band: Band }, viewerId: string,
   people: Map<string, PersonRow>, rank: number, previewLimit = 4,
+  /** What is known about the artists, and what this reader keeps. */
+  facts?: Map<string, ArtistFacts>, taste?: Taste,
 ): FeedCard {
   const nameOf = (id: string) => people.get(id)?.name ?? "someone here";
   const r = render(c, nameOf);
@@ -142,6 +145,29 @@ export function toFeedCard(
   const w0 = c.tracks[0] ? ref.works.get(c.tracks[0]) : undefined;
   const ctx = contextOf(c, nameOf);
 
+  /**
+   * The caption, written from the music and this reader's own taste.
+   *
+   * Never from who else holds it and never from a quantity — the old captions
+   * were made of both, which is why they read as a diff rather than a reason.
+   */
+  const subjectArtist = c.subject.kind === "artist" ? c.subject.label
+    : (c.subject.artist ?? w0?.artist ?? "");
+  const firstYears = c.tracks.map((wk) => ref.works.get(wk)?.firstYear)
+    .filter((y): y is number => typeof y === "number").sort((a, b) => a - b);
+  const caption = (facts && taste)
+    ? writeCaption({
+      kind: c.subject.kind,
+      album: c.subject.kind === "album" ? c.subject.label : null,
+      artist: subjectArtist,
+      year: firstYears.length ? firstYears[Math.floor(firstYears.length / 2)] : null,
+      lane: c.subject.kind === "set" ? c.connection.label : (w0?.subgenre ?? null),
+      facts: facts.get(plainName(subjectArtist)) ?? null,
+      taste,
+      albumTotal: c.subjectSize,
+    })
+    : r.caption;
+
   return {
     id: `fr:${c.family}:${c.key}`,
     version: `${c.tracks.length}:${c.holders.map((h) => h.count).join(",")}`,
@@ -150,7 +176,7 @@ export function toFeedCard(
     qualityBand: c.band,
     title: r.title,
     byline: r.byline,
-    caption: r.caption,
+    caption,
     generator: c.family,
     claimType: c.family,
     evidenceStrength: Math.min(1, c.evidence / 40),

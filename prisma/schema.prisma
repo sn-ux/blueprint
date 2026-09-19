@@ -341,3 +341,66 @@ model PlayEvent {
   @@unique([userId, spotifyId, playedAt])
   @@index([userId, playedAt])
 }
+
+/**
+ * What is known about an artist, from sources we may use commercially.
+ *
+ * Captions have to answer "what is this?" and the database could not: it holds
+ * a name, a genre string and a release date. Everything that makes a record
+ * legible — where the band was from, when they were active, who was in them,
+ * what the music is called by people who catalogue it — lives outside.
+ *
+ * CC0 only, and recorded per source so a claim can always be traced:
+ *
+ *   MusicBrainz core   type, country, area, life-span, artist relationships
+ *   Wikidata           the one-line description, genre, instruments, labels
+ *   Discogs dumps      styles, pressing year and country, label
+ *
+ * Deliberately absent: MusicBrainz tags and genres, which MusicBrainz derives
+ * from user tags and licenses CC BY-NC-SA. Nothing here may come from them.
+ *
+ * Keyed by Spotify artist id where we have one and by the normalised name
+ * otherwise, because four fifths of Track rows still carry no artist id.
+ */
+model ArtistFact {
+  id              String   @id @default(cuid())
+  /** Spotify artist id, where the row that prompted this had one. */
+  spotifyArtistId String?
+  /** Normalised artist name. The join of last resort, and the common case. */
+  nameKey         String
+  name            String
+
+  // ── MusicBrainz core (CC0) ──────────────────────────────────────────────
+  mbid            String?
+  /** "Group" or "Person". A Group's life-span is an era; a Person's is a life. */
+  kind            String?
+  country         String?
+  area            String?
+  /** Finer than area where MusicBrainz has it: a city rather than a nation. */
+  beginArea       String?
+  /** Only meaningful as an era when kind is "Group". */
+  activeFrom      String?
+  activeTo        String?
+  /** "member of band: Pink Floyd (keyboard) 1965-1981", forward direction only. */
+  memberships     String[] @default([])
+
+  // ── Wikidata (CC0) ──────────────────────────────────────────────────────
+  wikidataId      String?
+  /** One human-written line: "English keyboardist, co-founder of Pink Floyd". */
+  summary         String?
+  wikidataGenres  String[] @default([])
+  instruments     String[] @default([])
+  labels          String[] @default([])
+  formedIn        String?
+
+  // ── Discogs (CC0 dumps) ─────────────────────────────────────────────────
+  /** Finer than any genre we hold: "Psychedelic Rock", "Jazz-Funk". */
+  styles          String[] @default([])
+  pressingYear    Int?
+  pressingCountry String?
+
+  fetchedAt       DateTime @default(now())
+
+  @@unique([nameKey])
+  @@index([spotifyArtistId])
+}
