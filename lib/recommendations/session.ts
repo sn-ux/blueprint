@@ -232,7 +232,6 @@ async function startObservationSession(
   );
 
   if (!persist) return { sessionId: "", stored: stirred, suppressed };
-  await caption(viewerId, stirred);
   const session = await prisma.recommendationFeedSession.create({
     data: {
       userId: viewerId,
@@ -330,7 +329,6 @@ export async function startSession(viewerId: string, persist = true): Promise<Se
 
   if (!persist) return { sessionId: "", stored, suppressed };
 
-  await caption(viewerId, stored);
   const session = await prisma.recommendationFeedSession.create({
     data: {
       userId: viewerId,
@@ -422,12 +420,12 @@ async function extendSession(
           depth: c.tier ?? nextDepth,
         }));
         const next = [...stored, ...added];
-        await persist(sessionId, next, nextDepth, laps, viewerId);
+        await persist(sessionId, next, nextDepth, laps);
         console.log(`[feed] session ${sessionId} → depth ${nextDepth}, +${added.length} new (${next.length} total)`);
         return { stored: next, depth: nextDepth, laps, grew: true };
       }
       // Nothing new at this band; record the depth so it is not retried.
-      await persist(sessionId, stored, nextDepth, laps, viewerId);
+      await persist(sessionId, stored, nextDepth, laps);
       depth = nextDepth;
     }
   }
@@ -483,7 +481,7 @@ async function extendSession(
     lifecycle: { ...card.lifecycle, status: "REVIVED" as LifecycleStatus },
   }));
   const next = [...stored, ...added];
-  await persist(sessionId, next, depth, laps + 1, viewerId);
+  await persist(sessionId, next, depth, laps + 1);
   console.log(`[feed] session ${sessionId} lap ${laps + 1}, +${added.length} resurfaced (${next.length} total)`);
   return { stored: next, depth, laps: laps + 1, grew: true };
 }
@@ -495,9 +493,9 @@ async function extendSession(
  * per request, and a card already carrying a written caption is left alone.
  * A card the writer skips keeps the prose it arrived with.
  */
-async function caption(viewerId: string, stored: StoredCard[]): Promise<void> {
+async function caption(viewerId: string, stored: StoredCard[]): Promise<boolean> {
   const pending = stored.filter((s) => s.card.captionSource !== "llm");
-  if (!pending.length || !process.env.ANTHROPIC_API_KEY) return;
+  if (!pending.length || !process.env.ANTHROPIC_API_KEY) return false;
   try {
     const who = await loadListener(viewerId);
     const cards: CaptionCard[] = pending.map(({ card }) => ({
@@ -524,14 +522,14 @@ async function caption(viewerId: string, stored: StoredCard[]): Promise<void> {
       if (c) { s.card.caption = c; s.card.captionSource = "llm"; }
     }
     console.log(`[caption] wrote ${written.size}/${pending.length} for ${viewerId}`);
+    return written.size > 0;
   } catch (e) {
     console.error("[caption] page kept its built-in prose:", e);
   }
+  return false;
 }
 
-async function persist(sessionId: string, stored: StoredCard[], depth: number, laps: number,
-  viewerId?: string) {
-  if (viewerId) await caption(viewerId, stored);
+async function persist(sessionId: string, stored: StoredCard[], depth: number, laps: number) {
   await prisma.recommendationFeedSession.update({
     where: { id: sessionId },
     data: { cards: stored as unknown as object, depth, laps },
@@ -599,6 +597,21 @@ export async function feedPage(
 
   const slice = stored.slice(offset, offset + size);
   const end = offset + slice.length;
+
+  /**
+   * Captions are written for the page in hand, not for the session.
+   *
+   * A reading is several hundred cards deep and almost nobody reaches the
+   * bottom of one, so writing the whole thing up front would pay for prose
+   * nobody reads and would hold the first request open while it happened.
+   * The cards here are the same objects as the ones in `stored`, so writing
+   * the page and saving the session are the same act, and a card already
+   * written is skipped — scrolling back over a page costs nothing.
+   */
+  if (sessionId) {
+    const wrote = await caption(viewerId, slice);
+    if (wrote) await persist(sessionId, stored, depth, laps);
+  }
 
   // More exists whenever another card has been composed, another band can
   // still be searched, or anything is far enough back to come round again.
