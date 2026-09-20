@@ -63,6 +63,8 @@ export async function GET(req: NextRequest) {
       /** Temporary: which generator produced these. Read by the mobile log. */
       engine,
       cards: page.cards,
+      /** The reading these cards belong to, so their captions can be asked for. */
+      sessionId: page.sessionId,
       nextCursor: page.nextCursor,
       hasMore: page.hasMore,
       caughtUp: page.caughtUp,
