@@ -156,15 +156,38 @@ async function writeGroup(
 ): Promise<Map<string, string>> {
   const out = new Map<string, string>();
   const user = group.map((c) => contextFor(c, who)).join("\n\n---\n\n");
+  const t0 = Date.now();
   const res = await client.messages.create({
     model: MODEL,
     max_tokens: 4096,
     system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
     messages: [{ role: "user", content: `Write a caption for each card.\n\n${user}` }],
   });
+  const ms = Date.now() - t0;
   const text = res.content.map((b) => (b.type === "text" ? b.text : "")).join("");
   const open = text.indexOf("[");
   const close = text.lastIndexOf("]");
+
+  /**
+   * What the call actually did, rather than what we assume it did.
+   *
+   * A group of four captions is about 350 tokens of JSON and was still coming
+   * back with an unterminated array after fifty seconds, so the interesting
+   * number is whatever else the model spent the budget on. The whole usage
+   * object is printed rather than picked over, because a field we do not know
+   * to look for is exactly the one that would explain this.
+   */
+  console.log(`[caption:probe] ${group.length} cards · ${ms}ms`
+    + ` · asked for "${MODEL}" · served by "${res.model}"`
+    + ` · stop_reason=${res.stop_reason}`
+    + ` · blocks=[${res.content.map((b) => b.type).join(", ")}]`
+    + ` · usage=${JSON.stringify(res.usage)}`
+    + ` · textChars=${text.length}`
+    + ` · charsBeforeArray=${open < 0 ? "no array at all" : open}`
+    + ` · closed=${close > open}`
+    + ` · preamble=${JSON.stringify(text.slice(0, open < 0 ? 220 : Math.min(open, 220)))}`
+    + ` · tail=${JSON.stringify(text.slice(-160))}`);
+
   if (open < 0 || close <= open) throw new Error("the reply held no complete array");
   for (const row of JSON.parse(text.slice(open, close + 1)) as { id: string; caption: string }[]) {
     if (row?.id && typeof row.caption === "string" && acceptable(row.caption)) {
