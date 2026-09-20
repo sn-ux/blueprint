@@ -30,11 +30,13 @@ export async function GET(req: NextRequest) {
 
   const params = new URL(req.url).searchParams;
   const cursor = params.get("cursor");
+  /** Only a deliberate refresh abandons the reading in progress. */
+  const fresh = params.get("fresh") === "1";
   const raw = Number(params.get("limit") ?? LIFECYCLE.pageSize);
   const limit = Number.isFinite(raw) ? raw : LIFECYCLE.pageSize;
 
   const t0 = Date.now();
-  const page = await feedPage(viewer.id, cursor, limit);
+  const page = await feedPage(viewer.id, cursor, limit, fresh);
   if (!page) {
     return NextResponse.json({ error: "No library imported yet" }, { status: 404 });
   }

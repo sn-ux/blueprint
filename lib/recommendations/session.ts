@@ -582,6 +582,8 @@ async function persist(sessionId: string, stored: StoredCard[], depth: number, l
  */
 export async function feedPage(
   viewerId: string, cursor: string | null, limit: number,
+  /** Start a new reading rather than continuing the active one. */
+  fresh = false,
 ): Promise<FeedPage | null> {
   const size = Math.min(CFG.LIFECYCLE.maxPageSize, Math.max(1, limit));
 
@@ -602,6 +604,33 @@ export async function feedPage(
         laps = loaded.laps;
         offset = decoded.offset;
       }
+    }
+  }
+
+  /**
+   * A request without a cursor continues the reading already in progress.
+   *
+   * It used to build a new one every time, which is how a page that had just
+   * had twelve captions written into it was replaced sixty-four seconds later
+   * by a fresh session whose cards nobody had asked captions for. Anything
+   * that re-runs the opening fetch — a re-render, a reconnect, a remount —
+   * silently threw away the reading and everything written into it.
+   *
+   * Only an explicit refresh asks for a new one.
+   */
+  if (!stored && !fresh) {
+    const active = await prisma.recommendationFeedSession.findFirst({
+      where: { userId: viewerId, expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, cards: true, depth: true, laps: true },
+    });
+    if (active) {
+      sessionId = active.id;
+      stored = active.cards as unknown as StoredCard[];
+      depth = active.depth;
+      laps = active.laps;
+      offset = 0;
+      console.log(`[feed] continuing session ${active.id} (${stored.length} cards)`);
     }
   }
 
