@@ -18,7 +18,15 @@ import { prisma } from "@/lib/prisma";
 
 /** Per-page, so one batch of cards is one request. */
 const MODEL = process.env.BLUEPRINT_CAPTION_MODEL ?? "claude-sonnet-5";
-const MAX_CARDS = Number(process.env.BLUEPRINT_CAPTION_LIMIT ?? 40);
+/**
+ * A ceiling for a deliberate test, not a working limit.
+ *
+ * This used to trim the card list on the way in, so a page of twenty-four went
+ * to the writer as four and the other twenty vanished without a word. Nothing
+ * is dropped quietly now: whatever is skipped is named in the log and handed
+ * back to the caller as a failure.
+ */
+const MAX_CARDS = Number(process.env.BLUEPRINT_CAPTION_LIMIT ?? 0) || null;
 /**
  * How many captions one request may carry.
  *
@@ -219,7 +227,15 @@ export async function writeCaptions(
   const out = new Map<string, string>();
   if (!process.env.ANTHROPIC_API_KEY || !cards.length) return out;
 
-  const batch = cards.slice(0, MAX_CARDS);
+  // Every card given is a card written, unless a test cap says otherwise — and
+  // then it says so out loud.
+  const batch = MAX_CARDS ? cards.slice(0, MAX_CARDS) : cards;
+  if (batch.length < cards.length) {
+    console.warn(`[caption] BLUEPRINT_CAPTION_LIMIT=${MAX_CARDS} is holding back `
+      + `${cards.length - batch.length} of ${cards.length} cards: `
+      + cards.slice(batch.length).map((c) => c.id).join(", "));
+  }
+
   const client = new Anthropic();
   const groups: CaptionCard[][] = [];
   for (let i = 0; i < batch.length; i += BATCH) groups.push(batch.slice(i, i + BATCH));
@@ -227,7 +243,10 @@ export async function writeCaptions(
   const settled = await Promise.allSettled(groups.map((g) => writeGroup(client, g, who)));
   for (const [i, r] of settled.entries()) {
     if (r.status === "fulfilled") { for (const [k, v] of r.value) out.set(k, v); }
-    else console.error(`[caption] group ${i + 1}/${groups.length} lost:`, r.reason);
+    else {
+      console.error(`[caption] group ${i + 1}/${groups.length} lost `
+        + `(${groups[i].map((c) => c.id).join(", ")}):`, r.reason);
+    }
   }
   return out;
 }

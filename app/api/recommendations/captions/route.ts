@@ -23,15 +23,23 @@ export async function POST(req: NextRequest) {
   catch { return NextResponse.json({ error: "Expected JSON" }, { status: 400 }); }
 
   const sessionId = typeof body.sessionId === "string" ? body.sessionId : null;
-  const ids = Array.isArray(body.ids)
-    ? body.ids.filter((x): x is string => typeof x === "string").slice(0, 40) : [];
+  const all = Array.isArray(body.ids)
+    ? body.ids.filter((x): x is string => typeof x === "string") : [];
+  const ids = all.slice(0, 40);
+  if (all.length > ids.length) {
+    console.warn(`[caption] request carried ${all.length} ids; ${all.length - ids.length}`
+      + ` beyond the per-request ceiling were not attempted`);
+  }
   if (!sessionId || !ids.length) {
     return NextResponse.json({ error: "sessionId and ids are required" }, { status: 400 });
   }
 
   const t0 = Date.now();
-  const captions = await captionCards(viewer.id, sessionId, ids);
-  console.log(`[caption] endpoint returned ${Object.keys(captions).length}/${ids.length}`
-    + ` in ${Date.now() - t0}ms`);
-  return NextResponse.json({ captions });
+  const { captions, failed } = await captionCards(viewer.id, sessionId, ids);
+  const beyond = all.slice(ids.length);
+  console.log(`[caption] endpoint returned ${Object.keys(captions).length}/${all.length}`
+    + ` in ${Date.now() - t0}ms`
+    + (failed.length || beyond.length ? ` · failed ${failed.length + beyond.length}` : ""));
+  // A card is either written or named as unwritten. It is never just absent.
+  return NextResponse.json({ captions, failed: [...failed, ...beyond] });
 }

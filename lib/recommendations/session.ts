@@ -539,26 +539,30 @@ async function caption(viewerId: string, stored: StoredCard[]): Promise<boolean>
  */
 export async function captionCards(
   viewerId: string, sessionId: string, ids: string[],
-): Promise<Record<string, string>> {
+): Promise<{ captions: Record<string, string>; failed: string[] }> {
   const row = await prisma.recommendationFeedSession.findFirst({
     where: { id: sessionId, userId: viewerId },
     select: { cards: true, depth: true, laps: true },
   });
-  if (!row) return {};
+  if (!row) return { captions: {}, failed: ids };
 
   const stored = row.cards as unknown as StoredCard[];
   const wanted = new Set(ids);
   const asked = stored.filter((s) => wanted.has(s.card.id));
-  if (!asked.length) return {};
+  // An id the reading does not contain is a failure, not a silence.
+  const unknown = ids.filter((id) => !asked.some((s) => s.card.id === id));
+  if (!asked.length) return { captions: {}, failed: ids };
 
   if (await caption(viewerId, asked)) {
     await persist(sessionId, stored, row.depth, row.laps);
   }
   const out: Record<string, string> = {};
+  const failed: string[] = [...unknown];
   for (const s of asked) {
     if (s.card.captionSource === "llm") out[s.card.id] = s.card.caption;
+    else failed.push(s.card.id);
   }
-  return out;
+  return { captions: out, failed };
 }
 
 async function persist(sessionId: string, stored: StoredCard[], depth: number, laps: number) {
