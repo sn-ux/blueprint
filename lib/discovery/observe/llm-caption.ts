@@ -143,6 +143,38 @@ export function contextFor(card: CaptionCard, who: ListenerContext): string {
 }
 
 /**
+ * A caption has to put the music somewhere in time. This is how people write
+ * that down.
+ *
+ * The old pattern wanted a bare four-digit year or a standalone "90s" and
+ * nothing else, so "the 1990s", "the mid-2000s" and "the '90s" were all read as
+ * undated — a word boundary cannot fall between the 0 and the s of 2000s, nor
+ * before the apostrophe of '90s. The requirement is unchanged; what changed is
+ * that the validator now recognises the English for it.
+ */
+const DATED = /(?<!\d)(?:1[89]\d{2}|20\d{2})s?\b|(?<!\w)'?\d{2}s\b/;
+
+/**
+ * Talking like a recommender system, which a caption must never do.
+ *
+ * Narrowed from single words to the phrasings that actually give the machinery
+ * away. "score" on its own threw out every caption about a film composer, which
+ * is most of what we can say about Hans Zimmer or Thomas Newman, and "ranked"
+ * caught "ranked among Atlanta's best". A match score is still banned; a film
+ * score is a film score.
+ */
+const MACHINE = new RegExp([
+  String.raw`\b(?:algorithm(?:ic|s)?|database|Blueprint)\b`,
+  String.raw`\b(?:match|similarity|confidence|relevance|compatibility)\s+scores?\b`,
+  String.raw`\brank(?:ed|ing)\s+(?:by|according\s+to)\b`,
+  String.raw`\byour\s+library\s+has\s+\d`,
+  String.raw`\bbased\s+on\s+your\s+(?:listening|library|taste|history)\b`,
+  String.raw`\bwe\s+recommend\b`,
+  String.raw`\brecommended\s+for\s+you\b`,
+  String.raw`\bthis\s+recommendation\b`,
+].join("|"), "i");
+
+/**
  * Why a caption was refused, or null when it stands.
  *
  * Every condition here is the one acceptable() already applied, in the same
@@ -150,15 +182,13 @@ export function contextFor(card: CaptionCard, who: ListenerContext): string {
  * still refused: the standard asks for one and a caption that cannot say when
  * is not the caption we approved. What was wrong was losing it in silence.
  */
-function rejection(text: string): string | null {
+export function rejection(text: string): string | null {
   if (!text) return "empty";
   const words = text.trim().split(/\s+/).length;
   if (words < 25) return `too short (${words} words)`;
   if (words > 95) return `too long (${words} words)`;
-  if (!/\b(1[89]\d{2}|20\d{2}|\d{2}s|'\d{2}s)\b/.test(text)) return "no date in it";
-  if (/\b(algorithm|recommend|score|ranked|database|Blueprint|your library has \d)\b/i.test(text)) {
-    return "algorithm or database language";
-  }
+  if (!DATED.test(text)) return "no date in it";
+  if (MACHINE.test(text)) return "algorithm or database language";
   if (/fills? (a|the) gap|missing from your library|something your library/i.test(text)) {
     return "generic library-gap ending";
   }
