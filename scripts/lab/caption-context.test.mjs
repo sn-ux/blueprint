@@ -37,6 +37,16 @@ const antiFolk = {
   contents: { artists: ["The Moldy Peaches", "Jeffrey Lewis"], tracks: ["Jeffrey Lewis — Williamsburg"] },
 };
 
+// An artist and an album card, which must be untouched by any of this.
+const artistCard = {
+  id: "fr:DEEPER_ON_AN_ARTIST:deeper:gunna", type: "ARTIST", subject: "Gunna",
+  artist: "Gunna", lane: "trap", cardGenres: ["trap"], years: [2018, 2022], anchor: null,
+};
+const albumCard = {
+  id: "fr:FINISH_THE_RECORD:finish:x", type: "ALBUM", subject: "DAYTONA",
+  artist: "Pusha T", lane: "rap", cardGenres: ["rap"], years: [2018, 2018], anchor: null,
+};
+
 const cases = [
   // ── the collision ──────────────────────────────────────────────────────
   ["same lane yields no anchor", () => anchorOf("Rap", "rap") === null],
@@ -62,7 +72,7 @@ const cases = [
   ["rap context carries example tracks",
     () => /Kanye West — Hurricane/.test(contextFor(rapCard, who))],
   ["contents are marked as the subject",
-    () => /Write about this music/.test(contextFor(rapCard, who))],
+    () => /the music gathered on this card/.test(contextFor(rapCard, who))],
   ["an artist not on the card is not offered as the subject", () => {
     const t = contextFor(rapCard, who);
     const i = t.indexOf("the music on this card:");
@@ -70,6 +80,31 @@ const cases = [
     // Pusha T may appear as listener context, but never among the card's music.
     return i >= 0 && (!t.includes("Pusha T") || t.indexOf("Pusha T") > j);
   }],
+
+  // ── the genre, not one act inside it ──────────────────────────────────
+  ["genre card names the genre as the subject",
+    () => /The subject is Rap itself/.test(contextFor(rapCard, who))],
+  ["genre card forbids collapsing onto one artist",
+    () => /Never let a single artist or album become what the caption is about/
+      .test(contextFor(rapCard, who))],
+  ["genre card asks what links the music",
+    () => /what actually links them/.test(contextFor(rapCard, who))],
+  ["genre card still forbids off-card artists",
+    () => /never write about an artist who is not on this card/.test(contextFor(rapCard, who))],
+  ["anti-folk gets the same abstraction rule",
+    () => /The subject is Anti-folk itself/.test(contextFor(antiFolk, who))],
+
+  // ── artist and album cards are untouched ──────────────────────────────
+  ["artist card carries no genre abstraction rule",
+    () => !/The subject is .* itself/.test(contextFor(artistCard, who))
+       && !/Never let a single artist/.test(contextFor(artistCard, who))],
+  ["artist card still writes about the artist",
+    () => /WRITE ABOUT — ARTIST: Gunna/.test(contextFor(artistCard, who))],
+  ["album card carries no genre abstraction rule",
+    () => !/The subject is .* itself/.test(contextFor(albumCard, who))
+       && !/Never let a single artist/.test(contextFor(albumCard, who))],
+  ["album card still writes about the album",
+    () => /WRITE ABOUT — ALBUM: DAYTONA by Pusha T/.test(contextFor(albumCard, who))],
 ];
 
 let pass = 0, fail = 0;

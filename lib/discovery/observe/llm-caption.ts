@@ -175,9 +175,23 @@ export function contextFor(card: CaptionCard, who: ListenerContext): string {
       ? `the music on this card: ${card.contents.artists.join(", ")}` : null,
     card.contents?.tracks.length
       ? `for example: ${card.contents.tracks.join(" · ")}` : null,
+    /**
+     * The level of abstraction, which a genre card gets wrong on its own.
+     *
+     * Every one of the ten benchmarks is about a single act, so the pull is
+     * always toward writing about one — and the earlier wording only forbade
+     * an artist who was *not* on the card, which left "write the whole of old
+     * school hip hop as a 2Pac caption" expressly permitted. Naming the genre
+     * as the subject is what stops that.
+     */
     card.contents?.artists.length
-      ? `Write about this music. The listener notes below are only for connecting `
-        + `it to them — do not make the caption about an artist who is not on this card.`
+      ? `The subject is ${card.subject} itself — the music gathered on this card taken `
+        + `together, not any one of these artists or records. Use two or three of them `
+        + `as examples where that helps, and say what actually links them: a period, a `
+        + `place, a scene, a way the records were made. Never let a single artist or `
+        + `album become what the caption is about, and never write about an artist who `
+        + `is not on this card. The listener notes below are only for connecting this `
+        + `music to them.`
       : null,
     card.anchor ? `they already like: ${card.anchor} — this is the reason the card ` +
       `was raised, not its subject. Do not describe ${card.anchor}.` : null,
