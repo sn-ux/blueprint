@@ -66,8 +66,22 @@ export interface CaptionCard {
    * "you like afrobeat, so here is anti-folk" carries anti-folk as its subject
    * and afrobeat as its anchor, and describing the anchor gets you a caption
    * about Afrobeat sitting under a heading that says Anti-folk.
+   *
+   * Null when there is no anchor distinct from the subject — a card headed Rap
+   * whose lane is also rap has none, and telling the writer not to describe rap
+   * on a card about rap left it nothing to write about at all.
    */
   anchor: string | null;
+  /**
+   * What is actually on the card.
+   *
+   * A genre card used to arrive as a bare heading, so a Rap card built from
+   * Kanye, Travis Scott, Drake and J. Cole was described as Pusha T — true of
+   * the listener, true of rap, and not on the card. The records here are what
+   * the caption is about; everything below them is only for connecting that
+   * music to the person reading.
+   */
+  contents?: { artists: string[]; tracks: string[] };
   /** Years of the card's tracks, for a rough sense of period. */
   years: number[];
 }
@@ -130,6 +144,15 @@ export function contextFor(card: CaptionCard, who: ListenerContext): string {
     `WRITE ABOUT — ${card.type}: ${card.subject}` +
       `${card.artist && card.type === "ALBUM" ? ` by ${card.artist}` : ""}`,
     card.cardGenres.length ? `filed as: ${card.cardGenres.slice(0, 4).join(", ")}` : null,
+    // What the card holds, which is the authority on what the caption is about.
+    card.contents?.artists.length
+      ? `the music on this card: ${card.contents.artists.join(", ")}` : null,
+    card.contents?.tracks.length
+      ? `for example: ${card.contents.tracks.join(" · ")}` : null,
+    card.contents?.artists.length
+      ? `Write about this music. The listener notes below are only for connecting `
+        + `it to them — do not make the caption about an artist who is not on this card.`
+      : null,
     card.anchor ? `they already like: ${card.anchor} — this is the reason the card ` +
       `was raised, not its subject. Do not describe ${card.anchor}.` : null,
     years ? `recordings here span: ${years}` : null,

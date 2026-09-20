@@ -493,12 +493,49 @@ async function extendSession(
  * per request, and a card already carrying a written caption is left alone.
  * A card the writer skips keeps the prose it arrived with.
  */
+/** Nothing is an anchor if it names the same lane as the subject. */
+export function anchorOf(title: string | null, subgenre: string | null): string | null {
+  if (!subgenre || subgenre === "unknown") return null;
+  const flat = (x: string) => x.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  return flat(title ?? "") === flat(subgenre) ? null : subgenre;
+}
+
 async function caption(viewerId: string, stored: StoredCard[]): Promise<boolean> {
   const pending = stored.filter((s) => s.card.captionSource !== "llm");
   if (!pending.length || !process.env.ANTHROPIC_API_KEY) return false;
   try {
     const who = await loadListener(viewerId);
-    const cards: CaptionCard[] = pending.map(({ card }) => ({
+
+    /**
+     * What each card actually holds, read once for the whole page.
+     *
+     * A genre card carries no artist of its own, so without this it arrived as
+     * a bare heading and the writer filled the gap from the listener's library
+     * instead — a Rap card built from Kanye, Travis Scott and Drake came back
+     * describing Pusha T, who is not on it.
+     */
+    const wanted = [...new Set(pending.flatMap((s) => s.deliverableIds.slice(0, 12)))];
+    const rows = wanted.length
+      ? await prisma.track.findMany({
+          where: { spotifyId: { in: wanted } },
+          select: { spotifyId: true, name: true, artist: true },
+        })
+      : [];
+    const trackOf = new Map(rows.map((r) => [r.spotifyId, r]));
+    const contentsOf = (ids: string[]) => {
+      const artists: string[] = [];
+      const tracks: string[] = [];
+      for (const id of ids) {
+        const t = trackOf.get(id);
+        if (!t?.artist) continue;
+        if (!artists.includes(t.artist) && artists.length < 6) artists.push(t.artist);
+        if (tracks.length < 4 && !tracks.some((x) => x.startsWith(`${t.artist} —`))) {
+          tracks.push(`${t.artist} — ${t.name}`);
+        }
+      }
+      return { artists, tracks };
+    };
+    const cards: CaptionCard[] = pending.map(({ card, deliverableIds }) => ({
       id: card.id,
       type: card.cardType === "ARTIST" ? "ARTIST"
         : card.cardType === "ALBUM" ? "ALBUM" : "GENRE",
@@ -511,8 +548,14 @@ async function caption(viewerId: string, stored: StoredCard[]): Promise<boolean>
       cardGenres: card.cardType === "ARTIST" || card.cardType === "ALBUM"
         ? [card.subgenre, card.genre].filter((g): g is string => !!g && g !== "unknown")
         : [],
-      anchor: card.cardType === "ARTIST" || card.cardType === "ALBUM"
-        ? null : (card.subgenre && card.subgenre !== "unknown" ? card.subgenre : null),
+      // An anchor is only an anchor when it is a different lane from the
+      // subject. A card headed Rap whose lane is rap has none, and saying
+      // "do not describe rap" on it left nothing to write about.
+      anchor: card.cardType === "ARTIST" || card.cardType === "ALBUM" ? null
+        : anchorOf(card.title, card.subgenre),
+      // A genre card has no artist of its own, so it is told what it holds.
+      contents: card.cardType === "ARTIST" || card.cardType === "ALBUM"
+        ? undefined : contentsOf(deliverableIds),
       years: [card.releaseYearMin, card.releaseYearMax]
         .filter((y): y is number => typeof y === "number"),
     }));
