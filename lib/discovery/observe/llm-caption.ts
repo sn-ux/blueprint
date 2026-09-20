@@ -19,6 +19,16 @@ import { prisma } from "@/lib/prisma";
 /** Per-page, so one batch of cards is one request. */
 const MODEL = process.env.BLUEPRINT_CAPTION_MODEL ?? "claude-sonnet-5";
 const MAX_CARDS = Number(process.env.BLUEPRINT_CAPTION_LIMIT ?? 40);
+/**
+ * How many captions one request may carry.
+ *
+ * Twenty-four in a single completion ran past the output ceiling and came back
+ * with an unterminated array, which threw away every caption in it — forty-five
+ * seconds paid for and nothing kept. Four is far enough inside the limit that
+ * truncation is not a consideration, and running the groups at once makes the
+ * page faster than the monolith was rather than slower.
+ */
+const BATCH = 4;
 
 export interface ListenerContext {
   /** Their commonest Spotify genres, commonest first. */
@@ -140,6 +150,38 @@ function acceptable(text: string): boolean {
  * fumbled. A null means the caller keeps whatever caption the card arrived
  * with, so a bad batch degrades to the built-in prose rather than to nothing.
  */
+/** One request: a handful of cards, parsed on its own. */
+async function writeGroup(
+  client: Anthropic, group: CaptionCard[], who: ListenerContext,
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const user = group.map((c) => contextFor(c, who)).join("\n\n---\n\n");
+  const res = await client.messages.create({
+    model: MODEL,
+    max_tokens: 4096,
+    system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
+    messages: [{ role: "user", content: `Write a caption for each card.\n\n${user}` }],
+  });
+  const text = res.content.map((b) => (b.type === "text" ? b.text : "")).join("");
+  const open = text.indexOf("[");
+  const close = text.lastIndexOf("]");
+  if (open < 0 || close <= open) throw new Error("the reply held no complete array");
+  for (const row of JSON.parse(text.slice(open, close + 1)) as { id: string; caption: string }[]) {
+    if (row?.id && typeof row.caption === "string" && acceptable(row.caption)) {
+      out.set(row.id, row.caption.trim());
+    }
+  }
+  return out;
+}
+
+/**
+ * Captions for one page of cards, or null for any the model declined or
+ * fumbled. A null means the caller keeps whatever caption the card arrived
+ * with, so a bad batch degrades to the built-in prose rather than to nothing.
+ *
+ * The groups run together and are kept or lost one at a time: a reply that
+ * arrives truncated costs its own four captions and none of the others.
+ */
 export async function writeCaptions(
   cards: CaptionCard[], who: ListenerContext,
 ): Promise<Map<string, string>> {
@@ -148,27 +190,17 @@ export async function writeCaptions(
 
   const batch = cards.slice(0, MAX_CARDS);
   const client = new Anthropic();
-  const user = batch.map((c) => contextFor(c, who)).join("\n\n---\n\n");
+  const groups: CaptionCard[][] = [];
+  for (let i = 0; i < batch.length; i += BATCH) groups.push(batch.slice(i, i + BATCH));
 
-  try {
-    const res = await client.messages.create({
-      model: MODEL,
-      max_tokens: 4096,
-      system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
-      messages: [{ role: "user", content: `Write a caption for each card.\n\n${user}` }],
-    });
-    const text = res.content.map((b) => (b.type === "text" ? b.text : "")).join("");
-    const json = text.slice(text.indexOf("["), text.lastIndexOf("]") + 1);
-    for (const row of JSON.parse(json) as { id: string; caption: string }[]) {
-      if (row?.id && typeof row.caption === "string" && acceptable(row.caption)) {
-        out.set(row.id, row.caption.trim());
-      }
-    }
-  } catch (e) {
-    console.error("[caption] the writer did not answer, keeping the built-in prose:", e);
+  const settled = await Promise.allSettled(groups.map((g) => writeGroup(client, g, who)));
+  for (const [i, r] of settled.entries()) {
+    if (r.status === "fulfilled") { for (const [k, v] of r.value) out.set(k, v); }
+    else console.error(`[caption] group ${i + 1}/${groups.length} lost:`, r.reason);
   }
   return out;
 }
+
 
 /**
  * What this listener keeps, plays and has played lately.
