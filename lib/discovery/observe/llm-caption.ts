@@ -142,22 +142,34 @@ export function contextFor(card: CaptionCard, who: ListenerContext): string {
   return lines.join("\n");
 }
 
-/** Anything that reads like the failures we have already been through. */
-function acceptable(text: string): boolean {
-  if (!text) return false;
+/**
+ * Why a caption was refused, or null when it stands.
+ *
+ * Every condition here is the one acceptable() already applied, in the same
+ * order — this only gives each of them a name. A caption without a date is
+ * still refused: the standard asks for one and a caption that cannot say when
+ * is not the caption we approved. What was wrong was losing it in silence.
+ */
+function rejection(text: string): string | null {
+  if (!text) return "empty";
   const words = text.trim().split(/\s+/).length;
-  if (words < 25 || words > 95) return false;
-  if (!/\b(1[89]\d{2}|20\d{2}|\d{2}s|'\d{2}s)\b/.test(text)) return false;   // must be dated
-  if (/\b(algorithm|recommend|score|ranked|database|Blueprint|your library has \d)\b/i.test(text)) return false;
-  if (/fills? (a|the) gap|missing from your library|something your library/i.test(text)) return false;
-  return true;
+  if (words < 25) return `too short (${words} words)`;
+  if (words > 95) return `too long (${words} words)`;
+  if (!/\b(1[89]\d{2}|20\d{2}|\d{2}s|'\d{2}s)\b/.test(text)) return "no date in it";
+  if (/\b(algorithm|recommend|score|ranked|database|Blueprint|your library has \d)\b/i.test(text)) {
+    return "algorithm or database language";
+  }
+  if (/fills? (a|the) gap|missing from your library|something your library/i.test(text)) {
+    return "generic library-gap ending";
+  }
+  return null;
 }
 
-/**
- * Captions for one page of cards, or null for any the model declined or
- * fumbled. A null means the caller keeps whatever caption the card arrived
- * with, so a bad batch degrades to the built-in prose rather than to nothing.
- */
+/** Anything that reads like the failures we have already been through. */
+function acceptable(text: string): boolean {
+  return rejection(text) === null;
+}
+
 /** One request: a handful of cards, parsed on its own. */
 async function writeGroup(
   client: Anthropic, group: CaptionCard[], who: ListenerContext,
@@ -205,11 +217,30 @@ async function writeGroup(
     + ` · tail=${JSON.stringify(text.slice(-160))}`);
 
   if (open < 0 || close <= open) throw new Error("the reply held no complete array");
+  /**
+   * Every card handed to this group leaves it either written or explained.
+   *
+   * Six conditions could drop a caption and none of them used to say so, which
+   * is how a page came back fifteen of twenty-four with no record of the other
+   * nine anywhere — not in the log, not in the response, not in the database.
+   */
+  const asked = new Set(group.map((c) => c.id));
+  const seen = new Set<string>();
+  const dropped: string[] = [];
+
   for (const row of JSON.parse(text.slice(open, close + 1)) as { id: string; caption: string }[]) {
-    if (row?.id && typeof row.caption === "string" && acceptable(row.caption)) {
-      out.set(row.id, row.caption.trim());
-    }
+    if (!row?.id) { dropped.push("(row with no id)"); continue; }
+    seen.add(row.id);
+    if (!asked.has(row.id)) { dropped.push(`${row.id}: not a card we asked for`); continue; }
+    if (typeof row.caption !== "string") { dropped.push(`${row.id}: caption was not text`); continue; }
+    const why = rejection(row.caption);
+    if (why) { dropped.push(`${row.id}: ${why} — ${JSON.stringify(row.caption.slice(0, 90))}`); continue; }
+    out.set(row.id, row.caption.trim());
   }
+  for (const c of group) {
+    if (!seen.has(c.id)) dropped.push(`${c.id}: the model left it out of the reply`);
+  }
+  if (dropped.length) console.warn(`[caption] unwritten — ${dropped.join(" | ")}`);
   return out;
 }
 
