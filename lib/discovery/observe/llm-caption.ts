@@ -160,6 +160,14 @@ async function writeGroup(
   const res = await client.messages.create({
     model: MODEL,
     max_tokens: 4096,
+    /**
+     * No reasoning. Writing a caption is a short constrained job, and the model
+     * was spending the whole four thousand token budget deliberating about four
+     * of them: one call came back as a single thinking block, no captions in it
+     * at all, forty-eight seconds gone. Thinking counts against max_tokens, so
+     * turning it off is both the truncation fix and the latency fix.
+     */
+    thinking: { type: "disabled" },
     system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
     messages: [{ role: "user", content: `Write a caption for each card.\n\n${user}` }],
   });
