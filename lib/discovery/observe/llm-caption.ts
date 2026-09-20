@@ -30,13 +30,39 @@ const MAX_CARDS = Number(process.env.BLUEPRINT_CAPTION_LIMIT ?? 0) || null;
 /**
  * How many captions one request may carry.
  *
- * Twenty-four in a single completion ran past the output ceiling and came back
- * with an unterminated array, which threw away every caption in it — forty-five
- * seconds paid for and nothing kept. Four is far enough inside the limit that
- * truncation is not a consideration, and running the groups at once makes the
- * page faster than the monolith was rather than slower.
+ * One. Latency tracks output tokens almost exactly — fourteen to sixteen
+ * milliseconds each, on top of about a quarter second of fixed cost — so four
+ * captions in a reply meant seven hundred tokens and ten to twelve seconds,
+ * and the page waited on whichever group drew the longest straw. A single
+ * caption is a hundred and ninety tokens and three seconds, and the cards are
+ * written alongside each other rather than in queues of four.
  */
-const BATCH = 4;
+const BATCH = 1;
+
+/**
+ * How many of those may be in flight at once.
+ *
+ * A page of twenty-four could open twenty-four connections at the same moment,
+ * which is a good way to meet a rate limit. Twelve runs the page as two waves
+ * and still costs a fraction of what four-card groups did.
+ */
+const CONCURRENCY = 12;
+
+/** Run tasks with a ceiling on how many are in flight, keeping each outcome. */
+async function inWaves<T>(
+  tasks: (() => Promise<T>)[], width: number,
+): Promise<PromiseSettledResult<T>[]> {
+  const out = new Array<PromiseSettledResult<T>>(tasks.length);
+  let next = 0;
+  const runners = Array.from({ length: Math.min(width, tasks.length) }, async () => {
+    for (let i = next++; i < tasks.length; i = next++) {
+      try { out[i] = { status: "fulfilled", value: await tasks[i]() }; }
+      catch (reason) { out[i] = { status: "rejected", reason }; }
+    }
+  });
+  await Promise.all(runners);
+  return out;
+}
 
 export interface ListenerContext {
   /** Their commonest Spotify genres, commonest first. */
@@ -324,7 +350,7 @@ export async function writeCaptions(
   const groups: CaptionCard[][] = [];
   for (let i = 0; i < batch.length; i += BATCH) groups.push(batch.slice(i, i + BATCH));
 
-  const settled = await Promise.allSettled(groups.map((g) => writeGroup(client, g, who)));
+  const settled = await inWaves(groups.map((g) => () => writeGroup(client, g, who)), CONCURRENCY);
   for (const [i, r] of settled.entries()) {
     if (r.status === "fulfilled") { for (const [k, v] of r.value) out.set(k, v); }
     else {
